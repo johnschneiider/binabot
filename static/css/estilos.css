@@ -1,0 +1,247 @@
+:root {
+  --color-fondo: #020510;
+  --color-fondo-alt: #071021;
+  --color-superficie: rgba(12, 19, 40, 0.72);
+  --color-superficie-clara: rgba(32, 48, 84, 0.66);
+  --color-borde: rgba(120, 168, 255, 0.22);
+  --color-texto: #f5f7ff;
+  --color-texto-secundario: #8ea2c6;
+  --color-primario: #3c8dff;
+  --color-acento: #63f5bd;
+  --color-positivo: #35da96;
+  --color-negativo: #ff5b7a;
+  --gradiente-principal: radial-gradient(circle at top left, rgba(60, 141, 255, 0.55), transparent 45%), radial-gradient(circle at 80% 20%, rgba(99, 245, 189, 0.4), transparent 50%), linear-gradient(135deg, rgba(4, 10, 27, 0.85), rgba(6, 13, 32, 0.95));
+  --fuente: "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
+  --fuente-mono: "IBM Plex Mono", "Fira Mono", monospace;
+  --radio: 20px;
+  --sombra: 0 18px 45px rgba(10, 20, 40, 0.35);
+  --sombra-suave: 0 8px 22px rgba(6, 16, 33, 0.25);
+  --transicion: all 0.3s ease;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+.app-body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--fuente);
+  color: var(--color-texto);
+  background: var(--gradiente-principal);
+  overflow-x: hidden;
+  position: relative;
+}
+
+#fondo-particulas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.layout {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(6px);
+}
+
+.barra-superior {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 4vw;
+  border-bottom: 1px solid rgba(120, 168, 255, 0.14);
+  background: linear-gradient(135deg, rgba(8, 15, 32, 0.75), rgba(8, 15, 32, 0.55));
+}
+
+.barra-superior__brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.barra-superior__logo {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(60, 141, 255, 0.75), rgba(12, 96, 255, 0.55));
+  box-shadow: 0 10px 28px rgba(60, 141, 255, 0.35);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.barra-superior__info h1 {
+  margin: 0;
+  font-size: clamp(1.3rem, 2vw, 1.6rem);
+  letter-spacing: 0.03em;
+}
+
+.barra-superior__info p {
+  margin: 0.1rem 0 0;
+  color: var(--color-texto-secundario);
+  font-size: 0.9rem;
+}
+
+.barra-superior__acciones {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.barra-superior__marcador {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 14px;
+  background: rgba(12, 23, 43, 0.65);
+  border: 1px solid rgba(120, 168, 255, 0.18);
+  min-width: 8rem;
+  text-align: right;
+}
+
+.barra-superior__marcador span {
+  display: block;
+}
+
+.marcador__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-texto-secundario);
+}
+
+.marcador__valor {
+  font-family: var(--fuente-mono);
+  font-size: 0.95rem;
+}
+
+.marcador--estado .marcador__chip {
+  background: rgba(60, 141, 255, 0.12);
+  color: var(--color-primario);
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.contenido {
+  flex: 1;
+  width: min(1380px, 94vw);
+  margin: 2rem auto 3rem;
+}
+
+.pie {
+  padding: 1.5rem 4vw 2rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid rgba(120, 168, 255, 0.12);
+  color: var(--color-texto-secundario);
+  font-size: 0.85rem;
+}
+
+.tarjeta {
+  background: var(--color-superficie);
+  border-radius: var(--radio);
+  padding: 1.6rem;
+  border: 1px solid var(--color-borde);
+  box-shadow: var(--sombra-suave);
+  transition: var(--transicion);
+  position: relative;
+  overflow: hidden;
+}
+
+.tarjeta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(99, 245, 189, 0.07), rgba(60, 141, 255, 0.07));
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+
+.tarjeta:hover::after {
+  opacity: 1;
+}
+
+.tarjeta h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.tarjeta__header h3 {
+  margin-bottom: 0.45rem;
+}
+
+.tarjeta__header p {
+  margin: 0;
+  color: var(--color-texto-secundario);
+  font-size: 0.9rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+thead {
+  background: rgba(60, 141, 255, 0.12);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.8rem;
+}
+
+th,
+td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(120, 168, 255, 0.12);
+}
+
+tbody tr:hover {
+  background: rgba(99, 245, 189, 0.05);
+}
+
+.positivo {
+  color: var(--color-positivo);
+  font-weight: 600;
+}
+
+.negativo {
+  color: var(--color-negativo);
+  font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .barra-superior {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+
+  .barra-superior__acciones {
+    align-self: stretch;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .pie {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}

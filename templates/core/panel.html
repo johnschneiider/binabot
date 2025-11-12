@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Panel del Bot{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{% static 'css/core/panel.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <div class="panel__hero">
+      <div class="panel__hero-col">
+        <p class="panel__tag">Monitoreo en vivo</p>
+        <h2 class="panel__titulo">Mesa de control del bot Deriv</h2>
+
+        <div class="panel__estado-hero">
+          <span class="panel__estado-chip" id="badge-estado">--</span>
+          <span class="panel__estado-descripcion">Modo <strong id="estado-bot">--</strong></span>
+        </div>
+
+        <div class="panel__hero-metricas">
+          <div class="panel__hero-metrica">
+            <span>Balance disponible</span>
+            <strong class="dato" id="balance-actual">--</strong>
+            <small id="variacion-balance">Sin variaciones registradas</small>
+          </div>
+          <div class="panel__hero-metrica">
+            <span>Meta dinámica</span>
+            <strong class="dato" id="meta-actual">--</strong>
+          </div>
+          <div class="panel__hero-metrica">
+            <span>Stop loss dinámico</span>
+            <strong class="dato" id="stop-loss-actual">--</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel__hero-col panel__hero-col--resumen">
+        <article class="tarjeta tarjeta--resumen">
+          <h3>Resumen financiero</h3>
+          <div class="tarjeta__grid">
+            <div class="tarjeta__metric">
+              <span>Ganancia acumulada</span>
+              <strong id="ganancia-acumulada">--</strong>
+            </div>
+            <div class="tarjeta__metric">
+              <span>Pérdida acumulada</span>
+              <strong id="perdida-acumulada">--</strong>
+            </div>
+            <div class="tarjeta__metric">
+              <span>Winrate</span>
+              <strong><span id="winrate">--</span> <small>%</small></strong>
+            </div>
+            <div class="tarjeta__metric">
+              <span>Operaciones ganadas</span>
+              <strong id="operaciones-ganadas">--</strong>
+            </div>
+            <div class="tarjeta__metric">
+              <span>Total operaciones</span>
+              <strong id="total-operaciones">--</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="tarjeta tarjeta--temporizador">
+          <h3>Control de pausas</h3>
+          <ul class="temporizador-lista">
+            <li>
+              <span>En pausa desde</span>
+              <strong id="pausado-desde">--</strong>
+            </li>
+            <li>
+              <span>Reactivación programada</span>
+              <strong id="reactivacion-programada">--</strong>
+            </li>
+            <li>
+              <span>Tiempo restante</span>
+              <strong id="tiempo-restante">--</strong>
+            </li>
+          </ul>
+        </article>
+      </div>
+    </div>
+
+    <section class="panel__grid">
+      <article class="tarjeta tarjeta--estadisticas">
+        <header class="tarjeta__header">
+          <h3>Distribución CALL / PUT</h3>
+          <p>Detalle de comportamiento por dirección operativa</p>
+        </header>
+        <div class="distribucion">
+          <div class="distribucion__col">
+            <h4>CALL</h4>
+            <p><span class="indicador indicador--positivo"></span>Ganadas: <span id="ganadas-call">--</span></p>
+            <p><span class="indicador indicador--negativo"></span>Perdidas: <span id="perdidas-call">--</span></p>
+          </div>
+          <div class="distribucion__col">
+            <h4>PUT</h4>
+            <p><span class="indicador indicador--positivo"></span>Ganadas: <span id="ganadas-put">--</span></p>
+            <p><span class="indicador indicador--negativo"></span>Perdidas: <span id="perdidas-put">--</span></p>
+          </div>
+        </div>
+      </article>
+
+      <article class="tarjeta tarjeta--narrativa">
+        <header class="tarjeta__header">
+          <h3>Bitácora operativa</h3>
+          <p>Resumen de la sesión en curso y directrices del algoritmo</p>
+        </header>
+        <ul class="narrativa">
+          <li>
+            <span>➤</span>
+            <div>
+              <h4>Capitalización dinámica</h4>
+              <p>El bot recalcula objetivos después de cada meta alcanzada y sincroniza el saldo con la cuenta Deriv en cada ciclo.</p>
+            </div>
+          </li>
+          <li>
+            <span>➤</span>
+            <div>
+              <h4>Gestión de riesgo</h4>
+              <p>Stop loss móvil ligado al balance actual. Cuando se activa, se detiene la operativa y se realiza backtesting horario.</p>
+            </div>
+          </li>
+          <li>
+            <span>➤</span>
+            <div>
+              <h4>Monitoreo en tiempo real</h4>
+              <p>El dashboard refleja operaciones, métricas y estado mediante WebSocket seguro.</p>
+            </div>
+          </li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="panel__seccion tabla-operaciones">
+      <header class="panel__seccion-header">
+        <div>
+          <h3>Operaciones recientes</h3>
+          <p>Últimas ejecuciones sobre la cuenta demo Deriv</p>
+        </div>
+        <div class="panel__leyenda">
+          <span class="indicador indicador--positivo"></span>Ganancia
+          <span class="indicador indicador--negativo"></span>Pérdida
+        </div>
+      </header>
+      <div class="tabla-contenedor">
+        <table>
+          <thead>
+            <tr>
+              <th>Contrato</th>
+              <th>Activo</th>
+              <th>Dirección</th>
+              <th>Resultado</th>
+              <th>Beneficio</th>
+              <th>Hora inicio</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-operaciones">
+            <tr>
+              <td colspan="6">Sin datos por el momento</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel__seccion tabla-simulacion">
+      <header class="panel__seccion-header">
+        <div>
+          <h3>Simulación por horario</h3>
+          <p>Winrate calculado durante pausas mediante replay con ticks reales</p>
+        </div>
+      </header>
+      <div class="tabla-contenedor">
+        <table>
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Total</th>
+              <th>Ganadas</th>
+              <th>Perdidas</th>
+              <th>Winrate</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-simulacion">
+            <tr>
+              <td colspan="5">Sin datos de simulación</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+{% endblock %}
+

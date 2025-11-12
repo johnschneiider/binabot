@@ -1,0 +1,50 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Bot Deriv{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/estilos.css' %}">
+    {% block extra_css %}{% endblock %}
+  </head>
+  <body class="app-body">
+    <canvas id="fondo-particulas" aria-hidden="true"></canvas>
+    <div class="layout">
+      <header class="barra-superior">
+        <div class="barra-superior__brand">
+          <span class="barra-superior__logo">BD</span>
+          <div class="barra-superior__info">
+            <h1>Binary Desk</h1>
+            <p>Plataforma de control del bot de trading Deriv</p>
+          </div>
+        </div>
+        <div class="barra-superior__acciones">
+          <div class="barra-superior__marcador">
+            <span class="marcador__label">Mercado</span>
+            <span class="marcador__valor" id="marca-tiempo">--</span>
+          </div>
+          <div class="barra-superior__marcador marcador--estado">
+            <span class="marcador__label">Estado</span>
+            <span class="marcador__chip" id="chip-estado">--</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="contenido">
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="pie">
+        <div>
+          <strong>Binary Desk</strong> &mdash; Mesa de control automatizada.
+        </div>
+        <div>
+          Última actualización <span id="marca-tiempo-pie">--</span> &bull; {% now "Y" %}
+        </div>
+      </footer>
+    </div>
+    <script src="{% static 'js/panel.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>
