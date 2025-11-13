@@ -41,7 +41,7 @@
           <h3>Resumen financiero</h3>
           <div class="tarjeta__grid">
             <div class="tarjeta__metric">
-              <span>Ganancia acumulada</span>
+              <span>Balance neto</span>
               <strong id="ganancia-acumulada">--</strong>
             </div>
             <div class="tarjeta__metric">
@@ -146,23 +146,25 @@
         </div>
       </header>
       <div class="tabla-contenedor">
-        <table>
-          <thead>
-            <tr>
-              <th>Contrato</th>
-              <th>Activo</th>
-              <th>Dirección</th>
-              <th>Resultado</th>
-              <th>Beneficio</th>
-              <th>Hora inicio</th>
-            </tr>
-          </thead>
-          <tbody id="tabla-operaciones">
-            <tr>
-              <td colspan="6">Sin datos por el momento</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="tabla-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Contrato</th>
+                <th>Activo</th>
+                <th>Dirección</th>
+                <th>Resultado</th>
+                <th>Beneficio</th>
+                <th>Hora inicio</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-operaciones">
+              <tr>
+                <td colspan="6">Sin datos por el momento</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -173,23 +175,47 @@
           <p>Winrate calculado durante pausas mediante replay con ticks reales</p>
         </div>
       </header>
-      <div class="tabla-contenedor">
-        <table>
-          <thead>
-            <tr>
-              <th>Hora</th>
-              <th>Total</th>
-              <th>Ganadas</th>
-              <th>Perdidas</th>
-              <th>Winrate</th>
-            </tr>
-          </thead>
-          <tbody id="tabla-simulacion">
-            <tr>
-              <td colspan="5">Sin datos de simulación</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="tabla-contenedor tabla-contenedor--resumen">
+        <div class="tabla-scroll">
+          <table class="tabla tabla--compacta">
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>Total</th>
+                <th>Ganadas</th>
+                <th>Perdidas</th>
+                <th>Winrate</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-simulacion-resumen">
+              <tr>
+                <td colspan="5">Sin datos de simulación</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tabla-contenedor tabla-contenedor--operaciones">
+        <div class="tabla-scroll">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Contrato</th>
+                <th>Activo</th>
+                <th>Dirección</th>
+                <th>Resultado</th>
+                <th>Beneficio</th>
+                <th>Hora inicio</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-simulacion-operaciones">
+              <tr>
+                <td colspan="6">Sin operaciones simuladas</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   </section>

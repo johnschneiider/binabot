@@ -308,11 +308,37 @@
 }
 
 .tabla-contenedor {
-  overflow: hidden;
   border-radius: 18px;
   border: 1px solid rgba(120, 168, 255, 0.18);
   background: rgba(6, 12, 24, 0.85);
   box-shadow: inset 0 0 0 1px rgba(120, 168, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tabla-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.tabla-contenedor--resumen .tabla-scroll {
+  max-height: 260px;
+}
+
+.tabla-contenedor--operaciones .tabla-scroll {
+  max-height: 340px;
+}
+
+.tabla-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.tabla-scroll::-webkit-scrollbar-thumb {
+  background: rgba(120, 168, 255, 0.3);
+  border-radius: 999px;
 }
 
 table {
@@ -331,6 +357,19 @@ tbody td {
 tbody tr td:first-child {
   font-family: var(--fuente-mono);
   font-size: 0.88rem;
+}
+
+.tabla--compacta th,
+.tabla--compacta td {
+  font-size: 0.85rem;
+}
+
+.valor-positivo {
+  color: var(--color-positivo);
+}
+
+.valor-negativo {
+  color: var(--color-negativo);
 }
 
 .panel__hero-metrica small {

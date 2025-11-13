@@ -150,13 +150,20 @@ function actualizarEstadoBot(data) {
   const stopLoss = convertirNumero(data.stop_loss_actual);
   const ganancia = convertirNumero(data.ganancia_acumulada);
   const perdida = convertirNumero(data.perdida_acumulada);
+  const neto = (ganancia ?? 0) - (perdida ?? 0);
 
   setValor("estado-bot", estado.toUpperCase());
   setValor("balance-actual", formatearMoneda(balance));
   setValor("meta-actual", formatearMoneda(meta));
   setValor("stop-loss-actual", formatearMoneda(stopLoss));
-  setValor("ganancia-acumulada", formatearMoneda(ganancia));
   setValor("perdida-acumulada", formatearMoneda(perdida));
+
+  const netoElemento = document.getElementById("ganancia-acumulada");
+  if (netoElemento) {
+    netoElemento.textContent = formatearMoneda(neto);
+    netoElemento.classList.toggle("valor-positivo", neto >= 0);
+    netoElemento.classList.toggle("valor-negativo", neto < 0);
+  }
 
   actualizarChipCabecera(estado);
   actualizarVariacionBalance(balance);
@@ -175,18 +182,21 @@ function actualizarEstadisticas(data) {
   setValor("perdidas-put", formatearEntero(data.perdidas_put));
 }
 
-function actualizarOperaciones(data) {
-  const tbody = document.getElementById("tabla-operaciones");
+function renderTablaOperaciones(tbodyId, datos, mensajeVacio) {
+  const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
   tbody.innerHTML = "";
 
-  if (!data.length) {
-    tbody.innerHTML =
-      '<tr><td colspan="6">Sin operaciones registradas</td></tr>';
+  if (!datos.length) {
+    const columnas = tbody.parentElement
+      ?.querySelector("thead th")
+      ?.parentElement?.childElementCount;
+    const span = columnas || 6;
+    tbody.innerHTML = `<tr><td colspan="${span}">${mensajeVacio}</td></tr>`;
     return;
   }
 
-  data.forEach((operacion) => {
+  datos.forEach((operacion) => {
     const fila = document.createElement("tr");
     const celdas = [
       operacion.numero_contrato,
@@ -203,7 +213,8 @@ function actualizarOperaciones(data) {
       const celda = document.createElement("td");
       if (indice === 4) {
         const numero = convertirNumero(valor);
-        celda.textContent = numero === null ? valor ?? "--" : formatearMoneda(numero);
+        celda.textContent =
+          numero === null ? valor ?? "--" : formatearMoneda(numero);
         celda.classList.add(
           numero !== null && numero >= 0 ? "positivo" : "negativo"
         );
@@ -214,6 +225,14 @@ function actualizarOperaciones(data) {
     });
     tbody.appendChild(fila);
   });
+}
+
+function actualizarOperaciones(data) {
+  renderTablaOperaciones(
+    "tabla-operaciones",
+    data,
+    "Sin operaciones registradas"
+  );
 }
 
 function detenerTemporizador() {
@@ -305,17 +324,18 @@ function actualizarTemporizador(data) {
   iniciarTemporizador();
 }
 
-function actualizarSimulacion(data) {
-  const tbody = document.getElementById("tabla-simulacion");
+function actualizarSimulacionResumen(resumen) {
+  const tbody = document.getElementById("tabla-simulacion-resumen");
   if (!tbody) return;
   tbody.innerHTML = "";
-  if (!data.length) {
+
+  if (!resumen.length) {
     tbody.innerHTML =
       '<tr><td colspan="5">Sin datos de simulación</td></tr>';
     return;
   }
 
-  data.forEach((fila) => {
+  resumen.forEach((fila) => {
     const tr = document.createElement("tr");
     const columnas = [
       fila.hora_inicio,
@@ -331,6 +351,21 @@ function actualizarSimulacion(data) {
     });
     tbody.appendChild(tr);
   });
+}
+
+function actualizarSimulacionOperaciones(operaciones) {
+  renderTablaOperaciones(
+    "tabla-simulacion-operaciones",
+    operaciones,
+    "Sin operaciones simuladas"
+  );
+}
+
+function actualizarSimulacion(data) {
+  const resumen = data?.resumen ?? [];
+  const operaciones = data?.operaciones ?? [];
+  actualizarSimulacionResumen(resumen);
+  actualizarSimulacionOperaciones(operaciones);
 }
 
 async function refrescarPanel() {

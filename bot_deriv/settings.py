@@ -168,7 +168,7 @@ CHANNEL_LAYERS = {
 }
 
 # Configuración del bot
-DERIV_API_TOKEN = os.getenv("DERIV_API_TOKEN", "sOIz87Oml8LGJYl")
+DERIV_API_TOKEN = os.getenv("DERIV_API_TOKEN", "WwPVsJ7gJZ7KHW2")
 DERIV_APP_ID = os.getenv("DERIV_APP_ID", "1089")
 DERIV_ACCOUNT_ID = os.getenv("DERIV_ACCOUNT_ID", "")
 
