@@ -31,9 +31,15 @@ class SimuladorHorariosService:
     el mejor horario de reactivación.
     """
 
-    def __init__(self, operaciones_por_horario: int = 5, activo: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        operaciones_por_horario: int = 5,
+        activo: Optional[str] = None,
+        duracion_ticks: int = 5,
+    ) -> None:
         self.operaciones_por_horario = operaciones_por_horario
         self.activo = activo
+        self.duracion_ticks = max(1, duracion_ticks)
         self.channel_layer = get_channel_layer()
 
     def _obtener_activo(self) -> Optional[str]:
@@ -66,44 +72,68 @@ class SimuladorHorariosService:
     ) -> Dict[str, int]:
         ganadas = 0
         perdidas = 0
-        if len(ticks) < 2:
+        if len(ticks) <= self.duracion_ticks:
             return {"ganadas": ganadas, "perdidas": perdidas}
 
-        paso = max(1, len(ticks) // (self.operaciones_por_horario + 1))
+        # Queremos varias operaciones por hora pero separadas entre sí
+        paso = max(
+            1,
+            len(ticks)
+            // max(self.operaciones_por_horario * 2, self.operaciones_por_horario + 1),
+        )
         operaciones_generadas = 0
 
-        for indice in range(0, len(ticks) - 1, paso):
+        for indice in range(1, len(ticks) - self.duracion_ticks):
             if operaciones_generadas >= self.operaciones_por_horario:
                 break
-            tick_inicio = ticks[indice]
-            tick_fin = ticks[indice + 1]
-            precio_inicio = tick_inicio.precio
-            precio_fin = tick_fin.precio
 
-            if precio_inicio == precio_fin:
+            if indice % paso != 0:
                 continue
 
-            direccion = (
-                Operacion.Direccion.CALL
-                if precio_fin > precio_inicio
-                else Operacion.Direccion.PUT
-            )
-            resultado = (
-                Operacion.Resultado.GANADA
-                if (precio_fin > precio_inicio and direccion == Operacion.Direccion.CALL)
-                or (precio_fin < precio_inicio and direccion == Operacion.Direccion.PUT)
-                else Operacion.Resultado.PERDIDA
-            )
+            tick_inicio = ticks[indice]
+            tick_prev = ticks[indice - 1]
+            tick_salida = ticks[indice + self.duracion_ticks]
+
+            precio_inicio = tick_inicio.precio
+            precio_prev = tick_prev.precio
+            precio_fin = tick_salida.precio
+
+            # Determinar dirección basándonos en el momentum inmediato anterior
+            if precio_inicio == precio_prev:
+                # Si no hubo movimiento previo, asumimos dirección al alza como neutral
+                direccion = Operacion.Direccion.CALL
+            else:
+                direccion = (
+                    Operacion.Direccion.CALL
+                    if precio_inicio > precio_prev
+                    else Operacion.Direccion.PUT
+                )
+
+            if precio_fin == precio_inicio:
+                resultado = Operacion.Resultado.PERDIDA
+            elif (
+                direccion == Operacion.Direccion.CALL and precio_fin > precio_inicio
+            ) or (
+                direccion == Operacion.Direccion.PUT and precio_fin < precio_inicio
+            ):
+                resultado = Operacion.Resultado.GANADA
+            else:
+                resultado = Operacion.Resultado.PERDIDA
 
             diferencia = (precio_fin - precio_inicio).quantize(Decimal("0.00001"))
+
             confianza = (
                 (abs(diferencia) / precio_inicio * Decimal("100"))
                 .quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             )
-            numero_contrato = f"SIM-{int(tick_inicio.epoch.timestamp())}-{int(tick_fin.epoch.timestamp())}"
+            numero_contrato = (
+                f"SIM-{int(tick_inicio.epoch.timestamp())}-{int(tick_salida.epoch.timestamp())}"
+            )
 
             beneficio = (
-                abs(diferencia) if resultado == Operacion.Resultado.GANADA else -abs(diferencia)
+                abs(diferencia)
+                if resultado == Operacion.Resultado.GANADA
+                else -abs(diferencia)
             ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
             Operacion.objetos.update_or_create(
@@ -117,7 +147,7 @@ class SimuladorHorariosService:
                     "confianza": confianza,
                     "resultado": resultado,
                     "hora_inicio": tick_inicio.epoch,
-                    "hora_fin": tick_fin.epoch,
+                    "hora_fin": tick_salida.epoch,
                     "beneficio": beneficio,
                     "es_simulada": True,
                 },
