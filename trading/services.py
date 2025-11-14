@@ -133,7 +133,9 @@ class MotorTrading:
             return None
 
         activos = list(
-            ActivoPermitido.objects.filter(habilitado=True).order_by("nombre")
+            ActivoPermitido.objects.filter(habilitado=True).order_by(
+                "-winrate_simulacion", "nombre"
+            )
         )
         if not activos:
             self._enviar_evento(

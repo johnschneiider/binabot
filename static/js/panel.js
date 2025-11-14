@@ -338,6 +338,7 @@ function actualizarSimulacionResumen(resumen) {
   resumen.forEach((fila) => {
     const tr = document.createElement("tr");
     const columnas = [
+      fila.activo,
       fila.hora_inicio,
       formatearEntero(fila.total_operaciones),
       formatearEntero(fila.operaciones_ganadas),

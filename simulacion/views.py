@@ -27,6 +27,7 @@ class ResultadosSimulacionView(APIView):
                 ResultadoHorarioSimulacion.objects.filter(fecha_calculo=fecha_reciente)
                 .order_by("-winrate", "-total_operaciones")
                 .values(
+                    "activo",
                     "hora_inicio",
                     "total_operaciones",
                     "operaciones_ganadas",
@@ -36,6 +37,7 @@ class ResultadosSimulacionView(APIView):
             )
             resumen = [
                 {
+                    "activo": fila["activo"],
                     "hora_inicio": fila["hora_inicio"].strftime("%H:%M"),
                     "total_operaciones": fila["total_operaciones"],
                     "operaciones_ganadas": fila["operaciones_ganadas"],
@@ -72,6 +74,7 @@ class EjecutarSimulacionView(APIView):
             )
         return Response(
             {
+                "activo": resultado.activo,
                 "hora_optima": resultado.hora.strftime("%H:%M"),
                 "winrate": float(resultado.winrate),
                 "total_operaciones": resultado.total_operaciones,

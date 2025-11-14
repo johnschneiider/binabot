@@ -13,6 +13,7 @@ class ResultadoHorarioSimulacionQuerySet(models.QuerySet):
 
 
 class ResultadoHorarioSimulacion(models.Model):
+    activo = models.CharField(max_length=80, default="")
     hora_inicio = models.TimeField()
     total_operaciones = models.PositiveIntegerField(default=0)
     operaciones_ganadas = models.PositiveIntegerField(default=0)
@@ -27,7 +28,7 @@ class ResultadoHorarioSimulacion(models.Model):
         verbose_name = "Resultado de simulación por horario"
         verbose_name_plural = "Resultados de simulación por horario"
         ordering = ("-fecha_calculo", "-winrate")
-        unique_together = ("hora_inicio", "fecha_calculo")
+        unique_together = ("activo", "hora_inicio", "fecha_calculo")
 
     def __str__(self) -> str:
         return f"Horario {self.hora_inicio} - Winrate {self.winrate}%"
@@ -35,6 +36,8 @@ class ResultadoHorarioSimulacion(models.Model):
     @classmethod
     def crear_o_actualizar(
         cls,
+        *,
+        activo: str,
         hora_inicio,
         ganadas: int,
         perdidas: int,
@@ -50,6 +53,7 @@ class ResultadoHorarioSimulacion(models.Model):
             )
 
         objeto, _ = cls.objects.update_or_create(
+            activo=activo,
             hora_inicio=hora_inicio,
             fecha_calculo=fecha_calculo,
             defaults={

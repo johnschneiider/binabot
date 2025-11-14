@@ -221,6 +221,11 @@ class ActivoPermitido(models.Model):
     habilitado = models.BooleanField(default=True)
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
+    winrate_simulacion = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("0.00")
+    )
+    hora_mejor_simulacion = models.TimeField(null=True, blank=True)
+    ultima_simulacion = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Activo permitido"

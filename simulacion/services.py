@@ -18,6 +18,7 @@ from .models import ResultadoHorarioSimulacion
 
 @dataclass
 class ResultadoHorario:
+    activo: str
     hora: time
     winrate: Decimal
     total_operaciones: int
@@ -68,27 +69,20 @@ class SimuladorHorariosService:
         return agrupados
 
     def _simular_operaciones_con_ticks(
-        self, ticks: List[Tick], hora: int
+        self, ticks: List[Tick]
     ) -> Dict[str, int]:
         ganadas = 0
         perdidas = 0
         if len(ticks) <= self.duracion_ticks:
             return {"ganadas": ganadas, "perdidas": perdidas}
 
-        # Queremos varias operaciones por hora pero separadas entre sí
-        paso = max(
-            1,
-            len(ticks)
-            // max(self.operaciones_por_horario * 2, self.operaciones_por_horario + 1),
-        )
+        universo = max(1, len(ticks) - self.duracion_ticks)
+        paso = max(1, universo // max(1, self.operaciones_por_horario))
         operaciones_generadas = 0
 
-        for indice in range(1, len(ticks) - self.duracion_ticks):
+        for indice in range(1, len(ticks) - self.duracion_ticks, paso):
             if operaciones_generadas >= self.operaciones_por_horario:
                 break
-
-            if indice % paso != 0:
-                continue
 
             tick_inicio = ticks[indice]
             tick_prev = ticks[indice - 1]
@@ -163,61 +157,118 @@ class SimuladorHorariosService:
 
     @transaction.atomic
     def ejecutar(self) -> Optional[ResultadoHorario]:
-        simbolo = self._obtener_activo()
-        if not simbolo:
-            return None
-
         fin = timezone.now()
         inicio = fin - timedelta(hours=24)
-        ticks = list(
-            Tick.objects.filter(
-                activo=simbolo,
-                epoch__range=(inicio, fin),
-            ).order_by("epoch")
-        )
-        if not ticks:
-            return None
-
         tz = timezone.get_current_timezone()
-        ticks_por_hora = self._agrupar_ticks_por_hora(ticks, tz)
         horas = [time(h, 0) for h in range(0, 24)]
-        mejores_resultados: List[ResultadoHorario] = []
+        ahora = fin
 
-        for hora in horas:
-            data_hora = ticks_por_hora.get(hora.hour, [])
-            resultados = self._simular_operaciones_con_ticks(data_hora, hora.hour)
-            ganadas = resultados["ganadas"]
-            perdidas = resultados["perdidas"]
-            total = ganadas + perdidas
-            if total == 0:
-                continue
-
-            resultado_modelo = ResultadoHorarioSimulacion.crear_o_actualizar(
-                hora_inicio=hora,
-                ganadas=ganadas,
-                perdidas=perdidas,
-                fecha_calculo=timezone.now(),
-            )
-            mejores_resultados.append(
-                ResultadoHorario(
-                    hora=hora,
-                    winrate=resultado_modelo.winrate,
-                    total_operaciones=resultado_modelo.total_operaciones,
-                    ganadas=ganadas,
-                    perdidas=perdidas,
+        if self.activo:
+            simbolos = [self.activo]
+        else:
+            simbolos = list(
+                ActivoPermitido.objects.filter(habilitado=True).values_list(
+                    "nombre", flat=True
                 )
             )
+            if not simbolos:
+                ultimo = (
+                    Tick.objects.order_by("-epoch")
+                    .values_list("activo", flat=True)
+                    .first()
+                )
+                simbolos = [ultimo] if ultimo else []
 
-        if not mejores_resultados:
+        if not simbolos:
             return None
-        mejor = max(
-            mejores_resultados,
+
+        mejores_globales: List[ResultadoHorario] = []
+        procesados: List[str] = []
+
+        for simbolo in simbolos:
+            ticks = list(
+                Tick.objects.filter(
+                    activo=simbolo,
+                    epoch__range=(inicio, fin),
+                ).order_by("epoch")
+            )
+            if len(ticks) <= self.duracion_ticks:
+                continue
+
+            ticks_por_hora = self._agrupar_ticks_por_hora(ticks, tz)
+            mejores_resultados: List[ResultadoHorario] = []
+
+            for hora in horas:
+                data_hora = ticks_por_hora.get(hora.hour, [])
+                resultados = self._simular_operaciones_con_ticks(data_hora)
+                ganadas = resultados["ganadas"]
+                perdidas = resultados["perdidas"]
+                total = ganadas + perdidas
+                if total == 0:
+                    continue
+
+                resultado_modelo = ResultadoHorarioSimulacion.crear_o_actualizar(
+                    activo=simbolo,
+                    hora_inicio=hora,
+                    ganadas=ganadas,
+                    perdidas=perdidas,
+                    fecha_calculo=ahora,
+                )
+                mejores_resultados.append(
+                    ResultadoHorario(
+                        activo=simbolo,
+                        hora=hora,
+                        winrate=resultado_modelo.winrate,
+                        total_operaciones=resultado_modelo.total_operaciones,
+                        ganadas=ganadas,
+                        perdidas=perdidas,
+                    )
+                )
+
+            if not mejores_resultados:
+                continue
+
+            procesados.append(simbolo)
+            mejor_activo = max(
+                mejores_resultados,
+                key=lambda r: (r.winrate, r.total_operaciones),
+            )
+            mejores_globales.append(mejor_activo)
+
+            ActivoPermitido.objects.filter(nombre=simbolo).update(
+                winrate_simulacion=mejor_activo.winrate,
+                hora_mejor_simulacion=mejor_activo.hora,
+                ultima_simulacion=ahora,
+            )
+
+        if not mejores_globales:
+            return None
+
+        if not self.activo:
+            ActivoPermitido.objects.filter(habilitado=True).exclude(
+                nombre__in=procesados
+            ).update(
+                winrate_simulacion=Decimal("0.00"),
+                hora_mejor_simulacion=None,
+                ultima_simulacion=ahora,
+            )
+
+        mejor_global = max(
+            mejores_globales,
             key=lambda r: (r.winrate, r.total_operaciones),
         )
 
         gestor = GestorBotCore()
-        gestor.configuracion.mejor_horario = mejor.hora
-        gestor.configuracion.save(update_fields=["mejor_horario", "ultima_actualizacion"])
+        configuracion = gestor.configuracion
+        configuracion.mejor_horario = mejor_global.hora
+        configuracion.activo_seleccionado = mejor_global.activo
+        configuracion.save(
+            update_fields=[
+                "mejor_horario",
+                "activo_seleccionado",
+                "ultima_actualizacion",
+            ]
+        )
 
         if self.channel_layer:
             async_to_sync(self.channel_layer.group_send)(
@@ -227,10 +278,11 @@ class SimuladorHorariosService:
                     "data": {
                         "tipo": "simulacion",
                         "actualizar_panel": True,
-                        "hora_optima": mejor.hora.strftime("%H:%M"),
-                        "winrate": str(mejor.winrate),
+                        "hora_optima": mejor_global.hora.strftime("%H:%M"),
+                        "winrate": str(mejor_global.winrate),
+                        "activo": mejor_global.activo,
                     },
                 },
             )
-        return mejor
+        return mejor_global
 
