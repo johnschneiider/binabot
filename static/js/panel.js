@@ -32,6 +32,7 @@ const formatoFechaCorta = new Intl.DateTimeFormat("es-CO", {
 });
 
 let socketConexion = null;
+let socketDashboard = null;  // Nueva conexión para el dashboard
 let refrescoEnCurso = false;
 let refrescoPendiente = false;
 let temporizadorIntervalo = null;
@@ -420,6 +421,40 @@ function manejarMensajeTiempoReal(data) {
   }
 }
 
+function manejarActualizacionDashboard(data) {
+  if (!data || data.tipo !== "actualizacion_completa") return;
+  
+  console.log("[Dashboard] Actualización recibida:", data.timestamp);
+  
+  // Actualizar estado del bot
+  if (data.estado) {
+    actualizarEstadoBot(data.estado);
+  }
+  
+  // Actualizar winrate
+  if (data.winrate) {
+    actualizarWinrate(data.winrate);
+  }
+  
+  // Actualizar estadísticas
+  if (data.estadisticas) {
+    actualizarEstadisticas(data.estadisticas);
+  }
+  
+  // Actualizar operaciones
+  if (data.operaciones) {
+    actualizarOperaciones(data.operaciones);
+  }
+  
+  // Actualizar temporizador
+  if (data.temporizador) {
+    actualizarTemporizador(data.temporizador);
+  }
+  
+  // Actualizar sello temporal
+  actualizarSelloTemporal();
+}
+
 function iniciarSocket() {
   const protocolo = window.location.protocol === "https:" ? "wss" : "ws";
   const url = `${protocolo}://${window.location.host}/ws/deriv/estado/`;
@@ -447,6 +482,40 @@ function iniciarSocket() {
   socketConexion.onerror = (error) => {
     console.error("[Tiempo real] Error en la conexión:", error);
     socketConexion.close();
+  };
+}
+
+function iniciarSocketDashboard() {
+  const protocolo = window.location.protocol === "https:" ? "wss" : "ws";
+  const url = `${protocolo}://${window.location.host}/ws/dashboard/`;
+
+  socketDashboard = new WebSocket(url);
+
+  socketDashboard.onopen = () => {
+    console.info("[Dashboard] Conectado al canal de actualizaciones en tiempo real.");
+  };
+
+  socketDashboard.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.tipo === "conexion") {
+        console.info("[Dashboard]", data.mensaje);
+      } else {
+        manejarActualizacionDashboard(data);
+      }
+    } catch (error) {
+      console.error("[Dashboard] Error procesando mensaje:", error);
+    }
+  };
+
+  socketDashboard.onclose = () => {
+    console.warn("[Dashboard] Conexión cerrada. Reintentando en 5s...");
+    setTimeout(iniciarSocketDashboard, 5000);
+  };
+
+  socketDashboard.onerror = (error) => {
+    console.error("[Dashboard] Error en la conexión:", error);
+    socketDashboard.close();
   };
 }
 
@@ -510,8 +579,11 @@ function iniciarReloj() {
 document.addEventListener("DOMContentLoaded", () => {
   inicializarParticulas();
   iniciarSocket();
+  iniciarSocketDashboard();  // Nueva conexión para actualizaciones del dashboard
   iniciarReloj();
-  refrescarPanel();
-  setInterval(refrescarPanel, 60_000);
+  refrescarPanel();  // Carga inicial
+  // Reducir intervalo de refresco manual a 30 segundos como respaldo
+  // Las actualizaciones principales vienen por WebSocket cada 10 segundos
+  setInterval(refrescarPanel, 30_000);
 });
 
