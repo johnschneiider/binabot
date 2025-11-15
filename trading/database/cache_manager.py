@@ -38,11 +38,18 @@ def actualizar_tick_cache(activo: ActivoPermitido, max_ticks: int = 20) -> None:
     # Crear nuevos registros en cache
     tick_caches = []
     for tick in ticks_recientes:
+        # Convertir DateTimeField a epoch (segundos desde 1970)
+        if isinstance(tick.epoch, (int, float)):
+            epoch_value = int(tick.epoch)
+        else:
+            # Si es datetime, convertir a timestamp
+            epoch_value = int(tick.epoch.timestamp())
+        
         tick_caches.append(
             TickCache(
                 activo=activo,
                 precio=Decimal(str(tick.precio)),
-                epoch=tick.epoch,
+                epoch=epoch_value,
             )
         )
     
