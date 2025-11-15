@@ -127,6 +127,22 @@ class DerivWebsocketClient:
         await self._send({"balance": 1})
         return await self._receive()
 
+    async def obtener_simbolos_activos(
+        self, mercado: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Obtiene todos los símbolos activos disponibles en Deriv.
+        
+        Args:
+            mercado: Filtrar por mercado (ej: 'forex', 'synthetic_index', 'commodities', etc.)
+                    Si es None, devuelve todos los mercados.
+        """
+        payload = {"active_symbols": 1, "product_type": "basic"}
+        if mercado:
+            payload["landing_company"] = mercado
+        await self._send(payload)
+        return await self._receive()
+
 
 def operar_contrato_sync(**kwargs) -> Dict[str, Any]:
     """
@@ -165,6 +181,21 @@ def obtener_balance_sync() -> Dict[str, Any]:
         client = DerivWebsocketClient()
         try:
             respuesta = await client.obtener_balance()
+            return respuesta
+        finally:
+            await client.cerrar()
+
+    return asyncio.run(_run())
+
+
+def obtener_simbolos_activos_sync(mercado: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Helper sincrónico para obtener símbolos activos desde un contexto síncrono.
+    """
+    async def _run():
+        client = DerivWebsocketClient()
+        try:
+            respuesta = await client.obtener_simbolos_activos(mercado=mercado)
             return respuesta
         finally:
             await client.cerrar()

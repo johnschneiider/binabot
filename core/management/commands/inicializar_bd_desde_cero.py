@@ -1,17 +1,19 @@
 """
 Comando para inicializar la base de datos PostgreSQL desde cero.
-Útil cuando se migra a PostgreSQL y se quiere empezar sin datos históricos.
+Obtiene todos los activos disponibles desde la API de Deriv y los crea.
 """
 from decimal import Decimal
+from typing import List, Dict, Any
 
 from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 
 from core.models import ActivoPermitido, ConfiguracionBot
+from integracion_deriv.client import obtener_simbolos_activos_sync
 
 
 class Command(BaseCommand):
-    help = "Inicializa la base de datos PostgreSQL desde cero con datos mínimos."
+    help = "Inicializa la base de datos PostgreSQL desde cero con todos los activos disponibles de Deriv."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -20,11 +22,91 @@ class Command(BaseCommand):
             help="Confirma la inicialización sin preguntar",
         )
         parser.add_argument(
-            "--activos",
-            nargs="*",
-            help="Lista de activos a crear (por defecto: R_10, R_25, R_50, R_75, R_100)",
-            default=["R_10", "R_25", "R_50", "R_75", "R_100"],
+            "--solo-forex",
+            action="store_true",
+            help="Solo incluir activos de Forex",
         )
+        parser.add_argument(
+            "--excluir-mercados",
+            nargs="*",
+            help="Mercados a excluir (ej: commodities, indices)",
+            default=[],
+        )
+
+    def _obtener_simbolos_desde_api(self) -> List[Dict[str, Any]]:
+        """Obtiene todos los símbolos activos desde la API de Deriv."""
+        try:
+            self.stdout.write("Consultando API de Deriv para obtener símbolos activos...")
+            respuesta = obtener_simbolos_activos_sync()
+            
+            # Verificar errores
+            if "error" in respuesta:
+                error_msg = respuesta.get("error", {})
+                if isinstance(error_msg, dict):
+                    error_msg = error_msg.get("message", "Error desconocido")
+                raise CommandError(f"Error de API: {error_msg}")
+            
+            # La respuesta puede venir en diferentes formatos
+            # Formato 1: {"active_symbols": [...]}
+            # Formato 2: {"msg_type": "active_symbols", "active_symbols": [...]}
+            active_symbols = respuesta.get("active_symbols", [])
+            
+            # Si no está en el nivel superior, buscar en otros lugares
+            if not active_symbols:
+                # Intentar buscar en diferentes estructuras posibles
+                for key in ["symbols", "markets", "data"]:
+                    if key in respuesta:
+                        active_symbols = respuesta[key]
+                        break
+            
+            if not active_symbols:
+                # Mostrar la estructura de la respuesta para debugging
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Estructura de respuesta recibida: {list(respuesta.keys())}"
+                    )
+                )
+                raise CommandError("No se obtuvieron símbolos de la API de Deriv")
+            
+            if not isinstance(active_symbols, list):
+                raise CommandError(f"Formato de respuesta inesperado: {type(active_symbols)}")
+            
+            return active_symbols
+        except CommandError:
+            raise
+        except Exception as e:
+            raise CommandError(f"Error al consultar API de Deriv: {e}") from e
+
+    def _filtrar_simbolos(
+        self, 
+        simbolos: List[Dict[str, Any]], 
+        solo_forex: bool = False,
+        excluir_mercados: List[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Filtra símbolos según los criterios especificados."""
+        excluir_mercados = excluir_mercados or []
+        
+        simbolos_filtrados = []
+        for simbolo in simbolos:
+            mercado = simbolo.get("market", "").lower()
+            tipo = simbolo.get("market_display_name", "").lower()
+            
+            # Filtrar por mercado
+            if solo_forex:
+                if mercado != "forex" and "forex" not in tipo:
+                    continue
+            
+            # Excluir mercados
+            if any(excluir.lower() in mercado or excluir.lower() in tipo for excluir in excluir_mercados):
+                continue
+            
+            # Solo incluir símbolos que estén disponibles para trading
+            if simbolo.get("is_trading_suspended", False):
+                continue
+            
+            simbolos_filtrados.append(simbolo)
+        
+        return simbolos_filtrados
 
     def handle(self, *args, **options):
         # Verificar que estamos usando PostgreSQL
@@ -57,60 +139,106 @@ class Command(BaseCommand):
             )
             self.stdout.write("")
 
-        # Activos a crear
-        activos_a_crear = options["activos"]
-        self.stdout.write("ACTIVOS A CREAR:")
-        self.stdout.write("-" * 80)
-        for activo in activos_a_crear:
-            existe = ActivoPermitido.objects.filter(nombre=activo).exists()
-            estado = "✓ ya existe" if existe else "→ crear"
-            self.stdout.write(f"  {activo}: {estado}")
-        self.stdout.write("")
-
         if not options["confirmar"]:
             self.stdout.write(
                 self.style.WARNING(
-                    "⚠️  Este comando creará los activos permitidos y asegurará "
-                    "que exista una configuración del bot."
+                    "⚠️  Este comando consultará la API de Deriv para obtener todos los activos "
+                    "disponibles y los creará en la base de datos."
                 )
             )
+            if options["solo_forex"]:
+                self.stdout.write(self.style.WARNING("  → Solo se incluirán activos de Forex"))
             confirmacion = input("¿Deseas continuar? (sí/no): ")
             if confirmacion.lower() not in ["sí", "si", "yes", "y", "s"]:
                 self.stdout.write(self.style.ERROR("Operación cancelada."))
                 return
 
-        # Crear activos
+        # Obtener símbolos desde API
         self.stdout.write("")
+        self.stdout.write("OBTENIENDO ACTIVOS DESDE API DE DERIV...")
+        self.stdout.write("-" * 80)
+        
+        try:
+            simbolos = self._obtener_simbolos_desde_api()
+            self.stdout.write(self.style.SUCCESS(f"✓ Obtenidos {len(simbolos)} símbolos de la API"))
+        except CommandError as e:
+            self.stdout.write(self.style.ERROR(f"✗ {e}"))
+            return
+
+        # Filtrar símbolos
+        simbolos_filtrados = self._filtrar_simbolos(
+            simbolos,
+            solo_forex=options["solo_forex"],
+            excluir_mercados=options.get("excluir_mercados", [])
+        )
+        
+        self.stdout.write(f"  Símbolos después de filtrar: {len(simbolos_filtrados)}")
+        self.stdout.write("")
+
+        # Crear activos
         self.stdout.write("CREANDO ACTIVOS PERMITIDOS...")
         self.stdout.write("-" * 80)
 
         activos_creados = 0
-        activos_existentes_count = 0
+        activos_actualizados = 0
+        activos_omitidos = 0
+        errores = []
 
-        for activo_nombre in activos_a_crear:
-            activo, creado = ActivoPermitido.objects.get_or_create(
-                nombre=activo_nombre,
-                defaults={
-                    "descripcion": f"Índice sintético {activo_nombre}",
-                    "habilitado": True,
-                },
-            )
-            if creado:
-                self.stdout.write(
-                    self.style.SUCCESS(f"  ✓ Creado: {activo_nombre}")
+        for simbolo in simbolos_filtrados:
+            simbolo_nombre = simbolo.get("symbol", "").strip()
+            if not simbolo_nombre:
+                continue
+
+            try:
+                # Obtener información del símbolo
+                display_name = simbolo.get("display_name", simbolo_nombre)
+                mercado = simbolo.get("market", "unknown")
+                descripcion = f"{display_name} ({mercado})"
+                
+                # Verificar si el símbolo está disponible para trading
+                if simbolo.get("is_trading_suspended", False):
+                    activos_omitidos += 1
+                    continue
+
+                activo, creado = ActivoPermitido.objects.get_or_create(
+                    nombre=simbolo_nombre,
+                    defaults={
+                        "descripcion": descripcion,
+                        "habilitado": True,
+                    },
                 )
-                activos_creados += 1
-            else:
-                self.stdout.write(f"  → Ya existe: {activo_nombre}")
-                activos_existentes_count += 1
+                
+                if creado:
+                    activos_creados += 1
+                    if activos_creados % 10 == 0:
+                        self.stdout.write(f"  ... {activos_creados} creados")
+                else:
+                    # Actualizar si ya existe pero estaba deshabilitado
+                    if not activo.habilitado:
+                        activo.habilitado = True
+                        activo.descripcion = descripcion
+                        activo.save()
+                        activos_actualizados += 1
+            except Exception as e:
+                errores.append(f"{simbolo_nombre}: {str(e)}")
+                if len(errores) <= 5:  # Solo mostrar los primeros 5 errores
+                    self.stdout.write(
+                        self.style.ERROR(f"  ✗ Error con {simbolo_nombre}: {e}")
+                    )
 
         self.stdout.write("")
         self.stdout.write(
             self.style.SUCCESS(
                 f"✓ Activos creados: {activos_creados}, "
-                f"ya existían: {activos_existentes_count}"
+                f"actualizados: {activos_actualizados}, "
+                f"omitidos (suspendidos): {activos_omitidos}"
             )
         )
+        
+        if errores:
+            self.stdout.write(
+                self.style.WARNING(f"⚠️  Errores: {len(errores)} (primeros 5 mostrados arriba)")
+            )
 
         # Asegurar que existe ConfiguracionBot
         self.stdout.write("")
@@ -162,4 +290,3 @@ class Command(BaseCommand):
                     "⚠️  No hay activos habilitados. Verifica la configuración."
                 )
             )
-
