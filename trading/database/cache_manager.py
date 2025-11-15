@@ -94,7 +94,7 @@ def limpiar_cache_antiguo(dias_antiguedad: int = 1) -> int:
 def actualizar_indicadores_activo(
     activo: ActivoPermitido,
     indicadores_data: dict,
-) -> IndicadoresActivo:
+):
     """
     Actualiza o crea los indicadores de un activo.
     
@@ -105,6 +105,8 @@ def actualizar_indicadores_activo(
     Returns:
         Instancia de IndicadoresActivo
     """
+    from trading.models import IndicadoresActivo
+    
     indicadores, _ = IndicadoresActivo.objects.update_or_create(
         activo=activo,
         defaults=indicadores_data,
