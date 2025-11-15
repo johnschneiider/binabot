@@ -83,7 +83,8 @@ def calcular_ema(precios: List[Decimal], periodo: int = 10) -> Decimal:
         return precios_periodo[0]
     
     # Calcular SMA inicial
-    sma = sum(precios_periodo[:periodo]) / Decimal(str(len(precios_periodo[:periodo])))
+    periodo_actual = len(precios_periodo[:periodo])
+    sma = sum(precios_periodo[:periodo]) / Decimal(str(periodo_actual))
     
     # Calcular multiplicador
     multiplicador = Decimal("2") / Decimal(str(periodo + 1))
@@ -91,7 +92,8 @@ def calcular_ema(precios: List[Decimal], periodo: int = 10) -> Decimal:
     # Calcular EMA iterativamente
     ema = sma
     for precio in precios_periodo[periodo:]:
-        ema = (precio - ema) * multiplicador + ema
+        diferencia = precio - ema
+        ema = diferencia * multiplicador + ema
     
     return ema.quantize(Decimal("0.00001"))
 
@@ -114,17 +116,17 @@ def calcular_rate_of_change(precios: List[Decimal], periodo: int = 10) -> Decima
     
     # Regresión lineal simple: y = mx + b
     n = len(precios_periodo)
-    x_sum = sum(range(n))
-    y_sum = sum(precios_periodo)
-    xy_sum = sum(i * float(precio) for i, precio in enumerate(precios_periodo))
-    x2_sum = sum(i * i for i in range(n))
+    x_sum = Decimal(str(sum(range(n))))
+    y_sum = sum(precios_periodo)  # Ya es Decimal
+    xy_sum = sum(Decimal(str(i)) * precio for i, precio in enumerate(precios_periodo))
+    x2_sum = Decimal(str(sum(i * i for i in range(n))))
     
     # Calcular pendiente (m)
-    denominador = Decimal(str(n * x2_sum - x_sum * x_sum))
+    denominador = n * x2_sum - x_sum * x_sum
     if denominador == 0:
         return Decimal("0.00")
     
-    numerador = Decimal(str(n * xy_sum - x_sum * y_sum))
+    numerador = n * xy_sum - x_sum * y_sum
     pendiente = numerador / denominador
     
     return pendiente.quantize(Decimal("0.0001"))
