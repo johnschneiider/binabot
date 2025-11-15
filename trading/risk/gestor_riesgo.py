@@ -90,28 +90,57 @@ def crear_cooldown(
     activo = ActivoPermitido.objects.get(pk=activo_id)
     
     # Truncar motivo si es muy largo (asegurar máximo 40 caracteres)
-    # Convertir a string y truncar por caracteres, no por bytes
-    motivo_str = str(motivo)
+    # PostgreSQL varying(40) se refiere a caracteres, no bytes
+    motivo_str = str(motivo).strip()
+    
+    # Truncar a máximo 40 caracteres
     if len(motivo_str) > 40:
         motivo_truncado = motivo_str[:40]
     else:
         motivo_truncado = motivo_str
     
-    # Asegurar que no exceda 40 caracteres incluso después de encoding
-    # Si hay caracteres especiales que ocupan más bytes, truncar más
-    while len(motivo_truncado.encode('utf-8')) > 40:
-        motivo_truncado = motivo_truncado[:-1]
-        if not motivo_truncado:
-            motivo_truncado = "Cooldown activado"
-            break
+    # Validación final: asegurar que no esté vacío y que no exceda 40 caracteres
+    if not motivo_truncado:
+        motivo_truncado = "Cooldown activado"
     
-    cooldown = CooldownActivo.objects.create(
-        activo=activo,
-        motivo=motivo_truncado,
-        finaliza_en=timezone.now() + timedelta(minutes=duracion_minutos),
-    )
+    # Asegurar que no exceda 40 caracteres (validación final)
+    motivo_truncado = motivo_truncado[:40]
     
-    return cooldown
+    # Validación adicional: verificar longitud antes de crear
+    if len(motivo_truncado) > 40:
+        # Si por alguna razón aún excede, usar valor por defecto
+        motivo_truncado = "Cooldown activado"
+    
+    try:
+        cooldown = CooldownActivo.objects.create(
+            activo=activo,
+            motivo=motivo_truncado,
+            finaliza_en=timezone.now() + timedelta(minutes=duracion_minutos),
+        )
+        return cooldown
+    except Exception as e:
+        # Si falla, intentar con motivo por defecto
+        if motivo_truncado != "Cooldown activado":
+            try:
+                cooldown = CooldownActivo.objects.create(
+                    activo=activo,
+                    motivo="Cooldown activado",
+                    finaliza_en=timezone.now() + timedelta(minutes=duracion_minutos),
+                )
+                return cooldown
+            except Exception as e2:
+                # Log del error original para debugging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(
+                    f"Error al crear cooldown para activo {activo_id}. "
+                    f"Motivo original: '{motivo}' (len={len(str(motivo))}), "
+                    f"Motivo truncado: '{motivo_truncado}' (len={len(motivo_truncado)}). "
+                    f"Error: {e}, Error2: {e2}"
+                )
+                raise
+        else:
+            raise
 
 
 def verificar_limites_activo(
