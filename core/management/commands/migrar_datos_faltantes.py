@@ -47,24 +47,41 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("=" * 80))
         self.stdout.write("")
 
-        # Buscar backup de SQLite
-        sqlite_path = Path(settings.BASE_DIR) / "db.sqlite3"
-        if not sqlite_path.exists():
-            # Buscar backups
-            backups = list(Path(settings.BASE_DIR).glob("db.sqlite3.backup_*"))
-            if backups:
-                sqlite_path = sorted(backups)[-1]  # Usar el más reciente
-                self.stdout.write(
-                    self.style.WARNING(
-                        f"Usando backup de SQLite: {sqlite_path.name}"
-                    )
+        # Buscar backup de SQLite (preferir backups sobre el archivo actual)
+        sqlite_path = None
+        backups = list(Path(settings.BASE_DIR).glob("db.sqlite3.backup_*"))
+        if backups:
+            sqlite_path = sorted(backups)[-1]  # Usar el más reciente
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Usando backup de SQLite: {sqlite_path.name}"
                 )
-            else:
+            )
+        else:
+            # Intentar con el archivo actual
+            sqlite_path = Path(settings.BASE_DIR) / "db.sqlite3"
+            if not sqlite_path.exists():
                 raise CommandError(
                     "No se encontró db.sqlite3 ni backups. No se pueden migrar datos."
                 )
+            self.stdout.write(
+                self.style.WARNING(
+                    "Usando db.sqlite3 actual (puede estar vacío o corrupto)"
+                )
+            )
 
         self.stdout.write(f"SQLite fuente: {sqlite_path}")
+        
+        # Verificar tamaño del archivo
+        if sqlite_path.exists():
+            size_mb = sqlite_path.stat().st_size / (1024 * 1024)
+            self.stdout.write(f"Tamaño del archivo: {size_mb:.2f} MB")
+            if size_mb < 0.1:
+                self.stdout.write(
+                    self.style.WARNING(
+                        "⚠️  El archivo SQLite es muy pequeño. Puede estar vacío."
+                    )
+                )
         self.stdout.write("")
 
         # Verificar qué hay en PostgreSQL actualmente
@@ -138,12 +155,28 @@ class Command(BaseCommand):
             self.stdout.write("EXPORTANDO DESDE SQLITE...")
             self.stdout.write("-" * 80)
 
+            # Verificar que hay datos en SQLite antes de exportar
+            from core.models import ActivoPermitido as ActivoPermitidoSQLite
+            from historial.models import Operacion as OperacionSQLite
+            
+            activos_sqlite = ActivoPermitidoSQLite.objects.count()
+            operaciones_sqlite = OperacionSQLite.objects.count()
+            
+            self.stdout.write(f"  Activos en SQLite: {activos_sqlite}")
+            self.stdout.write(f"  Operaciones en SQLite: {operaciones_sqlite}")
+            
+            if activos_sqlite == 0 and operaciones_sqlite == 0:
+                raise CommandError(
+                    "No hay datos en SQLite para migrar. "
+                    "El archivo puede estar vacío o corrupto."
+                )
+
             dump_args = ["dumpdata", "--natural-foreign", "--natural-primary"]
             for modelo in modelos_a_migrar:
                 dump_args.append(modelo)
 
             dump_args.extend(["--output", temp_file_path])
-            call_command(*dump_args, verbosity=1)
+            call_command(*dump_args, verbosity=2)
 
             # Verificar archivo
             if not Path(temp_file_path).exists():
