@@ -271,7 +271,12 @@ class MotorTradingProfesional:
         
         # Crear operación
         import uuid
-        numero_contrato = f"PEND-{uuid.uuid4()}"
+        # Generar número de contrato truncado a 40 caracteres máximo
+        uuid_str = str(uuid.uuid4()).replace("-", "")  # UUID sin guiones (32 chars)
+        numero_contrato = f"PEND-{uuid_str[:32]}"  # PEND- (5) + 32 chars = 37 chars total
+        # Asegurar que no exceda 40 caracteres
+        numero_contrato = numero_contrato[:40]
+        
         operacion = Operacion.objetos.create(
             activo=mejor_activo.nombre,
             direccion=Operacion.Direccion.CALL if direccion == "CALL" else Operacion.Direccion.PUT,
