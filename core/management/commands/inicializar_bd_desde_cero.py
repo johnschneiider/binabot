@@ -39,11 +39,18 @@ class Command(BaseCommand):
             self.stdout.write("Consultando API de Deriv para obtener símbolos activos...")
             respuesta = obtener_simbolos_activos_sync()
             
+            # Debug: mostrar estructura de respuesta
+            self.stdout.write(f"  Claves en respuesta: {list(respuesta.keys())[:10]}")
+            
             # Verificar errores
             if "error" in respuesta:
                 error_msg = respuesta.get("error", {})
                 if isinstance(error_msg, dict):
-                    error_msg = error_msg.get("message", "Error desconocido")
+                    error_msg = error_msg.get("message", str(error_msg))
+                # Mostrar respuesta completa para debugging
+                self.stdout.write(
+                    self.style.WARNING(f"Respuesta completa: {respuesta}")
+                )
                 raise CommandError(f"Error de API: {error_msg}")
             
             # La respuesta puede venir en diferentes formatos

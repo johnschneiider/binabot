@@ -137,11 +137,19 @@ class DerivWebsocketClient:
             producto_tipo: Tipo de producto ('basic', 'multi_barrier', etc.)
                           Si es None, devuelve todos los tipos.
         """
+        # La API de Deriv requiere el formato: {"active_symbols": 1}
+        # Sin parámetros adicionales en el nivel superior
         payload = {"active_symbols": 1}
-        if producto_tipo:
-            payload["product_type"] = producto_tipo
         await self._send(payload)
-        return await self._receive()
+        respuesta = await self._receive()
+        
+        # Si hay error, intentar con product_type como parámetro opcional
+        if "error" in respuesta and producto_tipo:
+            payload = {"active_symbols": 1, "product_type": producto_tipo}
+            await self._send(payload)
+            respuesta = await self._receive()
+        
+        return respuesta
 
 
 def operar_contrato_sync(**kwargs) -> Dict[str, Any]:
