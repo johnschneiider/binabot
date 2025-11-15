@@ -44,14 +44,28 @@ class Command(BaseCommand):
         self.stdout.write("PASO 1: Verificando configuración de PostgreSQL...")
         self.stdout.write("-" * 80)
         
-        db_name = settings.DATABASES.get("default", {}).get("NAME")
-        if not db_name or "sqlite" in str(db_name).lower():
+        # Leer variables de entorno directamente (no desde settings, que aún usa SQLite)
+        import os
+        db_name = os.getenv("DB_NAME", "binabot")
+        db_user = os.getenv("DB_USER", "postgres")
+        db_password = os.getenv("DB_PASSWORD", "")
+        db_host = os.getenv("DB_HOST", "localhost")
+        db_port = os.getenv("DB_PORT", "5432")
+        
+        if not db_password:
             raise CommandError(
-                "ERROR: La configuración de PostgreSQL no está activa.\n"
-                "Asegúrate de tener DB_ENGINE=postgresql en tu archivo .env"
+                "ERROR: DB_PASSWORD no está configurado en el archivo .env\n"
+                "Agrega DB_PASSWORD=tu_password en tu archivo .env"
             )
-
-        db_config = settings.DATABASES["default"]
+        
+        db_config = {
+            "NAME": db_name,
+            "USER": db_user,
+            "PASSWORD": db_password,
+            "HOST": db_host,
+            "PORT": db_port,
+        }
+        
         self.stdout.write(f"Base de datos: {db_config['NAME']}")
         self.stdout.write(f"Host: {db_config['HOST']}")
         self.stdout.write(f"Puerto: {db_config['PORT']}")
