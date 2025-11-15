@@ -224,6 +224,20 @@ class CooldownActivo(models.Model):
     def __str__(self) -> str:
         return f"{self.activo.nombre} - Cooldown hasta {self.finaliza_en}"
 
+    def clean(self):
+        """Valida que el motivo no exceda 40 caracteres."""
+        super().clean()
+        if self.motivo and len(self.motivo) > 40:
+            self.motivo = self.motivo[:40]
+    
+    def save(self, *args, **kwargs):
+        """Trunca el motivo antes de guardar."""
+        if self.motivo and len(self.motivo) > 40:
+            self.motivo = self.motivo[:40]
+        if not self.motivo:
+            self.motivo = "Cooldown activado"
+        super().save(*args, **kwargs)
+    
     @property
     def esta_activo(self) -> bool:
         """Verifica si el cooldown aún está activo."""

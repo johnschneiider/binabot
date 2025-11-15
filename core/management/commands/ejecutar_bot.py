@@ -96,11 +96,20 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING("Loop detenido por el usuario."))
                 break
             except Exception as exc:
+                import traceback
+                error_traceback = traceback.format_exc()
                 self.stderr.write(
                     self.style.ERROR(
                         f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Error en el loop: {exc}"
                     )
                 )
+                # Si es un error de base de datos relacionado con longitud, mostrar más detalles
+                if "value too long" in str(exc).lower() or "varying" in str(exc).lower():
+                    self.stderr.write(
+                        self.style.ERROR(
+                            f"Traceback completo:\n{error_traceback}"
+                        )
+                    )
 
             time.sleep(intervalo)
 
