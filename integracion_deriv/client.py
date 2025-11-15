@@ -128,7 +128,7 @@ class DerivWebsocketClient:
         return await self._receive()
 
     async def obtener_simbolos_activos(
-        self, producto_tipo: Optional[str] = None
+        self, producto_tipo: Optional[str] = None, formato: str = "full"
     ) -> Dict[str, Any]:
         """
         Obtiene todos los símbolos activos disponibles en Deriv.
@@ -136,20 +136,14 @@ class DerivWebsocketClient:
         Args:
             producto_tipo: Tipo de producto ('basic', 'multi_barrier', etc.)
                           Si es None, devuelve todos los tipos.
+            formato: Formato de respuesta ('brief' o 'full'). 'full' incluye más detalles.
         """
-        # La API de Deriv requiere el formato: {"active_symbols": 1}
-        # Sin parámetros adicionales en el nivel superior
-        payload = {"active_symbols": 1}
+        # La API de Deriv requiere: {"active_symbols": "brief"} o {"active_symbols": "full"}
+        payload = {"active_symbols": formato}
+        if producto_tipo:
+            payload["product_type"] = producto_tipo
         await self._send(payload)
-        respuesta = await self._receive()
-        
-        # Si hay error, intentar con product_type como parámetro opcional
-        if "error" in respuesta and producto_tipo:
-            payload = {"active_symbols": 1, "product_type": producto_tipo}
-            await self._send(payload)
-            respuesta = await self._receive()
-        
-        return respuesta
+        return await self._receive()
 
 
 def operar_contrato_sync(**kwargs) -> Dict[str, Any]:
@@ -196,14 +190,18 @@ def obtener_balance_sync() -> Dict[str, Any]:
     return asyncio.run(_run())
 
 
-def obtener_simbolos_activos_sync(producto_tipo: Optional[str] = None) -> Dict[str, Any]:
+def obtener_simbolos_activos_sync(
+    producto_tipo: Optional[str] = None, formato: str = "full"
+) -> Dict[str, Any]:
     """
     Helper sincrónico para obtener símbolos activos desde un contexto síncrono.
     """
     async def _run():
         client = DerivWebsocketClient()
         try:
-            respuesta = await client.obtener_simbolos_activos(producto_tipo=producto_tipo)
+            respuesta = await client.obtener_simbolos_activos(
+                producto_tipo=producto_tipo, formato=formato
+            )
             return respuesta
         finally:
             await client.cerrar()
