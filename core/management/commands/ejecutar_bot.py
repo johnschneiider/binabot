@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from core.services import GestorBotCore
 from trading.services import MotorTrading
+from trading.services_profesional import MotorTradingProfesional
 
 
 class Command(BaseCommand):
@@ -23,13 +24,29 @@ class Command(BaseCommand):
             default=3600,
             help="Segundos mínimos entre simulaciones mientras el bot está en pausa.",
         )
+        parser.add_argument(
+            "--profesional",
+            action="store_true",
+            help="Usar motor de trading profesional (análisis multi-activo avanzado)",
+        )
 
     def handle(self, *args, **options):
         intervalo = options["intervalo"]
         intervalo_simulacion = options["intervalo_simulacion"]
 
         gestor = GestorBotCore()
-        motor = MotorTrading()
+        
+        # Seleccionar motor según opción
+        if options["profesional"]:
+            motor = MotorTradingProfesional()
+            self.stdout.write(
+                self.style.SUCCESS("Motor de trading PROFESIONAL activado")
+            )
+        else:
+            motor = MotorTrading()
+            self.stdout.write(
+                self.style.WARNING("Motor de trading SIMPLE activado (usa --profesional para activar el motor avanzado)")
+            )
 
         self.stdout.write(self.style.SUCCESS("Loop principal del bot iniciado."))
         self.stdout.write(f"Intervalo de ciclo: {intervalo}s")
