@@ -39,11 +39,24 @@ def actualizar_tick_cache(activo: ActivoPermitido, max_ticks: int = 20) -> None:
     tick_caches = []
     for tick in ticks_recientes:
         # Convertir DateTimeField a epoch (segundos desde 1970)
-        if isinstance(tick.epoch, (int, float)):
-            epoch_value = int(tick.epoch)
-        else:
-            # Si es datetime, convertir a timestamp
-            epoch_value = int(tick.epoch.timestamp())
+        # Tick.epoch es DateTimeField, necesitamos convertir a timestamp
+        try:
+            if hasattr(tick.epoch, 'timestamp'):
+                # Es un datetime
+                epoch_value = int(tick.epoch.timestamp())
+            elif isinstance(tick.epoch, (int, float)):
+                # Ya es un número
+                epoch_value = int(tick.epoch)
+            else:
+                # Intentar convertir de otra forma
+                import time
+                if hasattr(tick.epoch, 'timetuple'):
+                    epoch_value = int(time.mktime(tick.epoch.timetuple()))
+                else:
+                    continue  # Skip este tick si no podemos convertir
+        except (AttributeError, ValueError, OSError) as e:
+            # Si falla la conversión, saltar este tick
+            continue
         
         tick_caches.append(
             TickCache(
@@ -53,7 +66,8 @@ def actualizar_tick_cache(activo: ActivoPermitido, max_ticks: int = 20) -> None:
             )
         )
     
-    TickCache.objects.bulk_create(tick_caches)
+    if tick_caches:
+        TickCache.objects.bulk_create(tick_caches)
 
 
 def obtener_ticks_cache(

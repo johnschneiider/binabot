@@ -174,7 +174,7 @@ class MotorTradingProfesional:
             if detectar_micro_congestion(indicadores):
                 crear_cooldown(
                     activo.id,
-                    motivo="Micro-congestión detectada",
+                    motivo="Micro-congestion detectada",  # Truncado a 40 chars
                     duracion_minutos=5,
                 )
                 continue
