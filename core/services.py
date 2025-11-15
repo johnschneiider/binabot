@@ -8,7 +8,7 @@ from typing import Optional
 from django.db import transaction
 from django.utils import timezone
 
-from historial.models import Operacion
+from historial.models import AjusteBalance, Operacion
 from integracion_deriv.client import obtener_balance_sync
 
 from .models import ConfiguracionBot
@@ -144,6 +144,62 @@ class GestorBotCore:
         except Exception:
             pass
 
+    def calcular_balance_esperado_desde_operaciones(
+        self, balance_inicial: Optional[Decimal] = None
+    ) -> Decimal:
+        """
+        Calcula el balance esperado sumando todos los beneficios de las operaciones reales.
+        Si no se proporciona balance_inicial, usa el balance_meta_base como punto de partida.
+        """
+        if balance_inicial is None:
+            balance_inicial = (
+                self.configuracion.balance_meta_base
+                if self.configuracion.balance_meta_base > 0
+                else self.configuracion.balance_actual
+            )
+
+        # Sumar todos los beneficios de operaciones reales (no simuladas)
+        operaciones_reales = Operacion.objetos.reales().exclude(
+            resultado=Operacion.Resultado.PENDIENTE
+        )
+        total_beneficios = sum(
+            op.beneficio for op in operaciones_reales
+        )
+        balance_esperado = (balance_inicial + total_beneficios).quantize(Decimal("0.01"))
+        return balance_esperado
+
+    def detectar_discrepancia_balance(
+        self, balance_real: Decimal, balance_esperado: Decimal, umbral: Decimal = Decimal("0.01")
+    ) -> Optional[Decimal]:
+        """
+        Detecta si hay una discrepancia significativa entre el balance real y el esperado.
+        Retorna la diferencia si es mayor al umbral, None en caso contrario.
+        """
+        diferencia = (balance_real - balance_esperado).quantize(Decimal("0.01"))
+        if abs(diferencia) > umbral:
+            return diferencia
+        return None
+
+    def registrar_ajuste_balance(
+        self,
+        balance_esperado: Decimal,
+        balance_real: Decimal,
+        diferencia: Decimal,
+        descripcion: str = "",
+    ) -> AjusteBalance:
+        """
+        Registra un ajuste de balance cuando se detecta una discrepancia.
+        """
+        balance_anterior = self.configuracion.balance_actual
+        ajuste = AjusteBalance.objects.create(
+            balance_esperado=balance_esperado,
+            balance_real=balance_real,
+            diferencia=diferencia,
+            descripcion=descripcion or f"Discrepancia detectada: balance real ({balance_real}) vs esperado ({balance_esperado})",
+            balance_anterior=balance_anterior,
+        )
+        return ajuste
+
     def sincronizar_balance_desde_api(self) -> None:
         if not self.configuracion:
             return
@@ -161,6 +217,33 @@ class GestorBotCore:
             return
 
         balance = balance.quantize(Decimal("0.01"))
+        balance_anterior = self.configuracion.balance_actual
+
+        # Calcular balance esperado desde operaciones registradas
+        balance_esperado = self.calcular_balance_esperado_desde_operaciones()
+        
+        # Detectar discrepancias (umbral mínimo de $0.01 para evitar ruido)
+        diferencia = self.detectar_discrepancia_balance(
+            balance_real=balance,
+            balance_esperado=balance_esperado,
+            umbral=Decimal("0.01")
+        )
+
+        # Si hay discrepancia significativa, registrar el ajuste
+        if diferencia is not None:
+            descripcion = (
+                f"Balance real de Deriv: {balance}, "
+                f"Balance esperado desde operaciones: {balance_esperado}. "
+                f"Diferencia: {diferencia}. "
+                f"Esto puede deberse a comisiones, fees, o ajustes no contabilizados."
+            )
+            self.registrar_ajuste_balance(
+                balance_esperado=balance_esperado,
+                balance_real=balance,
+                diferencia=diferencia,
+                descripcion=descripcion,
+            )
+
         self.configuracion.balance_actual = balance
 
         if self.configuracion.balance_meta_base <= 0:

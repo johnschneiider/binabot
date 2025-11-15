@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Operacion, Tick
+from .models import AjusteBalance, Operacion, Tick
 
 
 @admin.register(Operacion)
@@ -28,3 +28,38 @@ class TickAdmin(admin.ModelAdmin):
     search_fields = ("activo",)
     ordering = ("-epoch",)
     readonly_fields = ("datos", "recibido")
+
+
+@admin.register(AjusteBalance)
+class AjusteBalanceAdmin(admin.ModelAdmin):
+    list_display = (
+        "detectado_en",
+        "balance_real",
+        "balance_esperado",
+        "diferencia",
+        "balance_anterior",
+    )
+    list_filter = ("detectado_en",)
+    search_fields = ("descripcion",)
+    ordering = ("-detectado_en",)
+    readonly_fields = (
+        "balance_esperado",
+        "balance_real",
+        "diferencia",
+        "detectado_en",
+        "balance_anterior",
+    )
+    fieldsets = (
+        (
+            "Información de Balance",
+            {
+                "fields": (
+                    "balance_real",
+                    "balance_esperado",
+                    "diferencia",
+                    "balance_anterior",
+                )
+            },
+        ),
+        ("Detalles", {"fields": ("descripcion", "detectado_en")}),
+    )

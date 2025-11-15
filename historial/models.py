@@ -120,3 +120,45 @@ class Tick(models.Model):
             },
         )
         return instancia
+
+
+class AjusteBalance(models.Model):
+    """
+    Registra discrepancias entre el balance calculado desde operaciones
+    y el balance real obtenido de la API de Deriv.
+    Esto puede deberse a comisiones, fees, o ajustes no contabilizados.
+    """
+    balance_esperado = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        help_text="Balance calculado desde operaciones registradas"
+    )
+    balance_real = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        help_text="Balance obtenido de la API de Deriv"
+    )
+    diferencia = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        help_text="Diferencia entre balance real y esperado (real - esperado)"
+    )
+    descripcion = models.TextField(
+        blank=True,
+        help_text="Descripción de la discrepancia detectada"
+    )
+    detectado_en = models.DateTimeField(auto_now_add=True)
+    balance_anterior = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Balance anterior antes de la sincronización"
+    )
+
+    objects = models.Manager()
+
+    class Meta:
+        ordering = ("-detectado_en",)
+        verbose_name = "Ajuste de balance"
+        verbose_name_plural = "Ajustes de balance"
+        indexes = [
+            models.Index(fields=("-detectado_en",)),
+        ]
+
+    def __str__(self) -> str:
+        return f"Ajuste: {self.diferencia} @ {self.detectado_en.strftime('%Y-%m-%d %H:%M:%S')}"
