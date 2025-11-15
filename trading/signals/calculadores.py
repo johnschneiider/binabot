@@ -84,10 +84,15 @@ def calcular_ema(precios: List[Decimal], periodo: int = 10) -> Decimal:
     
     # Calcular SMA inicial
     periodo_actual = len(precios_periodo[:periodo])
-    sma = sum(precios_periodo[:periodo]) / Decimal(str(periodo_actual))
+    periodo_decimal = Decimal(str(periodo_actual))
+    
+    # Sumar precios (todos son Decimal)
+    suma_precios = sum(precios_periodo[:periodo])
+    sma = suma_precios / periodo_decimal
     
     # Calcular multiplicador
-    multiplicador = Decimal("2") / Decimal(str(periodo + 1))
+    periodo_plus_one = Decimal(str(periodo + 1))
+    multiplicador = Decimal("2") / periodo_plus_one
     
     # Calcular EMA iterativamente
     ema = sma

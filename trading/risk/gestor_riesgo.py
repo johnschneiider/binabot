@@ -89,8 +89,21 @@ def crear_cooldown(
     
     activo = ActivoPermitido.objects.get(pk=activo_id)
     
-    # Truncar motivo si es muy largo
-    motivo_truncado = motivo[:40] if len(motivo) > 40 else motivo
+    # Truncar motivo si es muy largo (asegurar máximo 40 caracteres)
+    # Convertir a string y truncar por caracteres, no por bytes
+    motivo_str = str(motivo)
+    if len(motivo_str) > 40:
+        motivo_truncado = motivo_str[:40]
+    else:
+        motivo_truncado = motivo_str
+    
+    # Asegurar que no exceda 40 caracteres incluso después de encoding
+    # Si hay caracteres especiales que ocupan más bytes, truncar más
+    while len(motivo_truncado.encode('utf-8')) > 40:
+        motivo_truncado = motivo_truncado[:-1]
+        if not motivo_truncado:
+            motivo_truncado = "Cooldown activado"
+            break
     
     cooldown = CooldownActivo.objects.create(
         activo=activo,
