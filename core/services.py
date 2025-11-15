@@ -282,7 +282,12 @@ class GestorBotCore:
             ]
         )
 
-    def ejecutar_simulacion_pausa(self, intervalo_segundos: int = 3600):
+    def ejecutar_simulacion_pausa(self, intervalo_segundos: int = 60):
+        """
+        Ejecuta simulaciones mientras el bot está en pausa.
+        Por defecto, ejecuta una simulación cada 60 segundos para mantener
+        los datos actualizados continuamente.
+        """
         if self.configuracion.estado != ConfiguracionBot.Estado.PAUSADO:
             return None
 
@@ -296,7 +301,11 @@ class GestorBotCore:
 
             simulador = SimuladorHorariosService()
             resultado = simulador.ejecutar()
-        except Exception:
+        except Exception as e:
+            # Log del error para debugging pero no interrumpir el loop
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error ejecutando simulación: {e}", exc_info=True)
             return None
 
         if resultado:

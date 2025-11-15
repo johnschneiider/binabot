@@ -21,8 +21,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--intervalo-simulacion",
             type=int,
-            default=3600,
-            help="Segundos mínimos entre simulaciones mientras el bot está en pausa.",
+            default=60,
+            help="Segundos mínimos entre simulaciones mientras el bot está en pausa. Por defecto: 60s para ejecución continua.",
         )
         parser.add_argument(
             "--profesional",
