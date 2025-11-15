@@ -5,6 +5,7 @@ from datetime import time, timedelta
 from decimal import Decimal
 from typing import Optional
 
+from django.db import transaction
 from django.db.models import Avg, Count, Q
 from django.utils import timezone
 
