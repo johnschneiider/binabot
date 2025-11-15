@@ -98,16 +98,38 @@ ASGI_APPLICATION = "bot_deriv.asgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-        "OPTIONS": {
-            "timeout": 30,  # Timeout de 30 segundos para operaciones
-            "check_same_thread": False,  # Permitir acceso desde múltiples threads
-        },
+# Configuración de base de datos
+# Si DB_ENGINE está configurado, usa PostgreSQL, sino SQLite (para desarrollo)
+DB_ENGINE = os.getenv("DB_ENGINE", "sqlite").lower()
+
+if DB_ENGINE == "postgresql":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("DB_NAME", "binabot"),
+            "USER": os.getenv("DB_USER", "postgres"),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "HOST": os.getenv("DB_HOST", "localhost"),
+            "PORT": os.getenv("DB_PORT", "5432"),
+            "OPTIONS": {
+                "connect_timeout": 10,
+                "options": "-c timezone=America/Bogota",
+            },
+            "CONN_MAX_AGE": 600,  # Pool de conexiones por 10 minutos
+        }
     }
-}
+else:
+    # SQLite para desarrollo local
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+            "OPTIONS": {
+                "timeout": 30,
+                "check_same_thread": False,
+            },
+        }
+    }
 
 
 # Password validation
