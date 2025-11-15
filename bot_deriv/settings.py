@@ -17,7 +17,10 @@ from dotenv import load_dotenv
 
 # Cargar variables de entorno
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Buscar .env en el directorio actual y en el padre (común en servidores)
 ENV_PATH = BASE_DIR / ".env"
+if not ENV_PATH.exists():
+    ENV_PATH = BASE_DIR.parent / ".env"
 if ENV_PATH.exists():
     load_dotenv(ENV_PATH)
 
