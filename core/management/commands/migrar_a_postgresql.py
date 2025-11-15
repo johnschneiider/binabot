@@ -176,15 +176,35 @@ class Command(BaseCommand):
                 size_mb = sqlite_path.stat().st_size / (1024 * 1024)
                 self.stdout.write(f"    Tamaño de SQLite: {size_mb:.2f} MB")
             
-            call_command(
+            # Excluir Ticks si hay muchos (pueden causar problemas)
+            # Los Ticks se pueden regenerar después
+            from historial.models import Tick
+            tick_count = Tick.objects.count()
+            if tick_count > 100000:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"    ⚠️  Detectados {tick_count:,} Ticks. "
+                        "Se excluirán de la migración (se pueden regenerar después)."
+                    )
+                )
+                exclude_ticks = "--exclude=historial.Tick"
+            else:
+                exclude_ticks = ""
+            
+            # Construir comando dumpdata
+            dump_args = [
                 "dumpdata",
                 "--natural-foreign",
                 "--natural-primary",
                 "--exclude=contenttypes",
                 "--exclude=auth.Permission",
-                output=temp_file_path,
-                verbosity=1,  # Mostrar progreso
-            )
+            ]
+            if exclude_ticks:
+                dump_args.append("--exclude=historial.Tick")
+            
+            dump_args.extend(["--output", temp_file_path])
+            
+            call_command(*dump_args, verbosity=1)
             
             # Verificar que el archivo se creó y tiene contenido
             if not Path(temp_file_path).exists():
@@ -246,14 +266,38 @@ class Command(BaseCommand):
         self.stdout.write("-" * 80)
         
         try:
-            call_command("loaddata", temp_file_path, verbosity=0)
+            # Validar que el JSON es válido antes de importar
+            self.stdout.write("  - Validando formato JSON...")
+            import json
+            with open(temp_file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                self.stdout.write(f"    ✓ JSON válido ({len(data)} objetos)")
+            
+            # Importar con más verbosidad para ver errores
+            self.stdout.write("  - Importando datos...")
+            call_command("loaddata", temp_file_path, verbosity=2)
             self.stdout.write(self.style.SUCCESS("  ✓ Datos importados"))
-        except Exception as e:
+        except json.JSONDecodeError as e:
             Path(temp_file_path).unlink(missing_ok=True)
+            raise CommandError(f"ERROR: El archivo JSON no es válido: {e}")
+        except Exception as e:
+            # No eliminar el archivo temporal si hay error, para debugging
+            error_msg = str(e)
+            self.stdout.write(
+                self.style.ERROR(f"  ✗ Error al importar: {error_msg}")
+            )
+            self.stdout.write("")
+            self.stdout.write(
+                self.style.WARNING(
+                    f"El archivo de exportación se guardó en: {temp_file_path}\n"
+                    "Puedes revisarlo para identificar el problema."
+                )
+            )
             raise CommandError(f"ERROR al importar datos: {e}")
         finally:
-            # Limpiar archivo temporal
-            Path(temp_file_path).unlink(missing_ok=True)
+            # Solo limpiar si todo fue exitoso
+            # Si hay error, dejamos el archivo para debugging
+            pass
 
         self.stdout.write("")
 
