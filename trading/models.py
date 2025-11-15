@@ -206,7 +206,7 @@ class CooldownActivo(models.Model):
     )
     
     motivo = models.CharField(
-        max_length=100,
+        max_length=40,
         help_text="Razón del cooldown (señal contradictoria, micro-congestión, etc.)"
     )
     

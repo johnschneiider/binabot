@@ -116,17 +116,18 @@ def calcular_rate_of_change(precios: List[Decimal], periodo: int = 10) -> Decima
     
     # Regresión lineal simple: y = mx + b
     n = len(precios_periodo)
+    n_decimal = Decimal(str(n))
     x_sum = Decimal(str(sum(range(n))))
     y_sum = sum(precios_periodo)  # Ya es Decimal
     xy_sum = sum(Decimal(str(i)) * precio for i, precio in enumerate(precios_periodo))
     x2_sum = Decimal(str(sum(i * i for i in range(n))))
     
     # Calcular pendiente (m)
-    denominador = n * x2_sum - x_sum * x_sum
+    denominador = n_decimal * x2_sum - x_sum * x_sum
     if denominador == 0:
         return Decimal("0.00")
     
-    numerador = n * xy_sum - x_sum * y_sum
+    numerador = n_decimal * xy_sum - x_sum * y_sum
     pendiente = numerador / denominador
     
     return pendiente.quantize(Decimal("0.0001"))

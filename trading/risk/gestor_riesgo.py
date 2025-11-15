@@ -79,7 +79,7 @@ def crear_cooldown(
     
     Args:
         activo_id: ID del activo
-        motivo: Razón del cooldown
+        motivo: Razón del cooldown (máximo 40 caracteres)
         duracion_minutos: Duración del cooldown en minutos
     
     Returns:
@@ -89,9 +89,12 @@ def crear_cooldown(
     
     activo = ActivoPermitido.objects.get(pk=activo_id)
     
+    # Truncar motivo si es muy largo
+    motivo_truncado = motivo[:40] if len(motivo) > 40 else motivo
+    
     cooldown = CooldownActivo.objects.create(
         activo=activo,
-        motivo=motivo,
+        motivo=motivo_truncado,
         finaliza_en=timezone.now() + timedelta(minutes=duracion_minutos),
     )
     
