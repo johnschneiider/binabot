@@ -156,3 +156,9 @@ class CooldownActivoAdmin(admin.ModelAdmin):
     search_fields = ("activo__nombre", "motivo")
     ordering = ("-finaliza_en",)
     readonly_fields = ("creado_en",)
+    
+    def save_model(self, request, obj, form, change):
+        """Valida y trunca el motivo antes de guardar."""
+        if obj.motivo and len(obj.motivo) > 40:
+            obj.motivo = obj.motivo[:40]
+        super().save_model(request, obj, form, change)
