@@ -43,9 +43,6 @@ class Command(BaseCommand):
                 self.style.WARNING(f"Usando balance almacenado: {balance_real}")
             )
 
-        # Calcular balance esperado
-        balance_esperado = gestor.calcular_balance_esperado_desde_operaciones()
-
         # Estadísticas de operaciones
         operaciones_reales = Operacion.objetos.reales().exclude(
             resultado=Operacion.Resultado.PENDIENTE
@@ -59,12 +56,60 @@ class Command(BaseCommand):
         ).count()
         total_beneficios = sum(op.beneficio for op in operaciones_reales)
 
+        # Calcular balance esperado (método actual)
+        balance_esperado = gestor.calcular_balance_esperado_desde_operaciones()
+        
+        # Calcular balance inicial real (método alternativo: retroceder desde balance actual)
+        balance_inicial_calculado = (balance_real - total_beneficios).quantize(Decimal("0.01"))
+        
+        # Obtener balance inicial usado en el cálculo
+        balance_inicial_usado = (
+            config.balance_meta_base
+            if config.balance_meta_base > 0
+            else config.balance_actual
+        )
+
         # Mostrar información básica
         self.stdout.write(self.style.SUCCESS("INFORMACIÓN DE BALANCE"))
         self.stdout.write("-" * 80)
         self.stdout.write(f"Balance actual (almacenado):     US$ {config.balance_actual:,.2f}")
         self.stdout.write(f"Balance real (desde Deriv API):   US$ {balance_real:,.2f}")
         self.stdout.write(f"Balance esperado (desde ops):     US$ {balance_esperado:,.2f}")
+        self.stdout.write("")
+        
+        # Información de cálculo
+        self.stdout.write(self.style.SUCCESS("CÁLCULO DEL BALANCE ESPERADO"))
+        self.stdout.write("-" * 80)
+        self.stdout.write(f"Balance inicial usado:            US$ {balance_inicial_usado:,.2f}")
+        self.stdout.write(f"  (balance_meta_base: {config.balance_meta_base:,.2f})")
+        self.stdout.write(f"Total beneficios operaciones:      US$ {total_beneficios:,.2f}")
+        self.stdout.write(f"Balance esperado = {balance_inicial_usado:,.2f} + {total_beneficios:,.2f} = {balance_esperado:,.2f}")
+        self.stdout.write("")
+        self.stdout.write(self.style.SUCCESS("CÁLCULO ALTERNATIVO (RETROCESO)"))
+        self.stdout.write("-" * 80)
+        self.stdout.write(f"Balance inicial calculado:         US$ {balance_inicial_calculado:,.2f}")
+        self.stdout.write(f"  (Balance real - Total beneficios = {balance_real:,.2f} - {total_beneficios:,.2f})")
+        diferencia_inicial = balance_inicial_usado - balance_inicial_calculado
+        if abs(diferencia_inicial) > Decimal("0.01"):
+            self.stdout.write(
+                self.style.WARNING(
+                    f"⚠️  Diferencia en balance inicial: US$ {diferencia_inicial:,.2f}"
+                )
+            )
+            self.stdout.write(
+                self.style.WARNING(
+                    "   Esto sugiere que el balance_meta_base no es el balance inicial real,"
+                )
+            )
+            self.stdout.write(
+                self.style.WARNING(
+                    "   o que hubo operaciones antes de que se inicializara el tracking."
+                )
+            )
+        else:
+            self.stdout.write(
+                self.style.SUCCESS("✓ Balance inicial consistente")
+            )
         self.stdout.write("")
 
         diferencia = balance_real - balance_esperado
@@ -153,13 +198,24 @@ class Command(BaseCommand):
                     "   - Comisiones o fees de Deriv no contabilizados\n"
                     "   - Ajustes manuales en la cuenta\n"
                     "   - Operaciones ejecutadas fuera del bot\n"
-                    "   - Errores en el registro de operaciones"
+                    "   - Errores en el registro de operaciones\n"
+                    "   - Balance inicial (balance_meta_base) incorrecto"
                 )
             )
             self.stdout.write("")
             self.stdout.write(
                 "   Los ajustes se registran automáticamente en la tabla AjusteBalance."
             )
+            self.stdout.write("")
+            if abs(diferencia_inicial) > Decimal("0.01"):
+                self.stdout.write(
+                    self.style.WARNING(
+                        "💡 RECOMENDACIÓN: El balance inicial usado puede ser incorrecto.\n"
+                        f"   Balance inicial usado: {balance_inicial_usado:,.2f}\n"
+                        f"   Balance inicial calculado (retroceso): {balance_inicial_calculado:,.2f}\n"
+                        "   Considera reinicializar el balance con el valor correcto."
+                    )
+                )
         else:
             self.stdout.write(
                 self.style.SUCCESS("✓ Todo parece estar en orden. No hay discrepancias significativas.")
