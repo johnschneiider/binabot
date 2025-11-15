@@ -2,6 +2,7 @@
 Comando seguro para migrar de SQLite a PostgreSQL.
 Realiza backup, verifica conexión, migra datos y valida integridad.
 """
+import os
 import shutil
 import subprocess
 from datetime import datetime
@@ -11,6 +12,7 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
+from dotenv import load_dotenv
 
 
 class Command(BaseCommand):
@@ -35,6 +37,16 @@ class Command(BaseCommand):
                 "Este comando solo funciona cuando la base de datos actual es SQLite."
             )
 
+        # Cargar variables de entorno desde .env
+        env_path = Path(settings.BASE_DIR) / ".env"
+        if env_path.exists():
+            load_dotenv(env_path)
+        else:
+            # Intentar cargar desde el directorio padre (donde suele estar .env)
+            env_path = Path(settings.BASE_DIR).parent / ".env"
+            if env_path.exists():
+                load_dotenv(env_path)
+
         self.stdout.write(self.style.SUCCESS("=" * 80))
         self.stdout.write(self.style.SUCCESS("MIGRACIÓN DE SQLITE A POSTGRESQL"))
         self.stdout.write(self.style.SUCCESS("=" * 80))
@@ -44,8 +56,7 @@ class Command(BaseCommand):
         self.stdout.write("PASO 1: Verificando configuración de PostgreSQL...")
         self.stdout.write("-" * 80)
         
-        # Leer variables de entorno directamente (no desde settings, que aún usa SQLite)
-        import os
+        # Leer variables de entorno (ahora cargadas desde .env)
         db_name = os.getenv("DB_NAME", "binabot")
         db_user = os.getenv("DB_USER", "postgres")
         db_password = os.getenv("DB_PASSWORD", "")
