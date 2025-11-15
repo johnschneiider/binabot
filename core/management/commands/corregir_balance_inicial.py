@@ -1,7 +1,9 @@
+import time
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.utils import OperationalError
 
 from core.services import GestorBotCore
 from historial.models import Operacion
@@ -113,21 +115,43 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR("Operación cancelada."))
                 return
 
-        # Aplicar corrección
-        with transaction.atomic():
-            config.balance_meta_base = balance_inicial_nuevo
-            config.balance_stop_loss_base = balance_inicial_nuevo
-            config.meta_actual = config.calcular_meta(balance_inicial_nuevo)
-            config.stop_loss_actual = config.calcular_stop_loss(balance_inicial_nuevo)
-            config.save(
-                update_fields=[
-                    "balance_meta_base",
-                    "balance_stop_loss_base",
-                    "meta_actual",
-                    "stop_loss_actual",
-                    "ultima_actualizacion",
-                ]
-            )
+        # Aplicar corrección con reintentos
+        max_intentos = 5
+        tiempo_espera = 1  # segundos
+        
+        for intento in range(1, max_intentos + 1):
+            try:
+                with transaction.atomic():
+                    # Refrescar desde la BD para evitar conflictos
+                    config.refresh_from_db()
+                    config.balance_meta_base = balance_inicial_nuevo
+                    config.balance_stop_loss_base = balance_inicial_nuevo
+                    config.meta_actual = config.calcular_meta(balance_inicial_nuevo)
+                    config.stop_loss_actual = config.calcular_stop_loss(balance_inicial_nuevo)
+                    config.save(
+                        update_fields=[
+                            "balance_meta_base",
+                            "balance_stop_loss_base",
+                            "meta_actual",
+                            "stop_loss_actual",
+                            "ultima_actualizacion",
+                        ]
+                    )
+                break  # Éxito, salir del loop
+            except OperationalError as e:
+                if "database is locked" in str(e).lower() and intento < max_intentos:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"⚠️  Base de datos bloqueada (intento {intento}/{max_intentos}). "
+                            f"Esperando {tiempo_espera}s antes de reintentar..."
+                        )
+                    )
+                    time.sleep(tiempo_espera)
+                    tiempo_espera *= 2  # Backoff exponencial
+                else:
+                    raise CommandError(
+                        f"Error al guardar después de {intento} intentos: {e}"
+                    )
 
         self.stdout.write("")
         self.stdout.write(
