@@ -315,7 +315,9 @@ class MotorTradingProfesional:
             resultado = (
                 Operacion.Resultado.GANADA if status == "won" else Operacion.Resultado.PERDIDA
             )
-            numero_final = str(open_contract.get("contract_id", numero_contrato))
+            # Truncar contract_id a 40 caracteres máximo
+            contract_id = str(open_contract.get("contract_id", numero_contrato))
+            numero_final = contract_id[:40] if len(contract_id) > 40 else contract_id
             
         except Exception as exc:
             self._enviar_evento({"tipo": "error", "mensaje": str(exc)})

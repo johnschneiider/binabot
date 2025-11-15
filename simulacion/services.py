@@ -120,9 +120,12 @@ class SimuladorHorariosService:
                 (abs(diferencia) / precio_inicio * Decimal("100"))
                 .quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             )
-            numero_contrato = (
-                f"SIM-{int(tick_inicio.epoch.timestamp())}-{int(tick_salida.epoch.timestamp())}"
-            )
+            # Generar numero_contrato truncado a 40 caracteres máximo
+            timestamp_inicio = int(tick_inicio.epoch.timestamp())
+            timestamp_fin = int(tick_salida.epoch.timestamp())
+            numero_contrato = f"SIM-{timestamp_inicio}-{timestamp_fin}"
+            # Truncar si excede 40 caracteres
+            numero_contrato = numero_contrato[:40]
 
             beneficio = (
                 abs(diferencia)
