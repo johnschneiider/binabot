@@ -168,6 +168,14 @@ class Command(BaseCommand):
         try:
             # Leer datos de SQLite (aún estamos usando SQLite)
             self.stdout.write("  - Exportando datos...")
+            self.stdout.write("    (Esto puede tardar varios minutos si hay muchos datos)")
+            
+            # Verificar tamaño de la BD antes de exportar
+            sqlite_path = Path(settings.BASE_DIR) / "db.sqlite3"
+            if sqlite_path.exists():
+                size_mb = sqlite_path.stat().st_size / (1024 * 1024)
+                self.stdout.write(f"    Tamaño de SQLite: {size_mb:.2f} MB")
+            
             call_command(
                 "dumpdata",
                 "--natural-foreign",
@@ -175,11 +183,26 @@ class Command(BaseCommand):
                 "--exclude=contenttypes",
                 "--exclude=auth.Permission",
                 output=temp_file_path,
-                verbosity=0,
+                verbosity=1,  # Mostrar progreso
             )
             
-            self.stdout.write(self.style.SUCCESS("  ✓ Datos exportados"))
+            # Verificar que el archivo se creó y tiene contenido
+            if not Path(temp_file_path).exists():
+                raise CommandError("ERROR: El archivo de exportación no se creó")
             
+            file_size = Path(temp_file_path).stat().st_size
+            if file_size == 0:
+                raise CommandError("ERROR: El archivo de exportación está vacío")
+            
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"  ✓ Datos exportados ({file_size / (1024 * 1024):.2f} MB)"
+                )
+            )
+            
+        except KeyboardInterrupt:
+            Path(temp_file_path).unlink(missing_ok=True)
+            raise CommandError("Migración cancelada por el usuario")
         except Exception as e:
             Path(temp_file_path).unlink(missing_ok=True)
             raise CommandError(f"ERROR al exportar datos: {e}")
