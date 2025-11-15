@@ -306,20 +306,33 @@ class Command(BaseCommand):
         self.stdout.write("-" * 80)
         
         try:
-            from core.models import ConfiguracionBot
+            from core.models import ConfiguracionBot, ActivoPermitido
             from historial.models import Operacion, Tick
             
             config_count = ConfiguracionBot.objects.count()
+            activos_count = ActivoPermitido.objects.count()
+            activos_habilitados = ActivoPermitido.objects.filter(habilitado=True).count()
             operaciones_count = Operacion.objects.count()
+            operaciones_reales = Operacion.objetos.reales().exclude(
+                resultado=Operacion.Resultado.PENDIENTE
+            ).count()
             ticks_count = Tick.objects.count()
             
             self.stdout.write(f"  Configuraciones: {config_count}")
-            self.stdout.write(f"  Operaciones: {operaciones_count}")
+            self.stdout.write(f"  Activos permitidos: {activos_count} ({activos_habilitados} habilitados)")
+            self.stdout.write(f"  Operaciones: {operaciones_count} ({operaciones_reales} reales finalizadas)")
             self.stdout.write(f"  Ticks: {ticks_count}")
             
             if config_count == 0:
                 self.stdout.write(
                     self.style.WARNING("  ⚠️  No se encontraron configuraciones")
+                )
+            elif activos_count == 0:
+                self.stdout.write(
+                    self.style.WARNING("  ⚠️  No se encontraron activos permitidos")
+                )
+                self.stdout.write(
+                    self.style.WARNING("    El servicio de ticks fallará sin activos habilitados")
                 )
             else:
                 self.stdout.write(self.style.SUCCESS("  ✓ Datos verificados"))
