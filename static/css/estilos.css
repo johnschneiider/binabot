@@ -153,6 +153,46 @@
   font-size: 0.85rem;
 }
 
+.pie__creador {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.pie__creador strong {
+  color: var(--color-texto);
+  font-weight: 600;
+}
+
+.pie__instagram {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-primario);
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  transition: var(--transicion);
+  font-weight: 500;
+}
+
+.pie__instagram svg {
+  width: 16px;
+  height: 16px;
+  transition: var(--transicion);
+}
+
+.pie__instagram:hover {
+  color: var(--color-acento);
+  background: rgba(99, 245, 189, 0.1);
+  transform: translateY(-1px);
+}
+
+.pie__instagram:hover svg {
+  transform: scale(1.1);
+}
+
 .tarjeta {
   background: var(--color-superficie);
   border-radius: var(--radio);
