@@ -124,7 +124,7 @@ class MotorTradingProfesional:
                 continue
             
             # Verificar límites
-            if not verificar_limites_activo(activo.id):
+            if not verificar_limites_activo(activo.nombre):
                 continue
             
             # Calcular indicadores

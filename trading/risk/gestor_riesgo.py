@@ -99,7 +99,7 @@ def crear_cooldown(
 
 
 def verificar_limites_activo(
-    activo_id: int,
+    activo_nombre: str,
     max_trades_por_ciclo: int = 1,
     periodo_minutos: int = 60,
 ) -> bool:
@@ -107,7 +107,7 @@ def verificar_limites_activo(
     Verifica si un activo ha alcanzado el límite de trades en el período.
     
     Args:
-        activo_id: ID del activo
+        activo_nombre: Nombre del activo
         max_trades_por_ciclo: Máximo de trades permitidos
         periodo_minutos: Período de tiempo a considerar
     
@@ -119,7 +119,7 @@ def verificar_limites_activo(
     desde = timezone.now() - timedelta(minutes=periodo_minutos)
     
     trades_recientes = Operacion.objetos.reales().filter(
-        activo_id=activo_id,
+        activo=activo_nombre,
         hora_inicio__gte=desde,
     ).count()
     
