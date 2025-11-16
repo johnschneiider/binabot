@@ -132,6 +132,34 @@
           </li>
         </ul>
       </article>
+
+      <article class="tarjeta tarjeta--servicios">
+        <header class="tarjeta__header">
+          <h3>Estado de Servicios</h3>
+          <p>Monitoreo de servicios systemd del bot</p>
+        </header>
+        <div id="estado-servicios-container">
+          <div class="servicios-lista" id="servicios-lista">
+            <div class="servicio-item">
+              <span class="servicio-nombre">Bot Principal</span>
+              <span class="servicio-estado servicio-estado--cargando" id="servicio-bot_principal">Verificando...</span>
+            </div>
+            <div class="servicio-item">
+              <span class="servicio-nombre">Recolector de Ticks</span>
+              <span class="servicio-estado servicio-estado--cargando" id="servicio-recolector_ticks">Verificando...</span>
+            </div>
+            <div class="servicio-item">
+              <span class="servicio-nombre">Servidor Web</span>
+              <span class="servicio-estado servicio-estado--cargando" id="servicio-servidor_web">Verificando...</span>
+            </div>
+            <div class="servicio-item">
+              <span class="servicio-nombre">Dashboard Updates</span>
+              <span class="servicio-estado servicio-estado--cargando" id="servicio-dashboard_updates">Verificando...</span>
+            </div>
+          </div>
+          <div id="alertas-servicios" class="alertas-servicios"></div>
+        </div>
+      </article>
     </section>
 
     <section class="panel__seccion tabla-operaciones">

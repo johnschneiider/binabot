@@ -54,7 +54,7 @@ python manage.py createsuperuser
 - Loop principal del bot (sin Celery):
 
   ```powershell
-  python manage.py ejecutar_bot --intervalo 60 --intervalo-simulacion 3600
+  python manage.py ejecutar_bot --intervalo 60 --intervalo-simulacion 60
   ```
   (`--intervalo-simulacion` controla cada cuántos segundos se recalculan los horarios mientras el bot está en pausa; el valor por defecto es 3600 s).
 

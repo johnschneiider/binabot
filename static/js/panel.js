@@ -325,6 +325,67 @@ function actualizarTemporizador(data) {
   iniciarTemporizador();
 }
 
+function actualizarEstadoServicios(data) {
+  if (!data) {
+    return;
+  }
+
+  // data puede ser el objeto completo con servicios, alertas, etc.
+  const servicios = data.servicios || {};
+  const alertas = data.alertas || [];
+
+  const nombresServicios = {
+    bot_principal: "Bot Principal",
+    recolector_ticks: "Recolector de Ticks",
+    servidor_web: "Servidor Web",
+    dashboard_updates: "Dashboard Updates",
+  };
+
+  // Actualizar estado de cada servicio
+  Object.keys(servicios).forEach((clave) => {
+    const servicio = servicios[clave];
+    const elemento = document.getElementById(`servicio-${clave}`);
+    
+    if (!elemento) return;
+
+    // Remover clases anteriores
+    elemento.classList.remove(
+      "servicio-estado--activo",
+      "servicio-estado--inactivo",
+      "servicio-estado--cargando",
+      "servicio-estado--error"
+    );
+
+    if (servicio.error) {
+      elemento.textContent = `Error: ${servicio.error}`;
+      elemento.classList.add("servicio-estado--error");
+    } else if (servicio.activo) {
+      elemento.textContent = "Activo";
+      elemento.classList.add("servicio-estado--activo");
+    } else {
+      elemento.textContent = `Inactivo (${servicio.estado || "unknown"})`;
+      elemento.classList.add("servicio-estado--inactivo");
+    }
+  });
+
+  // Mostrar alertas si hay servicios inactivos
+  const alertasContainer = document.getElementById("alertas-servicios");
+  if (alertasContainer && alertas.length > 0) {
+    alertasContainer.innerHTML = alertas
+      .map(
+        (alerta) => `
+      <div class="alerta-servicio alerta-servicio--error">
+        <strong>⚠️ ${nombresServicios[alerta.servicio] || alerta.nombre}</strong>
+        <p>${alerta.mensaje}</p>
+      </div>
+    `
+      )
+      .join("");
+  } else if (alertasContainer) {
+    alertasContainer.innerHTML = "";
+  }
+}
+
 function actualizarSimulacionResumen(resumen) {
   const tbody = document.getElementById("tabla-simulacion-resumen");
   if (!tbody) return;
@@ -449,6 +510,11 @@ function manejarActualizacionDashboard(data) {
   // Actualizar temporizador
   if (data.temporizador) {
     actualizarTemporizador(data.temporizador);
+  }
+  
+  // Actualizar estado de servicios
+  if (data.servicios) {
+    actualizarEstadoServicios(data.servicios);
   }
   
   // Actualizar sello temporal

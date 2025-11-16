@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from core.services import GestorBotCore
 from historial.models import Operacion
+from .services_estado import EstadoServiciosService
 
 
 def enviar_actualizacion_dashboard():
@@ -104,6 +105,21 @@ def enviar_actualizacion_dashboard():
             "operaciones": operaciones_data,
             "temporizador": temporizador_data,
         }
+        
+        # Agregar estado de servicios
+        try:
+            estado_servicios = EstadoServiciosService.obtener_resumen_estado()
+            datos["servicios"] = estado_servicios
+        except Exception as e:
+            # Si falla la verificación de servicios, no interrumpir el flujo
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"No se pudo obtener estado de servicios: {e}")
+            datos["servicios"] = {
+                "error": "No disponible",
+                "servicios": {},
+                "alertas": [],
+            }
         
         # Enviar al grupo del dashboard
         async_to_sync(channel_layer.group_send)(

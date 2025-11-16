@@ -429,3 +429,95 @@ tbody tr td:first-child {
     min-width: 520px;
   }
 }
+
+/* Estilos para estado de servicios */
+.tarjeta--servicios {
+  background: rgba(20, 33, 66, 0.4);
+  border: 1px solid rgba(120, 168, 255, 0.15);
+}
+
+.servicios-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.servicio-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: rgba(12, 28, 59, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(120, 168, 255, 0.1);
+}
+
+.servicio-nombre {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.servicio-estado {
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.servicio-estado--activo {
+  background: rgba(99, 245, 189, 0.2);
+  color: #63f5bd;
+  border: 1px solid rgba(99, 245, 189, 0.3);
+}
+
+.servicio-estado--inactivo {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+.servicio-estado--cargando {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.servicio-estado--error {
+  background: rgba(255, 107, 107, 0.25);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+}
+
+.alertas-servicios {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.alerta-servicio {
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.alerta-servicio--error {
+  background: rgba(255, 107, 107, 0.15);
+  border-left-color: #ff6b6b;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.alerta-servicio--error strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #ff6b6b;
+}
+
+.alerta-servicio--error p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+}

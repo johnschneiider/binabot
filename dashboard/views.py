@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from core.services import GestorBotCore
 from historial.models import Operacion, Tick
 from historial.serializers import OperacionSerializer
+from .services_estado import EstadoServiciosService
 
 
 class WinrateView(APIView):
@@ -166,3 +167,24 @@ class TickAnaliticaView(APIView):
                 },
             }
         )
+
+
+class EstadoServiciosView(APIView):
+    """
+    Vista para obtener el estado de los servicios systemd del bot.
+    """
+    def get(self, request):
+        try:
+            resumen = EstadoServiciosService.obtener_resumen_estado()
+            return Response(resumen)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error al obtener estado de servicios: {e}", exc_info=True)
+            return Response(
+                {
+                    "error": "No se pudo verificar el estado de los servicios",
+                    "detalle": str(e),
+                },
+                status=500,
+            )

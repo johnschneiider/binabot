@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     BalanceView,
     EstadoBotView,
+    EstadoServiciosView,
     EstadisticasCallPutView,
     HistoricosView,
     TemporizadorView,
@@ -22,5 +23,6 @@ urlpatterns = [
     ),
     path("temporizador/", TemporizadorView.as_view(), name="dashboard-temporizador"),
     path("ticks/", TickAnaliticaView.as_view(), name="dashboard-ticks"),
+    path("estado-servicios/", EstadoServiciosView.as_view(), name="dashboard-estado-servicios"),
 ]
 
