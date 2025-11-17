@@ -250,27 +250,36 @@ class GestorBotCore:
         if self.configuracion.balance_stop_loss_base <= 0:
             self.configuracion.balance_stop_loss_base = balance
 
+        # Solo actualizar balance_stop_loss_base y recalcular stop_loss_actual cuando hay ganancias (trailing stop loss)
+        # NO actualizar cuando hay pérdidas, para que el stop loss se mantenga fijo
+        actualizar_stop_loss = False
         if balance > self.configuracion.balance_stop_loss_base:
             self.configuracion.balance_stop_loss_base = balance
+            self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(
+                self.configuracion.balance_stop_loss_base
+            )
+            actualizar_stop_loss = True
+        # Si no hay ganancia, mantener el stop_loss_actual como está (no recalcular)
+        
         self.configuracion.meta_actual = Decimal("0.00")
-        self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(
-            self.configuracion.balance_stop_loss_base
-        )
 
         perdida = self.configuracion.balance_stop_loss_base - balance
         if perdida < 0:
             perdida = Decimal("0.00")
         self.configuracion.perdida_acumulada = perdida.quantize(Decimal("0.01"))
-        self.configuracion.save(
-            update_fields=[
-                "balance_actual",
-                "balance_stop_loss_base",
-                "stop_loss_actual",
-                "perdida_acumulada",
-                "meta_actual",
-                "ultima_actualizacion",
-            ]
-        )
+        
+        # Solo incluir stop_loss_actual en update_fields si realmente se actualizó
+        campos_actualizar = [
+            "balance_actual",
+            "balance_stop_loss_base",
+            "perdida_acumulada",
+            "meta_actual",
+            "ultima_actualizacion",
+        ]
+        if actualizar_stop_loss:
+            campos_actualizar.append("stop_loss_actual")
+        
+        self.configuracion.save(update_fields=campos_actualizar)
 
     def ejecutar_simulacion_pausa(self, intervalo_segundos: int = 60):
         """
