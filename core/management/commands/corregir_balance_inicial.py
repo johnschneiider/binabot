@@ -106,9 +106,6 @@ class Command(BaseCommand):
                     "⚠️  Esta acción actualizará el balance_meta_base y balance_stop_loss_base."
                 )
             )
-            self.stdout.write(
-                "   Esto afectará el cálculo de metas y stop loss futuros."
-            )
             self.stdout.write("")
             confirmacion = input("¿Deseas continuar? (sí/no): ")
             if confirmacion.lower() not in ["sí", "si", "yes", "y", "s"]:
@@ -126,7 +123,7 @@ class Command(BaseCommand):
                     config.refresh_from_db()
                     config.balance_meta_base = balance_inicial_nuevo
                     config.balance_stop_loss_base = balance_inicial_nuevo
-                    config.meta_actual = config.calcular_meta(balance_inicial_nuevo)
+                    config.meta_actual = Decimal("0.00")
                     config.stop_loss_actual = config.calcular_stop_loss(balance_inicial_nuevo)
                     config.save(
                         update_fields=[

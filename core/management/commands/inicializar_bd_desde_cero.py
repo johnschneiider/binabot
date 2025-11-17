@@ -257,7 +257,7 @@ class Command(BaseCommand):
             defaults={
                 "balance_meta_base": Decimal("10000.00"),
                 "balance_stop_loss_base": Decimal("10000.00"),
-                "meta_actual": Decimal("100.00"),
+                "meta_actual": Decimal("0.00"),
                 "stop_loss_actual": Decimal("200.00"),
             },
         )

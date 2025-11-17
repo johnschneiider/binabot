@@ -26,12 +26,9 @@
             <small id="variacion-balance">Sin variaciones registradas</small>
           </div>
           <div class="panel__hero-metrica">
-            <span>Próxima meta</span>
-            <strong class="dato" id="meta-actual">--</strong>
-          </div>
-          <div class="panel__hero-metrica">
-            <span>Límite de pérdida</span>
+            <span>Stop loss dinámico (2%)</span>
             <strong class="dato" id="stop-loss-actual">--</strong>
+            <small>Se recalcula al cerrar cada trade ganador</small>
           </div>
         </div>
       </div>
@@ -113,14 +110,14 @@
             <span>➤</span>
             <div>
               <h4>Capitalización dinámica</h4>
-              <p>El bot recalcula objetivos después de cada meta alcanzada y sincroniza el saldo con la cuenta Deriv en cada ciclo.</p>
+              <p>No se usan metas fijas; el enfoque es proteger capital con un stop loss móvil basado en el balance actual.</p>
             </div>
           </li>
           <li>
             <span>➤</span>
             <div>
               <h4>Gestión de riesgo</h4>
-              <p>Stop loss móvil ligado al balance actual. Cuando se activa, se detiene la operativa y se realiza backtesting horario.</p>
+              <p>El “arnés” de seguridad sube con cada ganancia. Al caer 2% desde el último máximo, el bot entra en pausa y lanza simulaciones.</p>
             </div>
           </li>
           <li>

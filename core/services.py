@@ -17,7 +17,6 @@ from .models import ConfiguracionBot
 @dataclass
 class EstadoBot:
     balance_actual: Decimal
-    meta_actual: Decimal
     stop_loss_actual: Decimal
     estado: str
     activo_seleccionado: str
@@ -43,7 +42,6 @@ class GestorBotCore:
         config = self.configuracion
         return EstadoBot(
             balance_actual=config.balance_actual,
-            meta_actual=config.meta_actual,
             stop_loss_actual=config.stop_loss_actual,
             estado=config.estado,
             activo_seleccionado=config.activo_seleccionado,
@@ -65,12 +63,10 @@ class GestorBotCore:
         self.configuracion.en_operacion = False
         self.configuracion.balance_meta_base = self.configuracion.balance_actual
         self.configuracion.balance_stop_loss_base = self.configuracion.balance_actual
-        self.configuracion.meta_actual = self.configuracion.calcular_meta(
-            self.configuracion.balance_meta_base
-        )
         self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(
             self.configuracion.balance_stop_loss_base
         )
+        self.configuracion.meta_actual = Decimal("0.00")
         self.configuracion.save(
             update_fields=[
                 "balance_actual",
@@ -80,8 +76,8 @@ class GestorBotCore:
                 "en_operacion",
                 "balance_meta_base",
                 "balance_stop_loss_base",
-                "meta_actual",
                 "stop_loss_actual",
+                "meta_actual",
                 "ultima_actualizacion",
             ]
         )
@@ -256,15 +252,7 @@ class GestorBotCore:
 
         if balance > self.configuracion.balance_stop_loss_base:
             self.configuracion.balance_stop_loss_base = balance
-
-        meta_base = self.configuracion.balance_meta_base
-        meta_valor = self.configuracion.calcular_meta(meta_base)
-        if balance - meta_base >= meta_valor:
-            self.configuracion.balance_meta_base = balance
-            meta_base = balance
-            meta_valor = self.configuracion.calcular_meta(meta_base)
-
-        self.configuracion.meta_actual = meta_valor
+        self.configuracion.meta_actual = Decimal("0.00")
         self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(
             self.configuracion.balance_stop_loss_base
         )
@@ -276,11 +264,10 @@ class GestorBotCore:
         self.configuracion.save(
             update_fields=[
                 "balance_actual",
-                "balance_meta_base",
                 "balance_stop_loss_base",
-                "meta_actual",
                 "stop_loss_actual",
                 "perdida_acumulada",
+                "meta_actual",
                 "ultima_actualizacion",
             ]
         )

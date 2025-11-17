@@ -7,14 +7,12 @@ from .models import ActivoPermitido, ConfiguracionBot
 class ConfiguracionBotAdmin(admin.ModelAdmin):
     list_display = (
         "balance_actual",
-        "meta_actual",
         "stop_loss_actual",
         "estado",
         "activo_seleccionado",
         "ultima_actualizacion",
     )
     readonly_fields = (
-        "meta_actual",
         "stop_loss_actual",
         "ultima_actualizacion",
         "pausado_desde",

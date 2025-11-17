@@ -147,7 +147,6 @@ function actualizarVariacionBalance(nuevoBalance) {
 function actualizarEstadoBot(data) {
   const estado = data.estado || "--";
   const balance = convertirNumero(data.balance_actual);
-  const meta = convertirNumero(data.meta_actual);
   const stopLoss = convertirNumero(data.stop_loss_actual);
   const ganancia = convertirNumero(data.ganancia_acumulada);
   const perdida = convertirNumero(data.perdida_acumulada);
@@ -155,15 +154,10 @@ function actualizarEstadoBot(data) {
 
   setValor("estado-bot", estado.toUpperCase());
   setValor("balance-actual", formatearMoneda(balance));
-  
-  // Mostrar meta como valor absoluto (balance + meta)
-  const metaAbsoluta = (balance ?? 0) + (meta ?? 0);
-  setValor("meta-actual", formatearMoneda(metaAbsoluta));
-  
-  // Mostrar stop loss como valor absoluto (balance - stop_loss)
+
   const stopLossAbsoluto = (balance ?? 0) - (stopLoss ?? 0);
   setValor("stop-loss-actual", formatearMoneda(stopLossAbsoluto));
-  
+
   setValor("perdida-acumulada", formatearMoneda(perdida));
 
   const netoElemento = document.getElementById("ganancia-acumulada");

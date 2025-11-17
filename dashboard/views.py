@@ -33,7 +33,6 @@ class EstadoBotView(APIView):
             {
                 "estado": estado.estado,
                 "balance_actual": str(estado.balance_actual),
-                "meta_actual": str(estado.meta_actual),
                 "stop_loss_actual": str(estado.stop_loss_actual),
                 "perdida_acumulada": str(estado.perdida_acumulada),
                 "ganancia_acumulada": str(estado.ganancia_acumulada),
@@ -56,7 +55,6 @@ class BalanceView(APIView):
         return Response(
             {
                 "balance_actual": str(estado.balance_actual),
-                "meta_actual": str(estado.meta_actual),
                 "stop_loss_actual": str(estado.stop_loss_actual),
             }
         )

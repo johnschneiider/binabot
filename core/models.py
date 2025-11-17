@@ -98,9 +98,8 @@ class ConfiguracionBot(models.Model):
         if self.balance_stop_loss_base <= 0:
             self.balance_stop_loss_base = self.balance_actual
             cambios = True
-        meta_calculada = self.calcular_meta(self.balance_meta_base)
-        if self.meta_actual != meta_calculada:
-            self.meta_actual = meta_calculada
+        if self.meta_actual != Decimal("0.00"):
+            self.meta_actual = Decimal("0.00")
             cambios = True
         stop_loss_calculado = self.calcular_stop_loss(self.balance_stop_loss_base)
         if self.stop_loss_actual != stop_loss_calculado:
@@ -135,25 +134,16 @@ class ConfiguracionBot(models.Model):
         if self.balance_actual > self.balance_stop_loss_base:
             self.balance_stop_loss_base = self.balance_actual
 
-        if self.balance_meta_base <= 0:
-            self.balance_meta_base = self.balance_actual
-
-        meta_actual = self.calcular_meta(self.balance_meta_base)
-        if self.balance_actual - self.balance_meta_base >= meta_actual:
-            self.balance_meta_base = self.balance_actual
-            meta_actual = self.calcular_meta(self.balance_meta_base)
-
-        self.meta_actual = meta_actual
         self.stop_loss_actual = self.calcular_stop_loss(self.balance_stop_loss_base)
+        self.meta_actual = Decimal("0.00")
         self.save(
             update_fields=[
                 "balance_actual",
                 "ganancia_acumulada",
                 "perdida_acumulada",
-                "balance_meta_base",
                 "balance_stop_loss_base",
-                "meta_actual",
                 "stop_loss_actual",
+                "meta_actual",
                 "ultima_actualizacion",
             ]
         )
@@ -174,11 +164,19 @@ class ConfiguracionBot(models.Model):
         self.pausa_finaliza = self.pausado_desde + timezone.timedelta(hours=horas)
         self.en_operacion = False
         self.ultima_simulacion = None
+        self.balance_meta_base = self.balance_actual
+        self.balance_stop_loss_base = self.balance_actual
+        self.meta_actual = Decimal("0.00")
+        self.stop_loss_actual = self.calcular_stop_loss(self.balance_stop_loss_base)
         self.save(
             update_fields=[
                 "estado",
                 "pausado_desde",
                 "pausa_finaliza",
+                "balance_meta_base",
+                "balance_stop_loss_base",
+                "meta_actual",
+                "stop_loss_actual",
                 "ultima_simulacion",
                 "en_operacion",
                 "ultima_actualizacion",
@@ -192,7 +190,7 @@ class ConfiguracionBot(models.Model):
         self.perdida_acumulada = Decimal("0.00")
         self.balance_meta_base = self.balance_actual
         self.balance_stop_loss_base = self.balance_actual
-        self.meta_actual = self.calcular_meta(self.balance_meta_base)
+        self.meta_actual = Decimal("0.00")
         self.stop_loss_actual = self.calcular_stop_loss(self.balance_stop_loss_base)
         self.en_operacion = False
         self.mejor_horario = None

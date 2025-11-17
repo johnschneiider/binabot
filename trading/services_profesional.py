@@ -208,10 +208,10 @@ class MotorTradingProfesional:
         self.gestor_core.sincronizar_balance_desde_api()
         config.refresh_from_db()
         
-        if config.stop_loss_actual <= 0 or config.meta_actual <= 0:
+        if config.stop_loss_actual <= 0:
             self._enviar_evento({
                 "tipo": "error",
-                "mensaje": "Balance/objetivos no configurados correctamente.",
+                "mensaje": "Stop loss no está configurado correctamente.",
             })
             return None
         

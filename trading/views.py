@@ -14,7 +14,6 @@ class EstadoTradingView(APIView):
         estado = gestor.obtener_estado()
         data = {
             "balance_actual": str(estado.balance_actual),
-            "meta_actual": str(estado.meta_actual),
             "stop_loss_actual": str(estado.stop_loss_actual),
             "estado": estado.estado,
             "activo_seleccionado": estado.activo_seleccionado,
@@ -39,7 +38,6 @@ class InicializarBalanceView(APIView):
             {
                 "detalle": "Balance inicial configurado",
                 "balance_actual": str(configuracion.balance_actual),
-                "meta_actual": str(configuracion.meta_actual),
                 "stop_loss_actual": str(configuracion.stop_loss_actual),
             },
             status=status.HTTP_200_OK,

@@ -43,18 +43,17 @@ class Command(BaseCommand):
             )
         self.stdout.write("")
 
-        # 2. Verificar balance y objetivos
-        self.stdout.write("2. BALANCE Y OBJETIVOS:")
+        # 2. Verificar balance y stop loss
+        self.stdout.write("2. BALANCE Y STOP LOSS:")
         self.stdout.write("-" * 80)
         self.stdout.write(f"Balance actual: US$ {config.balance_actual}")
-        self.stdout.write(f"Meta actual: US$ {config.meta_actual}")
         self.stdout.write(f"Stop loss actual: US$ {config.stop_loss_actual}")
-        if config.stop_loss_actual <= 0 or config.meta_actual <= 0:
+        if config.stop_loss_actual <= 0:
             self.stdout.write(
-                self.style.ERROR("❌ Balance/objetivos no configurados correctamente")
+                self.style.ERROR("❌ Stop loss no configurado correctamente")
             )
         else:
-            self.stdout.write(self.style.SUCCESS("✓ Balance y objetivos configurados"))
+            self.stdout.write(self.style.SUCCESS("✓ Stop loss dinámico configurado"))
         self.stdout.write("")
 
         # 3. Verificar activos habilitados
@@ -188,8 +187,8 @@ class Command(BaseCommand):
             problemas.append("Bot no está en estado OPERANDO")
         if config.en_operacion:
             problemas.append("Hay una operación marcada como en curso")
-        if config.stop_loss_actual <= 0 or config.meta_actual <= 0:
-            problemas.append("Balance/objetivos no configurados")
+        if config.stop_loss_actual <= 0:
+            problemas.append("Stop loss dinámico no configurado")
         if total_activos == 0:
             problemas.append("No hay activos habilitados")
         if ticks_recientes == 0:

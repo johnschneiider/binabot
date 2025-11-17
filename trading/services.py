@@ -123,11 +123,11 @@ class MotorTrading:
 
         self.gestor_core.sincronizar_balance_desde_api()
         config.refresh_from_db()
-        if config.stop_loss_actual <= 0 or config.meta_actual <= 0:
+        if config.stop_loss_actual <= 0:
             self._enviar_evento(
                 {
                     "tipo": "error",
-                    "mensaje": "Balance/objetivos no configurados correctamente. No se puede operar.",
+                    "mensaje": "Stop loss no configurado correctamente. No se puede operar.",
                 }
             )
             return None

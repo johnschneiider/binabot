@@ -49,9 +49,9 @@ if config.estado != Estado.OPERANDO or config.en_operacion:
     return None  # No opera
 ```
 
-✅ **Balance y objetivos válidos**: 
+✅ **Stop loss válido**: 
 ```python
-if config.stop_loss_actual <= 0 or config.meta_actual <= 0:
+if config.stop_loss_actual <= 0:
     return None  # No opera
 ```
 

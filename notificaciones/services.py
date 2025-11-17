@@ -32,8 +32,7 @@ class ServicioNotificaciones:
         mensaje = (
             "🚀 El bot de trading ha iniciado su operativa.\n"
             f"Balance actual: {configuracion.balance_actual}\n"
-            f"Meta: {configuracion.meta_actual}\n"
-            f"Stop loss: {configuracion.stop_loss_actual}"
+            f"Stop loss dinámico (2%): {configuracion.stop_loss_actual}"
         )
         self._enviar(mensaje, self._destinatarios)
 
