@@ -188,10 +188,15 @@ class AlgoritmoGenetico:
         try:
             for gen in range(generaciones):
                 # Evaluar población actual
-                print(f"\n{'='*80}", file=sys.stderr)
-                print(f"EVALUANDO GENERACIÓN {gen+1}/{generaciones}", file=sys.stderr)
-                print(f"{'='*80}", file=sys.stderr)
-                sys.stderr.flush()
+                if callback_progreso:
+                    callback_progreso(f"\n{'='*80}")
+                    callback_progreso(f"EVALUANDO GENERACIÓN {gen+1}/{generaciones}")
+                    callback_progreso(f"{'='*80}")
+                else:
+                    print(f"\n{'='*80}", file=sys.stderr)
+                    print(f"EVALUANDO GENERACIÓN {gen+1}/{generaciones}", file=sys.stderr)
+                    print(f"{'='*80}", file=sys.stderr)
+                    sys.stderr.flush()
                 
                 self.evaluar_poblacion(poblacion, callback_progreso=callback_progreso)
                 
