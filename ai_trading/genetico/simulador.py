@@ -35,7 +35,8 @@ class SimuladorEstrategia:
         max_drawdown = Decimal("0.00")
         
         # Obtener ticks para cada activo en el rango de fechas
-        for activo in activos:
+        total_activos = len(activos)
+        for idx, activo in enumerate(activos, 1):
             ticks = Tick.objects.filter(
                 activo=activo,
                 epoch__gte=datos_desde,

@@ -71,17 +71,30 @@ class AlgoritmoGenetico:
         poblacion.estrategias.set(estrategias)
         return poblacion
     
-    def evaluar_poblacion(self, poblacion: PoblacionGenetica) -> None:
+    def evaluar_poblacion(self, poblacion: PoblacionGenetica, callback_progreso=None) -> None:
         """
         Evalúa todas las estrategias de una población y actualiza su fitness.
         """
         estrategias = list(poblacion.estrategias.all())
+        total = len(estrategias)
         
-        for estrategia in estrategias:
+        for idx, estrategia in enumerate(estrategias, 1):
+            if callback_progreso:
+                callback_progreso(f"Evaluando estrategia {idx}/{total}: {estrategia.nombre}")
+            else:
+                print(f"  Evaluando estrategia {idx}/{total}: {estrategia.nombre}", file=sys.stderr)
+                sys.stderr.flush()
+            
             fitness = self.calculador_fitness.calcular_fitness(estrategia)
             estrategia.fitness = fitness
             estrategia.ultima_evaluacion = timezone.now()
             estrategia.save(update_fields=["fitness", "ultima_evaluacion", "actualizada"])
+            
+            if callback_progreso:
+                callback_progreso(f"  ✓ Fitness: {fitness:.4f}")
+            else:
+                print(f"    ✓ Fitness: {fitness:.4f}", file=sys.stderr)
+                sys.stderr.flush()
         
         # Actualizar métricas de la población
         fitness_values = [e.fitness for e in estrategias]
@@ -175,7 +188,12 @@ class AlgoritmoGenetico:
         try:
             for gen in range(generaciones):
                 # Evaluar población actual
-                self.evaluar_poblacion(poblacion)
+                print(f"\n{'='*80}", file=sys.stderr)
+                print(f"EVALUANDO GENERACIÓN {gen+1}/{generaciones}", file=sys.stderr)
+                print(f"{'='*80}", file=sys.stderr)
+                sys.stderr.flush()
+                
+                self.evaluar_poblacion(poblacion, callback_progreso=callback_progreso)
                 
                 # Obtener mejor estrategia
                 mejor_estrategia = poblacion.estrategias.order_by('-fitness').first()
@@ -191,9 +209,9 @@ class AlgoritmoGenetico:
                 entrenamiento.progreso["generaciones"].append(progreso_gen)
                 entrenamiento.save(update_fields=["progreso", "actualizada"])
                 
-                # Callback de progreso
+                # Callback de progreso (pasar tupla para resumen de generación)
                 if callback_progreso:
-                    callback_progreso(gen, generaciones, poblacion, mejor_estrategia)
+                    callback_progreso((gen, generaciones, poblacion, mejor_estrategia))
                 
                 # Evolucionar (excepto en la última generación)
                 if gen < generaciones - 1:

@@ -91,18 +91,31 @@ class Command(BaseCommand):
         )
         
         # Callback de progreso
-        def callback_progreso(gen, total, poblacion, mejor_estrategia):
-            self.stdout.write(
-                f"[Gen {gen+1}/{total}] "
-                f"Fitness promedio: {poblacion.fitness_promedio:.4f} | "
-                f"Mejor: {poblacion.fitness_mejor:.4f} | "
-                f"Peor: {poblacion.fitness_peor:.4f}"
-            )
-            if mejor_estrategia:
+        import time
+        tiempo_inicio = time.time()
+        
+        def callback_progreso(mensaje):
+            """Callback para mostrar progreso detallado"""
+            if isinstance(mensaje, str):
+                self.stdout.write(f"  {mensaje}")
+            else:
+                # Es la tupla (gen, total, poblacion, mejor_estrategia)
+                gen, total, poblacion, mejor_estrategia = mensaje
+                tiempo_transcurrido = time.time() - tiempo_inicio
                 self.stdout.write(
-                    f"  Mejor estrategia: {mejor_estrategia.nombre} "
-                    f"(Fitness: {mejor_estrategia.fitness:.4f})"
+                    self.style.SUCCESS(
+                        f"\n[Gen {gen+1}/{total}] "
+                        f"Fitness promedio: {poblacion.fitness_promedio:.4f} | "
+                        f"Mejor: {poblacion.fitness_mejor:.4f} | "
+                        f"Peor: {poblacion.fitness_peor:.4f} | "
+                        f"Tiempo: {tiempo_transcurrido:.1f}s"
+                    )
                 )
+                if mejor_estrategia:
+                    self.stdout.write(
+                        f"  Mejor estrategia: {mejor_estrategia.nombre} "
+                        f"(Fitness: {mejor_estrategia.fitness:.4f})"
+                    )
         
         # Entrenar
         try:
