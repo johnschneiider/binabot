@@ -96,6 +96,19 @@ class AlgoritmoGenetico:
             else:
                 print(f"    ✓ Fitness: {fitness:.4f}", file=sys.stderr)
                 sys.stderr.flush()
+            
+            # Enviar actualización WebSocket
+            try:
+                from ai_trading.services_websocket import enviar_evaluacion_estrategia
+                enviar_evaluacion_estrategia(
+                    estrategia_numero=idx,
+                    total_estrategias=total,
+                    estrategia_nombre=estrategia.nombre,
+                    fitness=fitness,
+                )
+            except Exception:
+                # Si falla el WebSocket, no interrumpir el entrenamiento
+                pass
         
         # Actualizar métricas de la población
         fitness_values = [e.fitness for e in estrategias]
@@ -219,6 +232,26 @@ class AlgoritmoGenetico:
                 # Callback de progreso (pasar tupla para resumen de generación)
                 if callback_progreso:
                     callback_progreso((gen, generaciones, poblacion, mejor_estrategia))
+                
+                # Enviar actualización WebSocket de progreso de generación
+                try:
+                    from django.utils import timezone
+                    from ai_trading.services_websocket import enviar_progreso_generacion
+                    ahora = timezone.now()
+                    tiempo_transcurrido = (ahora - entrenamiento.iniciada).total_seconds() if entrenamiento.iniciada else 0
+                    enviar_progreso_generacion(
+                        generacion=gen + 1,
+                        total_generaciones=generaciones,
+                        fitness_promedio=poblacion.fitness_promedio,
+                        fitness_mejor=poblacion.fitness_mejor,
+                        fitness_peor=poblacion.fitness_peor,
+                        mejor_estrategia_nombre=mejor_estrategia.nombre if mejor_estrategia else "N/A",
+                        mejor_estrategia_fitness=mejor_estrategia.fitness if mejor_estrategia else Decimal("0.00"),
+                        tiempo_transcurrido=tiempo_transcurrido,
+                    )
+                except Exception:
+                    # Si falla el WebSocket, no interrumpir el entrenamiento
+                    pass
                 
                 # Evolucionar (excepto en la última generación)
                 if gen < generaciones - 1:

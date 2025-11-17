@@ -135,3 +135,92 @@ class EstadisticasEstrategiaView(APIView):
                 "beneficio_total": float(trades.aggregate(total=Sum('beneficio'))['total'] or 0.0),
             }
         })
+
+
+class ControlEntrenamientoView(APIView):
+    """
+    Control del entrenamiento de IA (iniciar, detener, estado).
+    """
+    def post(self, request):
+        """Iniciar o detener entrenamiento."""
+        accion = request.data.get('accion')
+        
+        if accion == 'iniciar':
+            try:
+                from ai_trading.services_entrenamiento import iniciar_entrenamiento
+                
+                entrenamiento = iniciar_entrenamiento(
+                    generaciones=int(request.data.get('generaciones', 10)),
+                    poblacion=int(request.data.get('poblacion', 20)),
+                    tasa_mutacion=float(request.data.get('tasa_mutacion', 0.10)),
+                    tasa_crossover=float(request.data.get('tasa_crossover', 0.80)),
+                    elite_size=int(request.data.get('elite_size', 5)),
+                    dias_datos=int(request.data.get('dias_datos', 1)),
+                    nombre=request.data.get('nombre'),
+                )
+                
+                return Response({
+                    "success": True,
+                    "mensaje": "Entrenamiento iniciado",
+                    "entrenamiento_id": entrenamiento.id,
+                })
+            except ValueError as e:
+                return Response({
+                    "success": False,
+                    "error": str(e),
+                }, status=400)
+            except Exception as e:
+                return Response({
+                    "success": False,
+                    "error": f"Error al iniciar entrenamiento: {str(e)}",
+                }, status=500)
+        
+        elif accion == 'detener':
+            try:
+                from ai_trading.services_entrenamiento import detener_entrenamiento
+                
+                detenido = detener_entrenamiento()
+                if detenido:
+                    return Response({
+                        "success": True,
+                        "mensaje": "Entrenamiento detenido",
+                    })
+                else:
+                    return Response({
+                        "success": False,
+                        "error": "No hay entrenamiento en curso",
+                    }, status=400)
+            except Exception as e:
+                return Response({
+                    "success": False,
+                    "error": f"Error al detener entrenamiento: {str(e)}",
+                }, status=500)
+        
+        else:
+            return Response({
+                "success": False,
+                "error": "Acción no válida. Use 'iniciar' o 'detener'",
+            }, status=400)
+    
+    def get(self, request):
+        """Obtener estado del entrenamiento actual."""
+        try:
+            from ai_trading.services_entrenamiento import obtener_estado_entrenamiento
+            
+            estado = obtener_estado_entrenamiento()
+            if estado:
+                return Response({
+                    "success": True,
+                    "estado": estado,
+                })
+            else:
+                return Response({
+                    "success": True,
+                    "estado": None,
+                    "mensaje": "No hay entrenamiento en curso",
+                })
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": f"Error al obtener estado: {str(e)}",
+            }, status=500)

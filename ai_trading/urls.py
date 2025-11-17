@@ -9,5 +9,6 @@ urlpatterns = [
     path('api/top-estrategias/', views.TopEstrategiasView.as_view(), name='top-estrategias'),
     path('api/trades-recientes/', views.TradesRecientesIAView.as_view(), name='trades-recientes'),
     path('api/estrategia/<int:estrategia_id>/', views.EstadisticasEstrategiaView.as_view(), name='estadisticas-estrategia'),
+    path('api/control-entrenamiento/', views.ControlEntrenamientoView.as_view(), name='control-entrenamiento'),
 ]
 

@@ -249,6 +249,7 @@ class EntrenamientoIA(models.Model):
         COMPLETADO = "completado", "Completado"
         ERROR = "error", "Error"
         CANCELADO = "cancelado", "Cancelado"
+        DETENIDO = "detenido", "Detenido"
     
     nombre = models.CharField(max_length=200)
     tipo = models.CharField(
@@ -270,6 +271,10 @@ class EntrenamientoIA(models.Model):
     activos_incluidos = models.JSONField(
         default=list,
         help_text="Lista de activos a incluir en el entrenamiento (vacío = todos)"
+    )
+    parametros = models.JSONField(
+        default=dict,
+        help_text="Parámetros del entrenamiento (generaciones, población, etc.)"
     )
     
     # Resultados

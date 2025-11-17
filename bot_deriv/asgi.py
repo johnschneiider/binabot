@@ -50,8 +50,21 @@ except Exception as exc:
         "No se pudieron cargar las rutas websocket del dashboard: %s", exc, exc_info=True
     )
 
+# Cargar rutas WebSocket de ai_trading
+try:
+    from ai_trading.routing import (
+        websocket_urlpatterns as ai_trading_websocket_patterns,
+    )
+except Exception as exc:
+    ai_trading_websocket_patterns = []
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "No se pudieron cargar las rutas websocket de ai_trading: %s", exc, exc_info=True
+    )
+
 # Combinar todas las rutas WebSocket
-all_websocket_patterns = deriv_websocket_patterns + dashboard_websocket_patterns
+all_websocket_patterns = deriv_websocket_patterns + dashboard_websocket_patterns + ai_trading_websocket_patterns
 
 application = ProtocolTypeRouter(
     {
