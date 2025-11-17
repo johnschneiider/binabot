@@ -26,6 +26,7 @@ urlpatterns = [
     path("api/simulacion/", include("simulacion.urls")),
     path("api/historial/", include("historial.urls")),
     path("api/notificaciones/", include("notificaciones.urls")),
+    path("ai/", include("ai_trading.urls")),
     path("", include("core.urls")),
 ]
 

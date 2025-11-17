@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Dashboard IA - Entrenamiento en Tiempo Real{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{% static 'css/ai_trading/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="ai-dashboard">
+    <div class="ai-dashboard__header">
+      <h1>🤖 Entrenamiento de IA en Tiempo Real</h1>
+      <p>Observa cómo la IA aprende de los trades reales del bot principal</p>
+    </div>
+
+    <div class="ai-dashboard__grid">
+      <!-- Panel de Estado General -->
+      <article class="ai-card ai-card--estado">
+        <h2>Estado General</h2>
+        <div class="ai-metricas">
+          <div class="ai-metrica">
+            <span>Total Estrategias</span>
+            <strong id="total-estrategias">--</strong>
+          </div>
+          <div class="ai-metrica">
+            <span>Mejor Fitness</span>
+            <strong id="mejor-fitness">--</strong>
+          </div>
+          <div class="ai-metrica">
+            <span>Winrate Global</span>
+            <strong id="winrate-global">--</strong>
+          </div>
+          <div class="ai-metrica">
+            <span>Trades Totales</span>
+            <strong id="trades-totales">--</strong>
+          </div>
+        </div>
+        <div class="ai-mejor-estrategia">
+          <h3>Mejor Estrategia</h3>
+          <div id="mejor-estrategia-detalle">
+            <p>Cargando...</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Top Estrategias -->
+      <article class="ai-card ai-card--top">
+        <h2>Top 10 Estrategias</h2>
+        <div class="ai-tabla-container">
+          <table class="ai-tabla">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Gen</th>
+                <th>Fitness</th>
+                <th>Winrate</th>
+                <th>Ops</th>
+                <th>Beneficio</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-estrategias">
+              <tr><td colspan="6">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <!-- Trades Recientes -->
+      <article class="ai-card ai-card--trades">
+        <h2>Trades Recientes de la IA</h2>
+        <div class="ai-tabla-container">
+          <table class="ai-tabla">
+            <thead>
+              <tr>
+                <th>Estrategia</th>
+                <th>Activo</th>
+                <th>Dirección</th>
+                <th>Resultado</th>
+                <th>Beneficio</th>
+                <th>Reward</th>
+                <th>Hora</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-trades">
+              <tr><td colspan="7">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <script src="{% static 'js/ai_trading/dashboard.js' %}"></script>
+{% endblock %}
+
