@@ -161,6 +161,10 @@ def verificar_limites_activo(
     """
     from historial.models import Operacion
     
+    if activo_nombre.startswith("frx"):
+        max_trades_por_ciclo = max(max_trades_por_ciclo, 3)
+        periodo_minutos = min(periodo_minutos, 30)
+
     desde = timezone.now() - timedelta(minutes=periodo_minutos)
     
     trades_recientes = Operacion.objetos.reales().filter(
@@ -189,6 +193,11 @@ def detectar_micro_congestion(
     Returns:
         True si está en micro-congestión
     """
+    activo_nombre = indicadores.activo.nombre if indicadores.activo else ""
+    if activo_nombre.startswith("frx"):
+        umbral_variacion = Decimal("0.05")
+        umbral_frecuencia = 30
+
     # Baja variación
     baja_variacion = abs(indicadores.momentum_pct) < umbral_variacion
     

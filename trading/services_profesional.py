@@ -28,6 +28,7 @@ from trading.risk import (
     verificar_limites_activo,
 )
 from trading.scheduler import obtener_confianza_horaria
+from trading.utils import priorizar_activos_por_horario
 from trading.signals import (
     calcular_consistencia,
     calcular_ema,
@@ -115,7 +116,9 @@ class MotorTradingProfesional:
         Returns:
             Lista de activos con sus indicadores y scores, ordenados por score
         """
-        activos = ActivoPermitido.objects.filter(habilitado=True)
+        activos = priorizar_activos_por_horario(
+            list(ActivoPermitido.objects.filter(habilitado=True))
+        )
         resultados = []
         
         for activo in activos:

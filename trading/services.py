@@ -15,6 +15,7 @@ from core.models import ActivoPermitido
 from core.services import GestorBotCore
 from historial.models import Operacion
 from integracion_deriv.client import obtener_ticks_history_sync, operar_contrato_sync
+from trading.utils import priorizar_activos_por_horario
 
 
 class MotorTrading:
@@ -132,11 +133,10 @@ class MotorTrading:
             )
             return None
 
-        activos = list(
-            ActivoPermitido.objects.filter(habilitado=True).order_by(
-                "-winrate_simulacion", "nombre"
-            )
+        activos_qs = ActivoPermitido.objects.filter(habilitado=True).order_by(
+            "-winrate_simulacion", "nombre"
         )
+        activos = priorizar_activos_por_horario(list(activos_qs))
         if not activos:
             self._enviar_evento(
                 {"tipo": "error", "mensaje": "No hay activos habilitados para operar."}
