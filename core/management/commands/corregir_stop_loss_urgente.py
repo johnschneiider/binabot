@@ -28,21 +28,38 @@ class Command(BaseCommand):
         self.stdout.write(f"  Pérdida acumulada: ${config.perdida_acumulada}")
         
         # Asegurar que balance_stop_loss_base nunca baje
-        balance_stop_loss_base_original = config.balance_stop_loss_base
+        # LÓGICA SIMPLIFICADA: Stop loss es un balance mínimo que solo sube
+        # Si el balance sube, actualizar el stop loss (trailing stop loss)
+        # Si el balance baja, el stop loss se mantiene fijo
+        stop_loss_anterior = config.stop_loss_actual
+        nuevo_stop_loss = config.calcular_stop_loss(config.balance_actual)
         
-        # Si el balance actual es mayor que balance_stop_loss_base, actualizarlo
-        if config.balance_actual > config.balance_stop_loss_base:
+        # Solo actualizar stop_loss si el balance subió
+        if nuevo_stop_loss > config.stop_loss_actual:
+            config.stop_loss_actual = nuevo_stop_loss
             config.balance_stop_loss_base = config.balance_actual
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"\n✓ Actualizado balance_stop_loss_base: "
-                    f"${balance_stop_loss_base_original} → ${config.balance_stop_loss_base}"
+                    f"\n✓ Balance subió, stop loss actualizado: "
+                    f"${stop_loss_anterior} → ${config.stop_loss_actual}"
                 )
             )
-        
-        # Recalcular stop_loss_actual basado en balance_stop_loss_base
-        stop_loss_anterior = config.stop_loss_actual
-        config.stop_loss_actual = config.calcular_stop_loss(config.balance_stop_loss_base)
+        elif config.stop_loss_actual <= 0:
+            # Inicializar stop loss si no existe
+            config.stop_loss_actual = nuevo_stop_loss
+            config.balance_stop_loss_base = config.balance_actual
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"\n✓ Stop loss inicializado: ${config.stop_loss_actual}"
+                )
+            )
+        else:
+            # Balance bajó, stop loss se mantiene fijo
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"\n✓ Balance bajó, stop loss se mantiene fijo: ${config.stop_loss_actual}"
+                )
+            )
         
         # Recalcular pérdida acumulada
         perdida_anterior = config.perdida_acumulada
