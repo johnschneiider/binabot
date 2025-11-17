@@ -78,17 +78,16 @@ class ConfiguracionBot(models.Model):
         )
         return self._calcular_meta_desde_base(base_calculo)
 
-    def calcular_stop_loss(self, base: Optional[Decimal] = None) -> Decimal:
-        base_calculo = (
-            base
-            if base is not None
-            else (
-                self.balance_stop_loss_base
-                if self.balance_stop_loss_base > 0
-                else self.balance_actual
-            )
-        )
-        return self._calcular_stop_loss_desde_base(base_calculo)
+    def calcular_stop_loss(self, balance: Optional[Decimal] = None) -> Decimal:
+        """
+        Calcula el stop loss como balance mínimo (balance * 0.98).
+        El stop loss es un balance mínimo que nunca baja, solo sube.
+        """
+        balance_calculo = balance if balance is not None else self.balance_actual
+        if balance_calculo <= 0:
+            return Decimal("0.00")
+        # Stop loss = balance * 0.98 (2% menos)
+        return (balance_calculo * Decimal("0.98")).quantize(Decimal("0.01"))
 
     def _asegurar_bases_y_objetivos(self) -> None:
         cambios = False
@@ -102,20 +101,23 @@ class ConfiguracionBot(models.Model):
             self.meta_actual = Decimal("0.00")
             cambios = True
         
-        # CRÍTICO: NO recalcular stop_loss_actual aquí automáticamente
-        # El stop_loss_actual solo debe actualizarse cuando hay ganancias (en registrar_ganancia o sincronizar_balance)
-        # Si no existe, inicializarlo una sola vez
-        if self.stop_loss_actual <= 0 and self.balance_stop_loss_base > 0:
-            self.stop_loss_actual = self.calcular_stop_loss(self.balance_stop_loss_base)
-            cambios = True
+        # LÓGICA SIMPLIFICADA: Stop loss es un balance mínimo que solo sube
+        # Si el balance actual sube, actualizar el stop loss
+        # Si el balance baja, el stop loss se mantiene fijo
+        stop_loss_calculado = self.calcular_stop_loss(self.balance_actual)
         
-        # Asegurar que balance_stop_loss_base nunca baje (solo puede subir)
-        if self.balance_actual > self.balance_stop_loss_base:
+        # Solo actualizar stop_loss si el balance subió (trailing stop loss)
+        if stop_loss_calculado > self.stop_loss_actual:
+            self.stop_loss_actual = stop_loss_calculado
             self.balance_stop_loss_base = self.balance_actual
-            # Solo actualizar stop_loss cuando el balance sube
-            self.stop_loss_actual = self.calcular_stop_loss(self.balance_stop_loss_base)
+            cambios = True
+        # Si no hay stop_loss inicializado, inicializarlo
+        elif self.stop_loss_actual <= 0:
+            self.stop_loss_actual = stop_loss_calculado
+            self.balance_stop_loss_base = self.balance_actual
             cambios = True
         
+        # Actualizar pérdida acumulada (solo para estadísticas, no afecta el stop loss)
         perdida_calculada = self.balance_stop_loss_base - self.balance_actual
         if perdida_calculada < 0:
             perdida_calculada = Decimal("0.00")
@@ -132,7 +134,6 @@ class ConfiguracionBot(models.Model):
                 "perdida_acumulada",
                 "ultima_actualizacion",
             ]
-            # Solo actualizar stop_loss_actual si cambió
             if self.stop_loss_actual > 0:
                 campos_actualizar.append("stop_loss_actual")
             
@@ -145,10 +146,12 @@ class ConfiguracionBot(models.Model):
         ).quantize(Decimal("0.01"))
         self.perdida_acumulada = Decimal("0.00")
 
-        if self.balance_actual > self.balance_stop_loss_base:
+        # Actualizar stop loss solo si el balance subió (trailing stop loss)
+        nuevo_stop_loss = self.calcular_stop_loss(self.balance_actual)
+        if nuevo_stop_loss > self.stop_loss_actual:
+            self.stop_loss_actual = nuevo_stop_loss
             self.balance_stop_loss_base = self.balance_actual
-
-        self.stop_loss_actual = self.calcular_stop_loss(self.balance_stop_loss_base)
+        
         self.meta_actual = Decimal("0.00")
         self.save(
             update_fields=[

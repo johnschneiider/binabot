@@ -106,7 +106,11 @@ class GestorBotCore:
             # Si beneficio == 0, no hacer nada (empate, recuperas tu dinero)
 
     def _verificar_stop_loss(self) -> None:
-        if self.configuracion.perdida_acumulada >= self.configuracion.stop_loss_actual:
+        """
+        Verifica si el balance actual llegó al stop loss (balance mínimo).
+        El stop loss es un balance mínimo que nunca baja, solo sube.
+        """
+        if self.configuracion.balance_actual <= self.configuracion.stop_loss_actual:
             self.configuracion.pausar()
             self.configuracion.mejor_horario = None
             self.configuracion.save(update_fields=["mejor_horario"])
@@ -250,25 +254,32 @@ class GestorBotCore:
         if self.configuracion.balance_stop_loss_base <= 0:
             self.configuracion.balance_stop_loss_base = balance
 
-        # Solo actualizar balance_stop_loss_base y recalcular stop_loss_actual cuando hay ganancias (trailing stop loss)
-        # NO actualizar cuando hay pérdidas, para que el stop loss se mantenga fijo
+        # LÓGICA SIMPLIFICADA: Stop loss es un balance mínimo que solo sube
+        # Si el balance sube, actualizar el stop loss (trailing stop loss)
+        # Si el balance baja, el stop loss se mantiene fijo
+        nuevo_stop_loss = self.configuracion.calcular_stop_loss(balance)
         actualizar_stop_loss = False
-        if balance > self.configuracion.balance_stop_loss_base:
+        
+        if nuevo_stop_loss > self.configuracion.stop_loss_actual:
+            # Balance subió, actualizar stop loss
+            self.configuracion.stop_loss_actual = nuevo_stop_loss
             self.configuracion.balance_stop_loss_base = balance
-            self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(
-                self.configuracion.balance_stop_loss_base
-            )
             actualizar_stop_loss = True
-        # Si no hay ganancia, mantener el stop_loss_actual como está (no recalcular)
+        elif self.configuracion.stop_loss_actual <= 0:
+            # Inicializar stop loss si no existe
+            self.configuracion.stop_loss_actual = nuevo_stop_loss
+            self.configuracion.balance_stop_loss_base = balance
+            actualizar_stop_loss = True
+        # Si el balance bajó, el stop_loss_actual se mantiene fijo (no se actualiza)
         
         self.configuracion.meta_actual = Decimal("0.00")
 
+        # Actualizar pérdida acumulada (solo para estadísticas)
         perdida = self.configuracion.balance_stop_loss_base - balance
         if perdida < 0:
             perdida = Decimal("0.00")
         self.configuracion.perdida_acumulada = perdida.quantize(Decimal("0.01"))
         
-        # Solo incluir stop_loss_actual en update_fields si realmente se actualizó
         campos_actualizar = [
             "balance_actual",
             "balance_stop_loss_base",
@@ -282,7 +293,7 @@ class GestorBotCore:
         self.configuracion.save(update_fields=campos_actualizar)
         
         # CRÍTICO: Verificar stop loss después de sincronizar balance
-        # Esto asegura que si el balance baja por cualquier razón, se detecte el stop loss
+        # Si balance_actual <= stop_loss_actual, pausar
         self._verificar_stop_loss()
 
     def ejecutar_simulacion_pausa(self, intervalo_segundos: int = 60):

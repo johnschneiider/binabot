@@ -85,28 +85,31 @@ class Command(BaseCommand):
         
         # Verificar lógica
         self.stdout.write(f"\nVerificación:")
-        if config.balance_actual <= config.balance_stop_loss_base:
-            diferencia = config.balance_stop_loss_base - config.balance_actual
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"  ✓ Stop loss (balance mínimo): ${config.stop_loss_actual}"
+            )
+        )
+        self.stdout.write(f"  ✓ Balance actual: ${config.balance_actual}")
+        
+        if config.balance_actual <= config.stop_loss_actual:
+            self.stdout.write(
+                self.style.ERROR(
+                    f"  ⚠ ALERTA: Balance ({config.balance_actual}) <= Stop loss ({config.stop_loss_actual})"
+                )
+            )
+            self.stdout.write("  → El bot debería estar pausado")
+        else:
+            diferencia = config.balance_actual - config.stop_loss_actual
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"  ✓ Stop loss fijo en: ${config.stop_loss_actual}"
+                    f"  ✓ Balance está ${diferencia} por encima del stop loss"
                 )
             )
             self.stdout.write(
-                f"  ✓ Si la pérdida acumulada alcanza ${config.stop_loss_actual}, el bot se pausará"
+                f"  ✓ Si el balance baja a ${config.stop_loss_actual} o menos, el bot se pausará"
             )
-            self.stdout.write(f"  ✓ Pérdida actual: ${diferencia}")
-            self.stdout.write(
-                f"  ✓ Restante hasta stop loss: ${config.stop_loss_actual - diferencia}"
-            )
-        else:
-            self.stdout.write(
-                self.style.WARNING(
-                    f"  ⚠ Balance actual ({config.balance_actual}) > "
-                    f"Balance stop loss base ({config.balance_stop_loss_base})"
-                )
-            )
-            self.stdout.write("  → Esto debería actualizar el stop loss base")
         
         self.stdout.write(self.style.SUCCESS("\n✓ Corrección completada\n"))
+
 
