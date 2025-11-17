@@ -69,17 +69,36 @@ class Command(BaseCommand):
                 estado = gestor.obtener_estado()
 
                 if estado.estado == gestor.configuracion.Estado.OPERANDO:
-                    operacion = motor.ejecutar_ciclo()
-                    if operacion:
+                    # Log detallado del estado antes de ejecutar
+                    self.stdout.write(
+                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Estado: OPERANDO | "
+                        f"en_operacion={estado.en_operacion} | "
+                        f"balance={estado.balance_actual}"
+                    )
+                    
+                    if estado.en_operacion:
                         self.stdout.write(
-                            f"[{timezone.now():%Y-%m-%d %H:%M:%S}] "
-                            f"Operación {operacion.numero_contrato} "
-                            f"{operacion.resultado.upper()} "
-                            f"beneficio={operacion.beneficio}"
+                            f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ⏸️  Bot ya tiene una operación en curso, esperando..."
                         )
+                    else:
+                        operacion = motor.ejecutar_ciclo()
+                        if operacion:
+                            self.stdout.write(
+                                self.style.SUCCESS(
+                                    f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ✓ Operación {operacion.numero_contrato} "
+                                    f"{operacion.resultado.upper()} "
+                                    f"beneficio={operacion.beneficio}"
+                                )
+                            )
+                        else:
+                            # Log cuando no se ejecuta operación para diagnóstico
+                            self.stdout.write(
+                                f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ⚠️  Ciclo ejecutado pero no se generó operación "
+                                f"(puede ser por falta de señales, límites, cooldowns, etc.)"
+                            )
                 else:
                     self.stdout.write(
-                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Bot en pausa. "
+                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Bot en pausa (estado: {estado.estado}). "
                         "Esperando reanudación automática."
                     )
                     resultado = gestor.ejecutar_simulacion_pausa(intervalo_simulacion)
@@ -100,16 +119,19 @@ class Command(BaseCommand):
                 error_traceback = traceback.format_exc()
                 self.stderr.write(
                     self.style.ERROR(
-                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Error en el loop: {exc}"
+                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ❌ Error en el loop: {exc}"
                     )
                 )
-                # Si es un error de base de datos relacionado con longitud, mostrar más detalles
-                if "value too long" in str(exc).lower() or "varying" in str(exc).lower():
-                    self.stderr.write(
-                        self.style.ERROR(
-                            f"Traceback completo:\n{error_traceback}"
-                        )
+                # Mostrar traceback completo para diagnóstico
+                self.stderr.write(
+                    self.style.ERROR(
+                        f"Traceback completo:\n{error_traceback}"
                     )
+                )
+                # Continuar el loop en lugar de detenerse
+                self.stdout.write(
+                    f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Continuando el loop después del error..."
+                )
 
             time.sleep(intervalo)
 
