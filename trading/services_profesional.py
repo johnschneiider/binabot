@@ -309,12 +309,17 @@ class MotorTradingProfesional:
             
             open_contract = respuesta.get("proposal_open_contract", {})
             status = open_contract.get("status")
-            beneficio = Decimal(str(open_contract.get("profit", 0))).quantize(Decimal("0.01"))
+            beneficio_api = Decimal(str(open_contract.get("profit", 0))).quantize(Decimal("0.01"))
             precio_cierre = Decimal(str(open_contract.get("sell_price", 0))).quantize(Decimal("0.00001"))
             
             resultado = (
                 Operacion.Resultado.GANADA if status == "won" else Operacion.Resultado.PERDIDA
             )
+            # Si es pérdida y el beneficio es 0, calcular como -monto_trade
+            if resultado == Operacion.Resultado.PERDIDA and beneficio_api == 0:
+                beneficio = -monto_trade
+            else:
+                beneficio = beneficio_api
             # Truncar contract_id a 40 caracteres máximo
             contract_id = str(open_contract.get("contract_id", numero_contrato))
             numero_final = contract_id[:40] if len(contract_id) > 40 else contract_id

@@ -206,11 +206,16 @@ class MotorTrading:
                 )
                 open_contract = respuesta.get("proposal_open_contract", {})
                 status = open_contract.get("status")
-                beneficio = Decimal(open_contract.get("profit", 0)).quantize(Decimal("0.01"))
+                beneficio_api = Decimal(open_contract.get("profit", 0)).quantize(Decimal("0.01"))
                 precio_cierre = Decimal(open_contract.get("sell_price", 0)).quantize(Decimal("0.00001"))
                 resultado = (
                     Operacion.Resultado.GANADA if status == "won" else Operacion.Resultado.PERDIDA
                 )
+                # Si es pérdida y el beneficio es 0, calcular como -monto_trade
+                if resultado == Operacion.Resultado.PERDIDA and beneficio_api == 0:
+                    beneficio = -monto_trade
+                else:
+                    beneficio = beneficio_api
                 numero_final = str(open_contract.get("contract_id", numero_contrato))
             except Exception as exc:
                 self._enviar_evento({"tipo": "error", "mensaje": str(exc)})
