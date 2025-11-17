@@ -103,8 +103,11 @@ class GestorBotCore:
         if operacion.resultado == Operacion.Resultado.GANADA:
             self.configuracion.registrar_ganancia(operacion.beneficio)
         elif operacion.resultado == Operacion.Resultado.PERDIDA:
-            self.configuracion.registrar_perdida(abs(operacion.beneficio))
-            self._verificar_stop_loss()
+            # Si el beneficio es 0, es un empate (no se registra pérdida)
+            if operacion.beneficio < 0:
+                self.configuracion.registrar_perdida(abs(operacion.beneficio))
+                self._verificar_stop_loss()
+            # Si beneficio == 0, no hacer nada (empate, recuperas tu dinero)
 
     def _verificar_stop_loss(self) -> None:
         if self.configuracion.perdida_acumulada >= self.configuracion.stop_loss_actual:

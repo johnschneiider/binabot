@@ -208,14 +208,22 @@ class MotorTrading:
                 status = open_contract.get("status")
                 beneficio_api = Decimal(open_contract.get("profit", 0)).quantize(Decimal("0.01"))
                 precio_cierre = Decimal(open_contract.get("sell_price", 0)).quantize(Decimal("0.00001"))
-                resultado = (
-                    Operacion.Resultado.GANADA if status == "won" else Operacion.Resultado.PERDIDA
-                )
-                # Si es pérdida y el beneficio es 0, calcular como -monto_trade
-                if resultado == Operacion.Resultado.PERDIDA and beneficio_api == 0:
-                    beneficio = -monto_trade
+                
+                # Determinar resultado basado en el beneficio real de la API
+                # Si profit == 0, es un empate (recuperas tu dinero, no ganas ni pierdes)
+                # Si profit > 0, es ganancia
+                # Si profit < 0, es pérdida
+                if beneficio_api > 0:
+                    resultado = Operacion.Resultado.GANADA
+                elif beneficio_api < 0:
+                    resultado = Operacion.Resultado.PERDIDA
                 else:
-                    beneficio = beneficio_api
+                    # profit == 0: empate (recuperas tu dinero)
+                    # Deriv puede marcar esto como "lost" pero el profit es 0
+                    # Lo tratamos como pérdida para estadísticas, pero beneficio = 0
+                    resultado = Operacion.Resultado.PERDIDA
+                
+                beneficio = beneficio_api
                 numero_final = str(open_contract.get("contract_id", numero_contrato))
             except Exception as exc:
                 self._enviar_evento({"tipo": "error", "mensaje": str(exc)})
