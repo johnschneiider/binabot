@@ -209,6 +209,18 @@ class MotorTrading:
                 beneficio_api = Decimal(open_contract.get("profit", 0)).quantize(Decimal("0.01"))
                 precio_cierre = Decimal(open_contract.get("sell_price", 0)).quantize(Decimal("0.00001"))
                 
+                # Obtener contract_id real de la respuesta
+                contract_id_real = open_contract.get("contract_id")
+                if contract_id_real:
+                    numero_final = str(contract_id_real)
+                else:
+                    # Si no hay contract_id, mantener el temporal pero loguear
+                    numero_final = numero_contrato
+                    self._enviar_evento({
+                        "tipo": "warning",
+                        "mensaje": f"Operación {numero_contrato}: No se recibió contract_id de Deriv. Respuesta: {respuesta}"
+                    })
+                
                 # Determinar resultado basado en el beneficio real de la API
                 # Si profit == 0, es un empate (recuperas tu dinero, no ganas ni pierdes)
                 # Si profit > 0, es ganancia
@@ -224,7 +236,6 @@ class MotorTrading:
                     resultado = Operacion.Resultado.PERDIDA
                 
                 beneficio = beneficio_api
-                numero_final = str(open_contract.get("contract_id", numero_contrato))
             except Exception as exc:
                 self._enviar_evento({"tipo": "error", "mensaje": str(exc)})
                 resultado = Operacion.Resultado.PERDIDA
