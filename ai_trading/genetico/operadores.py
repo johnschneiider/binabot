@@ -19,8 +19,10 @@ class OperadorMutacion:
         """
         Crea una copia mutada de la estrategia.
         """
+        from django.utils import timezone
         nueva = EstrategiaGenetica()
-        nueva.nombre = f"{estrategia.nombre}_mut_{random.randint(1000, 9999)}"
+        timestamp = int(timezone.now().timestamp() * 1000)
+        nueva.nombre = f"{estrategia.nombre}_mut_{timestamp}_{random.randint(1000, 9999)}"
         nueva.generacion = estrategia.generacion + 1
         
         # Copiar todos los parámetros
@@ -86,11 +88,13 @@ class OperadorCrossover:
         """
         Cruza dos estrategias para crear dos hijos.
         """
+        from django.utils import timezone
         hijo1 = EstrategiaGenetica()
         hijo2 = EstrategiaGenetica()
         
-        hijo1.nombre = f"hijo1_{random.randint(1000, 9999)}"
-        hijo2.nombre = f"hijo2_{random.randint(1000, 9999)}"
+        timestamp = int(timezone.now().timestamp() * 1000)
+        hijo1.nombre = f"hijo1_{timestamp}_{random.randint(1000, 9999)}"
+        hijo2.nombre = f"hijo2_{timestamp}_{random.randint(1000, 9999)}"
         hijo1.generacion = max(padre1.generacion, padre2.generacion) + 1
         hijo2.generacion = max(padre1.generacion, padre2.generacion) + 1
         

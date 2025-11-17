@@ -54,9 +54,10 @@ class AlgoritmoGenetico:
         )
         
         estrategias = []
+        timestamp = int(timezone.now().timestamp() * 1000)  # Timestamp en milisegundos para unicidad
         for i in range(self.tamano_poblacion):
             estrategia = EstrategiaGenetica.objects.create(
-                nombre=f"Estrategia_Gen0_{i+1}",
+                nombre=f"Estrategia_Gen0_{timestamp}_{i+1}",
                 generacion=0,
                 # Parámetros aleatorios iniciales
                 umbral_variacion_min=Decimal(str(random.uniform(0.01, 2.00))).quantize(Decimal("0.01")),
@@ -124,9 +125,10 @@ class AlgoritmoGenetico:
         
         # Elitismo: las mejores estrategias pasan directamente
         elite = estrategias_actuales[:self.elite_size]
-        for estrategia_elite in elite:
+        timestamp = int(timezone.now().timestamp() * 1000)
+        for idx, estrategia_elite in enumerate(elite):
             nueva_estrategia = EstrategiaGenetica.objects.create(
-                nombre=f"{estrategia_elite.nombre}_elite",
+                nombre=f"{estrategia_elite.nombre}_elite_{timestamp}_{idx}",
                 generacion=nueva_poblacion.generacion,
                 umbral_variacion_min=estrategia_elite.umbral_variacion_min,
                 umbral_confianza_min=estrategia_elite.umbral_confianza_min,
