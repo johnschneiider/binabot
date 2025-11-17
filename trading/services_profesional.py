@@ -307,23 +307,32 @@ class MotorTradingProfesional:
                 contract_type=contract_type,
             )
             
+            # Verificar errores en la respuesta
+            if respuesta.get("error"):
+                error_info = respuesta.get("error", {})
+                raise Exception(f"Error de Deriv API: {error_info.get('message', 'Error desconocido')}")
+            
             open_contract = respuesta.get("proposal_open_contract", {})
+            if not open_contract:
+                raise Exception(f"Respuesta inválida de Deriv: no se encontró proposal_open_contract. Respuesta: {respuesta}")
+            
             status = open_contract.get("status")
             beneficio_api = Decimal(str(open_contract.get("profit", 0))).quantize(Decimal("0.01"))
             precio_cierre = Decimal(str(open_contract.get("sell_price", 0))).quantize(Decimal("0.00001"))
             
-            # Obtener contract_id real de la respuesta
+            # Obtener contract_id real de la respuesta (debe estar siempre presente)
             contract_id_real = open_contract.get("contract_id")
+            if not contract_id_real:
+                # Intentar obtener de la respuesta de compra si está disponible
+                buy_response = respuesta.get("buy", {})
+                contract_id_real = buy_response.get("contract_id")
+            
             if contract_id_real:
                 contract_id_str = str(contract_id_real)
                 numero_final = contract_id_str[:40] if len(contract_id_str) > 40 else contract_id_str
             else:
-                # Si no hay contract_id, mantener el temporal pero loguear
-                numero_final = numero_contrato
-                self._enviar_evento({
-                    "tipo": "warning",
-                    "mensaje": f"Operación {numero_contrato}: No se recibió contract_id de Deriv. Respuesta: {respuesta}"
-                })
+                # Si aún no hay contract_id, es un error crítico
+                raise Exception(f"No se recibió contract_id de Deriv. Respuesta completa: {respuesta}")
             
             # Determinar resultado basado en el beneficio real de la API
             # Si profit == 0, es un empate (recuperas tu dinero, no ganas ni pierdes)

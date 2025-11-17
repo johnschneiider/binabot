@@ -150,16 +150,45 @@ def operar_contrato_sync(**kwargs) -> Dict[str, Any]:
     """
     Helper sincrónico para ejecutar la compra y esperar resultado
     desde un contexto síncrono (por ejemplo, dentro de una tarea Celery).
+    
+    Retorna la respuesta con el resultado del contrato, asegurando que siempre
+    incluya el contract_id en proposal_open_contract.
     """
 
     async def _run():
         client = DerivWebsocketClient()
         try:
             compra = await client.comprar_contrato(**kwargs)
-            contract_id = compra.get("buy", {}).get("contract_id")
-            if not contract_id:
+            
+            # Verificar errores en la compra
+            if compra.get("error"):
                 return compra
-            return await client.esperar_resultado(str(contract_id))
+            
+            # Obtener contract_id de la respuesta de compra
+            buy_response = compra.get("buy", {})
+            contract_id = buy_response.get("contract_id")
+            
+            if not contract_id:
+                # Si no hay contract_id, puede ser un error o respuesta inesperada
+                error_msg = compra.get("error", {}).get("message", "No se recibió contract_id")
+                return {
+                    "error": {
+                        "code": "NO_CONTRACT_ID",
+                        "message": f"Error al comprar contrato: {error_msg}",
+                        "details": compra
+                    }
+                }
+            
+            # Esperar resultado del contrato
+            resultado = await client.esperar_resultado(str(contract_id))
+            
+            # Asegurar que el contract_id esté en proposal_open_contract
+            open_contract = resultado.get("proposal_open_contract", {})
+            if not open_contract.get("contract_id"):
+                open_contract["contract_id"] = contract_id
+                resultado["proposal_open_contract"] = open_contract
+            
+            return resultado
         finally:
             await client.cerrar()
 
