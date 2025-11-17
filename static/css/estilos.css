@@ -99,6 +99,43 @@
   gap: 1.25rem;
 }
 
+.barra-superior__navegacion {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.barra-superior__nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 12px;
+  background: rgba(12, 23, 43, 0.65);
+  border: 1px solid rgba(120, 168, 255, 0.18);
+  color: var(--color-texto-secundario);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: var(--transicion);
+  white-space: nowrap;
+}
+
+.barra-superior__nav-link:hover {
+  background: rgba(60, 141, 255, 0.15);
+  border-color: rgba(60, 141, 255, 0.35);
+  color: var(--color-primario);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(60, 141, 255, 0.2);
+}
+
+.barra-superior__nav-link.activo {
+  background: linear-gradient(135deg, rgba(60, 141, 255, 0.25), rgba(12, 96, 255, 0.15));
+  border-color: rgba(60, 141, 255, 0.4);
+  color: var(--color-primario);
+  box-shadow: 0 4px 16px rgba(60, 141, 255, 0.25);
+}
+
 .barra-superior__marcador {
   display: flex;
   flex-direction: column;
@@ -277,6 +314,17 @@ tbody tr:hover {
     align-self: stretch;
     justify-content: space-between;
     width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .barra-superior__navegacion {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .barra-superior__nav-link {
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
   }
 
   .pie {

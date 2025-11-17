@@ -20,6 +20,14 @@
           </div>
         </div>
         <div class="barra-superior__acciones">
+          <nav class="barra-superior__navegacion">
+            <a href="{% url 'panel-principal' %}" class="barra-superior__nav-link {% if request.resolver_match.url_name == 'panel-principal' %}activo{% endif %}">
+              📊 Panel Principal
+            </a>
+            <a href="{% url 'ai_trading:dashboard' %}" class="barra-superior__nav-link {% if request.resolver_match.app_name == 'ai_trading' %}activo{% endif %}">
+              🤖 Entrenamiento IA
+            </a>
+          </nav>
           <div class="barra-superior__marcador">
             <span class="marcador__label">Mercado</span>
             <span class="marcador__valor" id="marca-tiempo">--</span>
