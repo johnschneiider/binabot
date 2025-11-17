@@ -73,6 +73,7 @@ class EntrenadorIATiempoReal:
         
         # Simular la estrategia con esos ticks
         ticks_list = list(reversed(ticks_anteriores))
+        # Usar el método del simulador para generar señal
         senal = self.simulador._generar_senal(ticks_list, self.estrategia)
         
         if not senal:
