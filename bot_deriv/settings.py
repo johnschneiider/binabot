@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "dashboard",
     "notificaciones",
     "integracion_deriv",
+    "ai_trading.apps.AiTradingConfig",
 ]
 
 MIDDLEWARE = [
