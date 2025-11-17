@@ -69,7 +69,7 @@ def iniciar_entrenamiento(
     
     # Ejecutar en hilo separado
     def ejecutar_entrenamiento():
-        global _proceso_entrenamiento_actual, _entrenamiento_actual
+        global _proceso_entrenamiento_actual, _hilo_entrenamiento_actual, _entrenamiento_actual
         
         try:
             # Obtener la ruta del manage.py
@@ -146,7 +146,6 @@ def iniciar_entrenamiento(
                     entrenamiento.id
                 )
         finally:
-            global _proceso_entrenamiento_actual, _hilo_entrenamiento_actual
             _proceso_entrenamiento_actual = None
             _hilo_entrenamiento_actual = None
     
