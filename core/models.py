@@ -101,10 +101,21 @@ class ConfiguracionBot(models.Model):
         if self.meta_actual != Decimal("0.00"):
             self.meta_actual = Decimal("0.00")
             cambios = True
-        stop_loss_calculado = self.calcular_stop_loss(self.balance_stop_loss_base)
-        if self.stop_loss_actual != stop_loss_calculado:
-            self.stop_loss_actual = stop_loss_calculado
+        
+        # CRÍTICO: NO recalcular stop_loss_actual aquí automáticamente
+        # El stop_loss_actual solo debe actualizarse cuando hay ganancias (en registrar_ganancia o sincronizar_balance)
+        # Si no existe, inicializarlo una sola vez
+        if self.stop_loss_actual <= 0 and self.balance_stop_loss_base > 0:
+            self.stop_loss_actual = self.calcular_stop_loss(self.balance_stop_loss_base)
             cambios = True
+        
+        # Asegurar que balance_stop_loss_base nunca baje (solo puede subir)
+        if self.balance_actual > self.balance_stop_loss_base:
+            self.balance_stop_loss_base = self.balance_actual
+            # Solo actualizar stop_loss cuando el balance sube
+            self.stop_loss_actual = self.calcular_stop_loss(self.balance_stop_loss_base)
+            cambios = True
+        
         perdida_calculada = self.balance_stop_loss_base - self.balance_actual
         if perdida_calculada < 0:
             perdida_calculada = Decimal("0.00")
@@ -112,17 +123,20 @@ class ConfiguracionBot(models.Model):
         if self.perdida_acumulada != perdida_calculada:
             self.perdida_acumulada = perdida_calculada
             cambios = True
+        
         if cambios:
-            self.save(
-                update_fields=[
-                    "balance_meta_base",
-                    "balance_stop_loss_base",
-                    "meta_actual",
-                    "stop_loss_actual",
-                    "perdida_acumulada",
-                    "ultima_actualizacion",
-                ]
-            )
+            campos_actualizar = [
+                "balance_meta_base",
+                "balance_stop_loss_base",
+                "meta_actual",
+                "perdida_acumulada",
+                "ultima_actualizacion",
+            ]
+            # Solo actualizar stop_loss_actual si cambió
+            if self.stop_loss_actual > 0:
+                campos_actualizar.append("stop_loss_actual")
+            
+            self.save(update_fields=campos_actualizar)
 
     def registrar_ganancia(self, monto: Decimal) -> None:
         self.balance_actual = (self.balance_actual + monto).quantize(Decimal("0.01"))
