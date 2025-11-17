@@ -280,6 +280,10 @@ class GestorBotCore:
             campos_actualizar.append("stop_loss_actual")
         
         self.configuracion.save(update_fields=campos_actualizar)
+        
+        # CRÍTICO: Verificar stop loss después de sincronizar balance
+        # Esto asegura que si el balance baja por cualquier razón, se detecte el stop loss
+        self._verificar_stop_loss()
 
     def ejecutar_simulacion_pausa(self, intervalo_segundos: int = 60):
         """
