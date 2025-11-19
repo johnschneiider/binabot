@@ -101,18 +101,11 @@ class ConfiguracionBot(models.Model):
             self.meta_actual = Decimal("0.00")
             cambios = True
         
-        # LÓGICA SIMPLIFICADA: Stop loss es un balance mínimo que solo sube
-        # Si el balance actual sube, actualizar el stop loss
-        # Si el balance baja, el stop loss se mantiene fijo
-        stop_loss_calculado = self.calcular_stop_loss(self.balance_actual)
-        
-        # Solo actualizar stop_loss si el balance subió (trailing stop loss)
-        if stop_loss_calculado > self.stop_loss_actual:
-            self.stop_loss_actual = stop_loss_calculado
-            self.balance_stop_loss_base = self.balance_actual
-            cambios = True
-        # Si no hay stop_loss inicializado, inicializarlo
-        elif self.stop_loss_actual <= 0:
+        # IMPORTANTE: NO actualizar el stop loss aquí automáticamente
+        # El stop loss SOLO se actualiza cuando hay un trade ganador (en registrar_ganancia)
+        # Solo inicializar stop_loss si no existe
+        if self.stop_loss_actual <= 0:
+            stop_loss_calculado = self.calcular_stop_loss(self.balance_actual)
             self.stop_loss_actual = stop_loss_calculado
             self.balance_stop_loss_base = self.balance_actual
             cambios = True
@@ -140,13 +133,18 @@ class ConfiguracionBot(models.Model):
             self.save(update_fields=campos_actualizar)
 
     def registrar_ganancia(self, monto: Decimal) -> None:
+        """
+        Registra una ganancia de un trade ganador.
+        IMPORTANTE: Siempre recalcula el stop loss hacia arriba (trailing stop loss).
+        """
         self.balance_actual = (self.balance_actual + monto).quantize(Decimal("0.01"))
         self.ganancia_acumulada = (
             self.ganancia_acumulada + monto
         ).quantize(Decimal("0.01"))
         self.perdida_acumulada = Decimal("0.00")
 
-        # Actualizar stop loss solo si el balance subió (trailing stop loss)
+        # CRÍTICO: Recalcular stop loss cuando hay un trade ganador
+        # El stop loss sube junto con el balance (arnés de seguridad que se ajusta hacia arriba)
         nuevo_stop_loss = self.calcular_stop_loss(self.balance_actual)
         if nuevo_stop_loss > self.stop_loss_actual:
             self.stop_loss_actual = nuevo_stop_loss
@@ -166,7 +164,13 @@ class ConfiguracionBot(models.Model):
         )
 
     def registrar_perdida(self, monto: Decimal) -> None:
+        """
+        Registra una pérdida de un trade perdedor.
+        IMPORTANTE: NO mueve el stop loss. El stop loss se mantiene fijo como arnés de seguridad.
+        """
         self.balance_actual = (self.balance_actual - monto).quantize(Decimal("0.01"))
+        # CRÍTICO: NO actualizar stop_loss_actual ni balance_stop_loss_base
+        # El stop loss se mantiene fijo cuando hay pérdidas (arnés de seguridad)
         perdida = self.balance_stop_loss_base - self.balance_actual
         if perdida < 0:
             perdida = Decimal("0.00")

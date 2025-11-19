@@ -253,24 +253,14 @@ class GestorBotCore:
             self.configuracion.balance_meta_base = balance
         if self.configuracion.balance_stop_loss_base <= 0:
             self.configuracion.balance_stop_loss_base = balance
+            # Solo inicializar stop_loss si no existe
+            if self.configuracion.stop_loss_actual <= 0:
+                self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(balance)
 
-        # LÓGICA SIMPLIFICADA: Stop loss es un balance mínimo que solo sube
-        # Si el balance sube, actualizar el stop loss (trailing stop loss)
-        # Si el balance baja, el stop loss se mantiene fijo
-        nuevo_stop_loss = self.configuracion.calcular_stop_loss(balance)
-        actualizar_stop_loss = False
-        
-        if nuevo_stop_loss > self.configuracion.stop_loss_actual:
-            # Balance subió, actualizar stop loss
-            self.configuracion.stop_loss_actual = nuevo_stop_loss
-            self.configuracion.balance_stop_loss_base = balance
-            actualizar_stop_loss = True
-        elif self.configuracion.stop_loss_actual <= 0:
-            # Inicializar stop loss si no existe
-            self.configuracion.stop_loss_actual = nuevo_stop_loss
-            self.configuracion.balance_stop_loss_base = balance
-            actualizar_stop_loss = True
-        # Si el balance bajó, el stop_loss_actual se mantiene fijo (no se actualiza)
+        # IMPORTANTE: NO actualizar el stop loss aquí automáticamente
+        # El stop loss SOLO se actualiza cuando hay un trade ganador (en registrar_ganancia)
+        # Si el balance sube por otras razones (ajustes, comisiones, etc.), el stop loss NO se mueve
+        # Si el balance baja, el stop loss se mantiene fijo (arnés de seguridad)
         
         self.configuracion.meta_actual = Decimal("0.00")
 
@@ -282,12 +272,14 @@ class GestorBotCore:
         
         campos_actualizar = [
             "balance_actual",
-            "balance_stop_loss_base",
             "perdida_acumulada",
             "meta_actual",
             "ultima_actualizacion",
         ]
-        if actualizar_stop_loss:
+        # Solo actualizar balance_stop_loss_base y stop_loss_actual si se inicializaron
+        if self.configuracion.balance_stop_loss_base > 0:
+            campos_actualizar.append("balance_stop_loss_base")
+        if self.configuracion.stop_loss_actual > 0:
             campos_actualizar.append("stop_loss_actual")
         
         self.configuracion.save(update_fields=campos_actualizar)
