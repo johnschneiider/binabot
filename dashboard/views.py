@@ -43,7 +43,8 @@ class EstadoBotView(APIView):
 
 class HistoricosView(APIView):
     def get(self, request):
-        recientes = Operacion.objetos.reales()[:20]
+        # Ordenar por hora_inicio descendente para mostrar las más recientes primero
+        recientes = Operacion.objetos.reales().order_by("-hora_inicio")[:20]
         serializer = OperacionSerializer(recientes, many=True)
         return Response(serializer.data)
 
