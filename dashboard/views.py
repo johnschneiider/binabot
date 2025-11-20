@@ -29,6 +29,7 @@ class EstadoBotView(APIView):
     def get(self, request):
         gestor = GestorBotCore()
         estado = gestor.obtener_estado()
+        config = gestor.configuracion
         return Response(
             {
                 "estado": estado.estado,
@@ -37,6 +38,7 @@ class EstadoBotView(APIView):
                 "perdida_acumulada": str(estado.perdida_acumulada),
                 "ganancia_acumulada": str(estado.ganancia_acumulada),
                 "activo_seleccionado": estado.activo_seleccionado,
+                "modo_inverso": config.modo_inverso,
             }
         )
 

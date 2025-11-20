@@ -146,6 +146,17 @@ function actualizarVariacionBalance(nuevoBalance) {
 }
 
 function actualizarEstadoBot(data) {
+  // Actualizar estado del modo inverso si está disponible
+  if (data.modo_inverso !== undefined) {
+    const switchElement = document.getElementById("modo-inverso-switch");
+    const badgeElement = document.getElementById("modo-inverso-badge");
+    if (switchElement) {
+      switchElement.checked = data.modo_inverso;
+    }
+    if (badgeElement) {
+      badgeElement.style.display = data.modo_inverso ? "inline-block" : "none";
+    }
+  }
   const estado = data.estado || "--";
   const balance = convertirNumero(data.balance_actual);
   const stopLoss = convertirNumero(data.stop_loss_actual);
@@ -677,15 +688,23 @@ async function actualizarModoInverso(activado) {
     
     // Mostrar notificación visual
     const switchElement = document.getElementById("modo-inverso-switch");
+    const badgeElement = document.getElementById("modo-inverso-badge");
     if (switchElement) {
       switchElement.checked = data.modo_inverso;
+    }
+    if (badgeElement) {
+      badgeElement.style.display = data.modo_inverso ? "inline-block" : "none";
     }
   } catch (error) {
     console.error("Error al actualizar modo inverso:", error);
     // Revertir el switch si hay error
     const switchElement = document.getElementById("modo-inverso-switch");
+    const badgeElement = document.getElementById("modo-inverso-badge");
     if (switchElement) {
       switchElement.checked = !activado;
+    }
+    if (badgeElement) {
+      badgeElement.style.display = "none";
     }
   }
 }

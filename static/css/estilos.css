@@ -190,6 +190,31 @@
   font-weight: 500;
 }
 
+.switch__badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-acento);
+  background: rgba(99, 245, 189, 0.15);
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(99, 245, 189, 0.3);
+  font-weight: 600;
+  margin-left: 0.5rem;
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(99, 245, 189, 0.4);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 0 4px rgba(99, 245, 189, 0);
+  }
+}
+
 .switch--navbar {
   margin: 0;
   width: 44px;

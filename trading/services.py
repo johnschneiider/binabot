@@ -69,14 +69,18 @@ class MotorTrading:
             )
             return None
 
-        direccion = (
+        direccion_original = (
             Operacion.Direccion.CALL if actual > anterior else Operacion.Direccion.PUT
         )
+        direccion = direccion_original
         
         # MODO INVERSO: Si está activado, invertir la dirección
         config = self.gestor_core.configuracion
         if config.modo_inverso:
             direccion = Operacion.Direccion.PUT if direccion == Operacion.Direccion.CALL else Operacion.Direccion.CALL
+            import sys
+            from django.utils import timezone
+            print(f"[{timezone.now():%Y-%m-%d %H:%M:%S}] 🔄 Modo inverso: {direccion_original} → {direccion} (Activo: {activo})", file=sys.stderr)
         
         contract_type = "CALL" if direccion == Operacion.Direccion.CALL else "PUT"
         variacion = (abs(actual - anterior) / anterior * Decimal("100")).quantize(

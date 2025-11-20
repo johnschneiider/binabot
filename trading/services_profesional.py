@@ -303,12 +303,16 @@ class MotorTradingProfesional:
                 return None
         
         # MODO INVERSO: Si está activado, invertir la dirección
+        direccion_original = direccion
         if config.modo_inverso:
             direccion = "PUT" if direccion == "CALL" else "CALL"
             self._enviar_evento({
                 "tipo": "info",
-                "mensaje": f"🔄 Modo inverso activado: dirección invertida a {direccion}",
+                "mensaje": f"🔄 Modo inverso: {direccion_original} → {direccion} (Activo: {mejor_activo.nombre})",
             })
+            # Log también en stdout para que aparezca en los logs del sistema
+            import sys
+            print(f"[{timezone.now():%Y-%m-%d %H:%M:%S}] 🔄 Modo inverso: {direccion_original} → {direccion} (Activo: {mejor_activo.nombre})", file=sys.stderr)
         
         contract_type = direccion
         
