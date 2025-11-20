@@ -47,6 +47,8 @@ def calcular_monto_adaptativo(
     monto_maximo = balance * Decimal("0.02")   # Máximo 2%
     
     monto = max(monto_minimo, min(monto, monto_maximo))
+
+    monto = max(monto, Decimal("0.40"))
     
     return monto.quantize(Decimal("0.01"))
 

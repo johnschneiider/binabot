@@ -64,9 +64,13 @@ class ConfiguracionBot(models.Model):
         return instancia
 
     def calcular_monto_trade(self) -> Decimal:
-        return (self.balance_actual * self.MONTO_TRADE_PORCENTAJE).quantize(
+        monto = (self.balance_actual * self.MONTO_TRADE_PORCENTAJE).quantize(
             Decimal("0.01")
         )
+        minimo = Decimal("0.40")
+        if monto < minimo:
+            return minimo
+        return monto
 
     def _calcular_meta_desde_base(self, base: Decimal) -> Decimal:
         return (base * self.META_PORCENTAJE).quantize(Decimal("0.01"))
