@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import uuid
+from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Optional
 
@@ -16,6 +17,25 @@ from core.services import GestorBotCore
 from historial.models import Operacion
 from integracion_deriv.client import obtener_ticks_history_sync, operar_contrato_sync
 from trading.utils import priorizar_activos_por_horario
+
+
+def _decimal_or_zero(value: Optional[object], quant: str) -> Decimal:
+    target = Decimal(quant)
+    if value is None:
+        return Decimal("0").quantize(target)
+    try:
+        return Decimal(str(value)).quantize(target)
+    except Exception:
+        return Decimal("0").quantize(target)
+
+
+def _epoch_to_datetime(epoch: Optional[int]) -> Optional[datetime]:
+    if epoch in (None, 0):
+        return None
+    try:
+        return datetime.fromtimestamp(int(epoch), tz=timezone.utc)
+    except Exception:
+        return None
 
 
 class MotorTrading:
@@ -187,82 +207,7 @@ class MotorTrading:
             self.gestor_core.finalizar_operacion()
             return None
 
-        # Generar número de contrato truncado a 40 caracteres máximo
-        uuid_str = str(uuid.uuid4()).replace("-", "")  # UUID sin guiones (32 chars)
-        numero_contrato = f"PEND-{uuid_str[:32]}"  # PEND- (5) + 32 chars = 37 chars total
-        # Asegurar que no exceda 40 caracteres
-        numero_contrato = numero_contrato[:40]
-        
-        operacion = Operacion.objetos.create(
-            activo=mejor_activo.nombre,
-            direccion=senal["direccion"],
-            precio_entrada=Decimal(random.uniform(1.0, 2.0)).quantize(Decimal("0.00001")),
-            monto_invertido=monto_trade,
-            confianza=senal["confianza"],
-            resultado=Operacion.Resultado.PENDIENTE,
-            numero_contrato=numero_contrato,
-            hora_inicio=timezone.now(),
-            es_simulada=False,
-        )
-
-        if settings.DERIV_API_TOKEN:
-            try:
-                respuesta = operar_contrato_sync(
-                    symbol=mejor_activo.nombre,
-                    amount=float(monto_trade),
-                    duration=senal["duracion"],
-                    duration_unit=senal["unidad_duracion"],
-                    contract_type=senal["contract_type"],
-                )
-                
-                # Verificar errores en la respuesta
-                if respuesta.get("error"):
-                    error_info = respuesta.get("error", {})
-                    raise Exception(f"Error de Deriv API: {error_info.get('message', 'Error desconocido')}")
-                
-                open_contract = respuesta.get("proposal_open_contract", {})
-                if not open_contract:
-                    raise Exception(f"Respuesta inválida de Deriv: no se encontró proposal_open_contract. Respuesta: {respuesta}")
-                
-                status = open_contract.get("status")
-                beneficio_api = Decimal(open_contract.get("profit", 0)).quantize(Decimal("0.01"))
-                precio_cierre = Decimal(open_contract.get("sell_price", 0)).quantize(Decimal("0.00001"))
-                
-                # Obtener contract_id real de la respuesta (debe estar siempre presente)
-                contract_id_real = open_contract.get("contract_id")
-                if not contract_id_real:
-                    # Intentar obtener de la respuesta de compra si está disponible
-                    buy_response = respuesta.get("buy", {})
-                    contract_id_real = buy_response.get("contract_id")
-                
-                if contract_id_real:
-                    numero_final = str(contract_id_real)
-                else:
-                    # Si aún no hay contract_id, es un error crítico
-                    raise Exception(f"No se recibió contract_id de Deriv. Respuesta completa: {respuesta}")
-                
-                # Determinar resultado basado en el beneficio real de la API
-                # Si profit == 0, es un empate (recuperas tu dinero, no ganas ni pierdes)
-                # Si profit > 0, es ganancia
-                # Si profit < 0, es pérdida
-                if beneficio_api > 0:
-                    resultado = Operacion.Resultado.GANADA
-                elif beneficio_api < 0:
-                    resultado = Operacion.Resultado.PERDIDA
-                else:
-                    # profit == 0: empate (recuperas tu dinero)
-                    # Deriv puede marcar esto como "lost" pero el profit es 0
-                    # Lo tratamos como pérdida para estadísticas, pero beneficio = 0
-                    resultado = Operacion.Resultado.PERDIDA
-                
-                beneficio = beneficio_api
-            except Exception as exc:
-                self._enviar_evento({"tipo": "error", "mensaje": str(exc)})
-                resultado = Operacion.Resultado.PERDIDA
-                beneficio = -monto_trade
-                precio_cierre = operacion.precio_entrada
-                numero_final = numero_contrato
-        else:
+        if not settings.DERIV_API_TOKEN:
             self._enviar_evento(
                 {
                     "tipo": "error",
@@ -272,20 +217,88 @@ class MotorTrading:
             self.gestor_core.finalizar_operacion()
             return None
 
-        operacion.resultado = resultado
-        operacion.beneficio = beneficio
-        operacion.precio_cierre = precio_cierre
-        operacion.hora_fin = timezone.now()
+        try:
+            respuesta = operar_contrato_sync(
+                symbol=mejor_activo.nombre,
+                amount=float(monto_trade),
+                duration=senal["duracion"],
+                duration_unit=senal["unidad_duracion"],
+                contract_type=senal["contract_type"],
+            )
+        except Exception as exc:
+            self._enviar_evento({"tipo": "error", "mensaje": str(exc)})
+            self.gestor_core.finalizar_operacion()
+            return None
 
-        if (
-            Operacion.objetos.filter(numero_contrato=numero_final)
-            .exclude(pk=operacion.pk)
-            .exists()
-        ):
-            numero_final = f"{numero_final}-{uuid.uuid4().hex[:8]}"
+        if respuesta.get("error"):
+            error_info = respuesta.get("error", {})
+            self._enviar_evento(
+                {
+                    "tipo": "error",
+                    "mensaje": f"Error de Deriv API: {error_info.get('message', 'Error desconocido')}",
+                }
+            )
+            self.gestor_core.finalizar_operacion()
+            return None
 
-        operacion.numero_contrato = numero_final
-        operacion.save()
+        open_contract = respuesta.get("proposal_open_contract", {})
+        if not open_contract:
+            self._enviar_evento(
+                {
+                    "tipo": "error",
+                    "mensaje": "Respuesta inválida de Deriv: sin proposal_open_contract.",
+                }
+            )
+            self.gestor_core.finalizar_operacion()
+            return None
+
+        contract_id_real = open_contract.get("contract_id") or respuesta.get("buy", {}).get(
+            "contract_id"
+        )
+        if not contract_id_real:
+            self._enviar_evento(
+                {"tipo": "error", "mensaje": f"No se recibió contract_id de Deriv. Respuesta: {respuesta}"}
+            )
+            self.gestor_core.finalizar_operacion()
+            return None
+
+        beneficio = _decimal_or_zero(open_contract.get("profit", 0), "0.01")
+        precio_entrada = _decimal_or_zero(
+            open_contract.get("entry_spot") or open_contract.get("entry_tick") or open_contract.get("barrier"),
+            "0.00001",
+        )
+        precio_cierre = _decimal_or_zero(
+            open_contract.get("sell_spot")
+            or open_contract.get("exit_tick")
+            or open_contract.get("sell_price")
+            or open_contract.get("current_spot"),
+            "0.00001",
+        )
+
+        hora_inicio = _epoch_to_datetime(open_contract.get("date_start")) or timezone.now()
+        hora_fin = _epoch_to_datetime(open_contract.get("date_expiry") or open_contract.get("sell_time")) or timezone.now()
+
+        if beneficio > 0:
+            resultado = Operacion.Resultado.GANADA
+        elif beneficio < 0:
+            resultado = Operacion.Resultado.PERDIDA
+        else:
+            resultado = Operacion.Resultado.PERDIDA
+
+        operacion = Operacion.objetos.create(
+            activo=mejor_activo.nombre,
+            direccion=senal["direccion"],
+            precio_entrada=precio_entrada,
+            precio_cierre=precio_cierre,
+            monto_invertido=monto_trade,
+            confianza=senal["confianza"],
+            resultado=resultado,
+            numero_contrato=str(contract_id_real),
+            hora_inicio=hora_inicio,
+            hora_fin=hora_fin,
+            beneficio=beneficio,
+            es_simulada=False,
+        )
 
         self.gestor_core.registrar_resultado_operacion(operacion)
         self.gestor_core.finalizar_operacion()
