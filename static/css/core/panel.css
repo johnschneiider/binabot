@@ -522,41 +522,6 @@ tbody tr td:first-child {
   color: rgba(255, 255, 255, 0.7);
 }
 
-/* Estilos para la sección de configuración */
-.tarjeta--configuracion {
-  margin-top: 1.5rem;
-}
-
-.configuracion-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 0;
-  border-bottom: 1px solid rgba(120, 168, 255, 0.1);
-}
-
-.configuracion-item:last-child {
-  border-bottom: none;
-}
-
-.configuracion-item__info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.configuracion-item__label {
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 0.95rem;
-}
-
-.configuracion-item__descripcion {
-  font-size: 0.8rem;
-  color: rgba(136, 186, 255, 0.6);
-}
-
 /* Estilos para el switch */
 .switch {
   position: relative;
