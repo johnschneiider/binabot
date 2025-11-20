@@ -266,7 +266,6 @@ class MotorTradingProfesional:
             # Obtener información detallada sobre por qué no hay resultados
             activos_habilitados = ActivoPermitido.objects.filter(habilitado=True).count()
             from trading.models import CooldownActivo
-            from django.utils import timezone
             cooldowns_activos = CooldownActivo.objects.filter(finaliza_en__gt=timezone.now()).count()
             
             self._enviar_evento({
