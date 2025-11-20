@@ -187,3 +187,24 @@ class EstadoServiciosView(APIView):
                 },
                 status=500,
             )
+
+
+class ModoInversoView(APIView):
+    """
+    Vista para obtener y actualizar el modo inverso del bot.
+    """
+    def get(self, request):
+        gestor = GestorBotCore()
+        config = gestor.configuracion
+        return Response({"modo_inverso": config.modo_inverso})
+    
+    def post(self, request):
+        gestor = GestorBotCore()
+        config = gestor.configuracion
+        modo_inverso = request.data.get("modo_inverso", False)
+        config.modo_inverso = bool(modo_inverso)
+        config.save(update_fields=["modo_inverso"])
+        return Response({
+            "modo_inverso": config.modo_inverso,
+            "mensaje": "Modo inverso activado" if config.modo_inverso else "Modo inverso desactivado"
+        })

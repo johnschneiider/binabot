@@ -6,6 +6,7 @@ const endpoints = {
   estadisticas: "/api/dashboard/estadisticas-call-put/",
   temporizador: "/api/dashboard/temporizador/",
   simulacion: "/api/simulacion/resultados/",
+  modoInverso: "/api/dashboard/modo-inverso/",
 };
 
 const formatoMoneda = new Intl.NumberFormat("es-CO", {
@@ -643,11 +644,83 @@ function iniciarReloj() {
   setInterval(() => actualizarSelloTemporal(), 1000);
 }
 
+// Funciones para manejar el modo inverso
+async function cargarModoInverso() {
+  try {
+    const data = await obtenerJSON(endpoints.modoInverso);
+    const switchElement = document.getElementById("modo-inverso-switch");
+    if (switchElement) {
+      switchElement.checked = data.modo_inverso || false;
+    }
+  } catch (error) {
+    console.error("Error al cargar modo inverso:", error);
+  }
+}
+
+async function actualizarModoInverso(activado) {
+  try {
+    const response = await fetch(endpoints.modoInverso, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCookie("csrftoken"),
+      },
+      body: JSON.stringify({ modo_inverso: activado }),
+    });
+    
+    if (!response.ok) {
+      throw new Error("Error al actualizar modo inverso");
+    }
+    
+    const data = await response.json();
+    console.log(data.mensaje);
+    
+    // Mostrar notificación visual
+    const switchElement = document.getElementById("modo-inverso-switch");
+    if (switchElement) {
+      switchElement.checked = data.modo_inverso;
+    }
+  } catch (error) {
+    console.error("Error al actualizar modo inverso:", error);
+    // Revertir el switch si hay error
+    const switchElement = document.getElementById("modo-inverso-switch");
+    if (switchElement) {
+      switchElement.checked = !activado;
+    }
+  }
+}
+
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== "") {
+    const cookies = document.cookie.split(";");
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === name + "=") {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+function inicializarModoInverso() {
+  const switchElement = document.getElementById("modo-inverso-switch");
+  if (switchElement) {
+    switchElement.addEventListener("change", (e) => {
+      actualizarModoInverso(e.target.checked);
+    });
+    cargarModoInverso();
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   inicializarParticulas();
   iniciarSocket();
   iniciarSocketDashboard();  // Nueva conexión para actualizaciones del dashboard
   iniciarReloj();
+  inicializarModoInverso();  // Inicializar el switch de modo inverso
   refrescarPanel();  // Carga inicial
   // Reducir intervalo de refresco manual a 30 segundos como respaldo
   // Las actualizaciones principales vienen por WebSocket cada 10 segundos
