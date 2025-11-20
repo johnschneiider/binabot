@@ -158,6 +158,14 @@ def operar_contrato_sync(**kwargs) -> Dict[str, Any]:
     async def _run():
         client = DerivWebsocketClient()
         try:
+            # Log de parámetros enviados a Deriv
+            import sys
+            from datetime import datetime
+            duration = kwargs.get("duration", "N/A")
+            duration_unit = kwargs.get("duration_unit", "N/A")
+            symbol = kwargs.get("symbol", "N/A")
+            print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] 📤 Enviando contrato a Deriv: {symbol}, duration={duration}{duration_unit}", file=sys.stderr)
+            
             compra = await client.comprar_contrato(**kwargs)
             
             # Verificar errores en la compra
@@ -179,8 +187,17 @@ def operar_contrato_sync(**kwargs) -> Dict[str, Any]:
                     }
                 }
             
+            # Log de inicio de espera
+            inicio_espera = datetime.now()
+            print(f"[{inicio_espera:%Y-%m-%d %H:%M:%S}] ⏳ Esperando resultado del contrato {contract_id}...", file=sys.stderr)
+            
             # Esperar resultado del contrato
             resultado = await client.esperar_resultado(str(contract_id))
+            
+            # Log de tiempo de espera
+            fin_espera = datetime.now()
+            tiempo_espera = (fin_espera - inicio_espera).total_seconds()
+            print(f"[{fin_espera:%Y-%m-%d %H:%M:%S}] ✅ Resultado recibido después de {tiempo_espera:.1f} segundos", file=sys.stderr)
             
             # Asegurar que el contract_id esté en proposal_open_contract
             open_contract = resultado.get("proposal_open_contract", {})
