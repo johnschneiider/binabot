@@ -92,8 +92,8 @@ class MotorTrading:
             "direccion": direccion,
             "contract_type": contract_type,
             "confianza": confianza,
-            "duracion": 5,
-            "unidad_duracion": "t",
+            "duracion": 60,
+            "unidad_duracion": "s",
             "variacion": variacion,
         }
 

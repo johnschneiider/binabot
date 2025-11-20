@@ -358,8 +358,8 @@ class MotorTradingProfesional:
             respuesta = operar_contrato_sync(
                 symbol=mejor_activo.nombre,
                 amount=float(monto_trade),
-                duration=5,
-                duration_unit="t",
+                duration=60,
+                duration_unit="s",
                 contract_type=contract_type,
             )
             
