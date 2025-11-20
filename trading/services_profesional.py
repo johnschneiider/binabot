@@ -52,10 +52,10 @@ class MotorTradingProfesional:
         
         # Configuración
         self.periodo_analisis = 20  # Ticks a analizar
-        self.umbral_score_minimo = Decimal("40.00")
-        self.umbral_consistencia = Decimal("30.00")
+        self.umbral_score_minimo = Decimal("25.00")  # Reducido de 40.00 para permitir más operaciones
+        self.umbral_consistencia = Decimal("25.00")  # Reducido de 30.00
         self.umbral_volatilidad_minima = Decimal("0.001")
-        self.umbral_confianza_horaria = Decimal("45.00")
+        self.umbral_confianza_horaria = Decimal("35.00")  # Reducido de 45.00
 
     def _enviar_evento(self, data: Dict) -> None:
         """Envía evento a través de WebSockets."""

@@ -60,7 +60,7 @@ def normalizar_valor(
 def calcular_score_activo(
     indicadores: IndicadoresActivo,
     rendimiento: Optional[RendimientoActivo] = None,
-    umbral_minimo: Decimal = Decimal("30.00"),
+    umbral_minimo: Decimal = Decimal("20.00"),  # Reducido de 30.00
 ) -> Decimal:
     """
     Calcula el score total (0-100) para un activo.
