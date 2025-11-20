@@ -70,10 +70,11 @@ class Command(BaseCommand):
 
                 if estado.estado == gestor.configuracion.Estado.OPERANDO:
                     # Log detallado del estado antes de ejecutar
+                    modo_inverso_info = " | 🔄 Modo inverso: ACTIVO" if gestor.configuracion.modo_inverso else ""
                     self.stdout.write(
                         f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Estado: OPERANDO | "
                         f"en_operacion={estado.en_operacion} | "
-                        f"balance={estado.balance_actual}"
+                        f"balance={estado.balance_actual}{modo_inverso_info}"
                     )
                     
                     if estado.en_operacion:
