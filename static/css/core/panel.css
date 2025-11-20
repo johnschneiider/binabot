@@ -528,7 +528,7 @@ tbody tr td:first-child {
   display: inline-block;
   width: 50px;
   height: 26px;
-  margin-left: 1rem;
+  margin: 0;
 }
 
 .switch input {
