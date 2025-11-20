@@ -92,9 +92,12 @@ class Command(BaseCommand):
                             )
                         else:
                             # Log cuando no se ejecuta operación para diagnóstico
+                            # Mostrar el último mensaje de diagnóstico si está disponible
+                            mensaje_extra = ""
+                            if hasattr(motor, 'ultimo_mensaje_diagnostico') and motor.ultimo_mensaje_diagnostico:
+                                mensaje_extra = f" | {motor.ultimo_mensaje_diagnostico}"
                             self.stdout.write(
-                                f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ⚠️  Ciclo ejecutado pero no se generó operación "
-                                f"(puede ser por falta de señales, límites, cooldowns, etc.)"
+                                f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ⚠️  Ciclo ejecutado pero no se generó operación{mensaje_extra}"
                             )
                 else:
                     self.stdout.write(

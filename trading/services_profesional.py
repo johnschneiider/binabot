@@ -48,6 +48,7 @@ class MotorTradingProfesional:
     def __init__(self) -> None:
         self.gestor_core = GestorBotCore()
         self.channel_layer = get_channel_layer()
+        self.ultimo_mensaje_diagnostico = None  # Para logging detallado
         
         # Configuración
         self.periodo_analisis = 20  # Ticks a analizar
@@ -58,6 +59,10 @@ class MotorTradingProfesional:
 
     def _enviar_evento(self, data: Dict) -> None:
         """Envía evento a través de WebSockets."""
+        # Guardar mensajes de info/error para diagnóstico
+        if data.get("tipo") in ("info", "error", "warning"):
+            self.ultimo_mensaje_diagnostico = data.get("mensaje", "")
+        
         if not self.channel_layer:
             return
         async_to_sync(self.channel_layer.group_send)(
@@ -121,25 +126,39 @@ class MotorTradingProfesional:
         )
         resultados = []
         
+        activos_evaluados = 0
+        activos_rechazados_cooldown = 0
+        activos_rechazados_limites = 0
+        activos_rechazados_indicadores = 0
+        activos_rechazados_volatilidad = 0
+        activos_rechazados_consistencia = 0
+        activos_rechazados_microcongestion = 0
+        
         for activo in activos:
+            activos_evaluados += 1
             # Verificar cooldown
             if not verificar_cooldown(activo.id):
+                activos_rechazados_cooldown += 1
                 continue
             
             # Verificar límites
             if not verificar_limites_activo(activo.nombre):
+                activos_rechazados_limites += 1
                 continue
             
             # Calcular indicadores
             indicadores_data = self._calcular_indicadores_activo(activo)
             if not indicadores_data:
+                activos_rechazados_indicadores += 1
                 continue
             
             # Verificar umbrales mínimos
             if indicadores_data["volatilidad"] < self.umbral_volatilidad_minima:
+                activos_rechazados_volatilidad += 1
                 continue
             
             if indicadores_data["consistencia"] < self.umbral_consistencia:
+                activos_rechazados_consistencia += 1
                 continue
             
             # Guardar indicadores
@@ -175,6 +194,7 @@ class MotorTradingProfesional:
             
             # Verificar micro-congestión
             if detectar_micro_congestion(indicadores):
+                activos_rechazados_microcongestion += 1
                 crear_cooldown(
                     activo.id,
                     motivo="Micro-congestion detectada",  # Truncado a 40 chars
@@ -191,6 +211,22 @@ class MotorTradingProfesional:
         
         # Ordenar por score descendente
         resultados.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Log detallado de evaluación (solo si no hay resultados para diagnóstico)
+        if not resultados:
+            mensaje_detallado = (
+                f"Evaluación: Total={activos_evaluados}, "
+                f"Cooldown={activos_rechazados_cooldown}, "
+                f"Límites={activos_rechazados_limites}, "
+                f"Sin indicadores={activos_rechazados_indicadores}, "
+                f"Volatilidad baja={activos_rechazados_volatilidad}, "
+                f"Consistencia baja={activos_rechazados_consistencia}, "
+                f"Micro-congestión={activos_rechazados_microcongestion}"
+            )
+            self._enviar_evento({
+                "tipo": "info",
+                "mensaje": mensaje_detallado,
+            })
         
         return resultados
 
@@ -227,9 +263,15 @@ class MotorTradingProfesional:
         resultados = self._evaluar_activos()
         
         if not resultados:
+            # Obtener información detallada sobre por qué no hay resultados
+            activos_habilitados = ActivoPermitido.objects.filter(habilitado=True).count()
+            from trading.models import CooldownActivo
+            from django.utils import timezone
+            cooldowns_activos = CooldownActivo.objects.filter(finaliza_en__gt=timezone.now()).count()
+            
             self._enviar_evento({
                 "tipo": "info",
-                "mensaje": "No se encontraron activos con señales válidas.",
+                "mensaje": f"No se encontraron activos con señales válidas. Activos habilitados: {activos_habilitados}, Cooldowns activos: {cooldowns_activos}",
             })
             return None
         
@@ -242,7 +284,7 @@ class MotorTradingProfesional:
         if mejor_score < self.umbral_score_minimo:
             self._enviar_evento({
                 "tipo": "info",
-                "mensaje": f"Score máximo ({mejor_score}) no alcanza el umbral mínimo.",
+                "mensaje": f"Score máximo ({mejor_score}) no alcanza el umbral mínimo ({self.umbral_score_minimo}). Activo: {mejor_activo.nombre}",
             })
             return None
         
