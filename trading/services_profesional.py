@@ -302,6 +302,14 @@ class MotorTradingProfesional:
                 })
                 return None
         
+        # MODO INVERSO: Si está activado, invertir la dirección
+        if config.modo_inverso:
+            direccion = "PUT" if direccion == "CALL" else "CALL"
+            self._enviar_evento({
+                "tipo": "info",
+                "mensaje": f"🔄 Modo inverso activado: dirección invertida a {direccion}",
+            })
+        
         contract_type = direccion
         
         # Calcular monto adaptativo

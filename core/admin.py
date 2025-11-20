@@ -9,6 +9,7 @@ class ConfiguracionBotAdmin(admin.ModelAdmin):
         "balance_actual",
         "stop_loss_actual",
         "estado",
+        "modo_inverso",
         "activo_seleccionado",
         "ultima_actualizacion",
     )
@@ -17,6 +18,20 @@ class ConfiguracionBotAdmin(admin.ModelAdmin):
         "ultima_actualizacion",
         "pausado_desde",
         "pausa_finaliza",
+    )
+    fieldsets = (
+        ("Estado", {
+            "fields": ("estado", "balance_actual", "stop_loss_actual", "en_operacion", "activo_seleccionado")
+        }),
+        ("Configuración", {
+            "fields": ("modo_inverso",)
+        }),
+        ("Estadísticas", {
+            "fields": ("ganancia_acumulada", "perdida_acumulada", "balance_meta_base", "balance_stop_loss_base")
+        }),
+        ("Pausas", {
+            "fields": ("pausado_desde", "pausa_finaliza", "mejor_horario", "ultima_simulacion")
+        }),
     )
 
 

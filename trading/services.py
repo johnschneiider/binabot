@@ -72,6 +72,12 @@ class MotorTrading:
         direccion = (
             Operacion.Direccion.CALL if actual > anterior else Operacion.Direccion.PUT
         )
+        
+        # MODO INVERSO: Si está activado, invertir la dirección
+        config = self.gestor_core.configuracion
+        if config.modo_inverso:
+            direccion = Operacion.Direccion.PUT if direccion == Operacion.Direccion.CALL else Operacion.Direccion.CALL
+        
         contract_type = "CALL" if direccion == Operacion.Direccion.CALL else "PUT"
         variacion = (abs(actual - anterior) / anterior * Decimal("100")).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP

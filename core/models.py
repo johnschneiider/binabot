@@ -44,6 +44,10 @@ class ConfiguracionBot(models.Model):
     pausado_desde = models.DateTimeField(null=True, blank=True)
     pausa_finaliza = models.DateTimeField(null=True, blank=True)
     en_operacion = models.BooleanField(default=False)
+    modo_inverso = models.BooleanField(
+        default=False,
+        help_text="Si está activado, invierte las señales: CALL se convierte en PUT y viceversa"
+    )
     ultima_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
