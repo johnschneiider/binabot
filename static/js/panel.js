@@ -488,7 +488,10 @@ async function refrescarPanel() {
 function manejarMensajeTiempoReal(data) {
   if (!data) return;
   if (data.tipo === "operacion" && data.actualizar_panel) {
-    refrescarPanel();
+    refrescarPanel(); // Actualizar todo el panel incluyendo historial
+  } else if (data.tipo === "actualizar_historial") {
+    // Forzar actualización del historial
+    obtenerJSON(endpoints.operaciones).then(actualizarOperaciones);
   } else if (data.tipo === "error") {
     console.error("[Tiempo real]", data.mensaje ?? data.error);
   } else if (data.actualizar_panel) {

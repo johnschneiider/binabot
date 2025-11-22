@@ -51,12 +51,11 @@ class MotorTradingProfesional:
         self.channel_layer = get_channel_layer()
         self.ultimo_mensaje_diagnostico = None  # Para logging detallado
         
-        # Configuración
-        self.periodo_analisis = 20  # Ticks a analizar
-        self.umbral_score_minimo = Decimal("25.00")  # Reducido de 40.00 para permitir más operaciones
-        self.umbral_consistencia = Decimal("25.00")  # Reducido de 30.00
-        self.umbral_volatilidad_minima = Decimal("0.001")
-        self.umbral_confianza_horaria = Decimal("35.00")  # Reducido de 45.00
+        # Configuración SIMPLIFICADA - Estrategia simple basada en momentum
+        # Menos filtros = menos overfitting, más operaciones
+        self.periodo_analisis = 10  # Reducido: solo necesitamos momentum reciente
+        self.umbral_score_minimo = Decimal("15.00")  # Muy reducido: permitir más operaciones
+        # Eliminados: umbral_consistencia, umbral_volatilidad_minima, umbral_confianza_horaria
 
     def _enviar_evento(self, data: Dict) -> None:
         """Envía evento a través de WebSockets."""
@@ -75,7 +74,8 @@ class MotorTradingProfesional:
         self, activo: ActivoPermitido
     ) -> Optional[Dict]:
         """
-        Calcula todos los indicadores técnicos para un activo.
+        Calcula indicadores SIMPLIFICADOS: solo momentum y volatilidad básica.
+        Estrategia simple que funciona para todos los activos.
         
         Returns:
             Diccionario con indicadores o None si no hay datos suficientes
@@ -86,80 +86,57 @@ class MotorTradingProfesional:
         # Obtener ticks desde cache
         precios = obtener_ticks_cache(activo, cantidad=self.periodo_analisis)
         
-        if len(precios) < 10:
+        # Mínimo de 5 ticks para calcular momentum simple
+        if len(precios) < 5:
             return None
         
-        # Calcular indicadores
-        momentum_simple, momentum_pct = calcular_momentum(precios, periodo=10)
-        volatilidad = calcular_volatilidad(precios, periodo=20)
-        ema = calcular_ema(precios, periodo=10)
-        roc = calcular_rate_of_change(precios, periodo=10)
-        consistencia = calcular_consistencia(precios, periodo=10)
-        
+        # ESTRATEGIA SIMPLE: Momentum reciente (últimos 5 ticks)
         precio_actual = precios[-1]
-        fuerza_movimiento = calcular_fuerza_movimiento(precio_actual, ema)
+        precio_inicial = precios[-5] if len(precios) >= 5 else precios[0]
         
-        # Determinar dirección usando función local
-        direccion = determinar_direccion_simple(precios, ema, roc)
+        momentum_simple = precio_actual - precio_inicial
+        momentum_pct = (momentum_simple / precio_inicial * 100) if precio_inicial > 0 else Decimal("0")
+        
+        # Volatilidad simple: desviación estándar de los últimos precios
+        volatilidad = calcular_volatilidad(precios, periodo=min(len(precios), 10))
+        
+        # Dirección simple: basada solo en momentum
+        if momentum_pct > 0:
+            direccion = "CALL"
+        elif momentum_pct < 0:
+            direccion = "PUT"
+        else:
+            direccion = "NONE"
         
         return {
             "momentum_simple": momentum_simple,
             "momentum_pct": momentum_pct,
             "volatilidad": volatilidad,
-            "tendencia_ema": ema,
             "precio_actual": precio_actual,
-            "rate_of_change": roc,
-            "fuerza_movimiento": fuerza_movimiento,
-            "consistencia": consistencia,
             "direccion_sugerida": direccion,
             "ticks_analizados": len(precios),
         }
 
     def _evaluar_activos(self) -> List[Dict]:
         """
-        Evalúa todos los activos habilitados y calcula sus scores.
+        Evalúa activos con estrategia SIMPLIFICADA basada en momentum.
+        Eliminados filtros complejos que causan overfitting.
         
         Returns:
             Lista de activos con sus indicadores y scores, ordenados por score
         """
-        activos = priorizar_activos_por_horario(
-            list(ActivoPermitido.objects.filter(habilitado=True))
-        )
+        # Obtener activos habilitados (sin priorización compleja)
+        activos = list(ActivoPermitido.objects.filter(habilitado=True))
         resultados = []
         
-        activos_evaluados = 0
-        activos_rechazados_cooldown = 0
-        activos_rechazados_limites = 0
-        activos_rechazados_indicadores = 0
-        activos_rechazados_volatilidad = 0
-        activos_rechazados_consistencia = 0
-        activos_rechazados_microcongestion = 0
-        
         for activo in activos:
-            activos_evaluados += 1
-            # Verificar cooldown
+            # Solo verificar cooldown básico (evitar operar el mismo activo muy seguido)
             if not verificar_cooldown(activo.id):
-                activos_rechazados_cooldown += 1
                 continue
             
-            # Verificar límites
-            if not verificar_limites_activo(activo.nombre):
-                activos_rechazados_limites += 1
-                continue
-            
-            # Calcular indicadores
+            # Calcular indicadores básicos (momentum simple)
             indicadores_data = self._calcular_indicadores_activo(activo)
             if not indicadores_data:
-                activos_rechazados_indicadores += 1
-                continue
-            
-            # Verificar umbrales mínimos
-            if indicadores_data["volatilidad"] < self.umbral_volatilidad_minima:
-                activos_rechazados_volatilidad += 1
-                continue
-            
-            if indicadores_data["consistencia"] < self.umbral_consistencia:
-                activos_rechazados_consistencia += 1
                 continue
             
             # Guardar indicadores
@@ -168,66 +145,25 @@ class MotorTradingProfesional:
                 defaults=indicadores_data,
             )
             
-            # Calcular score
-            from trading.models import RendimientoActivo
+            # Score SIMPLIFICADO: Solo momentum y volatilidad básica
+            # Eliminados: consistencia, confianza horaria, micro-congestión, etc.
+            momentum_score = abs(indicadores.momentum_pct) * Decimal("100")  # 0-100 basado en momentum
+            volatilidad_score = min(indicadores.volatilidad * Decimal("1000"), Decimal("30"))  # Bonus por volatilidad
             
-            try:
-                rendimiento = RendimientoActivo.objects.filter(
-                    activo=activo
-                ).order_by("-winrate_dinamico").first()
-            except RendimientoActivo.DoesNotExist:
-                rendimiento = None
-            
-            score = calcular_score_activo(
-                indicadores,
-                rendimiento=rendimiento,
-                umbral_minimo=self.umbral_score_minimo,
-            )
-            
-            # Verificar confianza horaria
-            confianza_horaria = obtener_confianza_horaria(activo)
-            if confianza_horaria < self.umbral_confianza_horaria:
-                score = score * Decimal("0.5")  # Reducir score si horario no es óptimo
+            score = momentum_score + volatilidad_score
             
             # Actualizar score en indicadores
             indicadores.score_total = score
             indicadores.save()
             
-            # Verificar micro-congestión
-            if detectar_micro_congestion(indicadores):
-                activos_rechazados_microcongestion += 1
-                crear_cooldown(
-                    activo.id,
-                    motivo="Micro-congestion detectada",  # Truncado a 40 chars
-                    duracion_minutos=5,
-                )
-                continue
-            
             resultados.append({
                 "activo": activo,
                 "indicadores": indicadores,
                 "score": score,
-                "confianza_horaria": confianza_horaria,
             })
         
         # Ordenar por score descendente
         resultados.sort(key=lambda x: x["score"], reverse=True)
-        
-        # Log detallado de evaluación (solo si no hay resultados para diagnóstico)
-        if not resultados:
-            mensaje_detallado = (
-                f"Evaluación: Total={activos_evaluados}, "
-                f"Cooldown={activos_rechazados_cooldown}, "
-                f"Límites={activos_rechazados_limites}, "
-                f"Sin indicadores={activos_rechazados_indicadores}, "
-                f"Volatilidad baja={activos_rechazados_volatilidad}, "
-                f"Consistencia baja={activos_rechazados_consistencia}, "
-                f"Micro-congestión={activos_rechazados_microcongestion}"
-            )
-            self._enviar_evento({
-                "tipo": "info",
-                "mensaje": mensaje_detallado,
-            })
         
         return resultados
 
@@ -264,14 +200,13 @@ class MotorTradingProfesional:
         resultados = self._evaluar_activos()
         
         if not resultados:
-            # Obtener información detallada sobre por qué no hay resultados
             activos_habilitados = ActivoPermitido.objects.filter(habilitado=True).count()
             from trading.models import CooldownActivo
             cooldowns_activos = CooldownActivo.objects.filter(finaliza_en__gt=timezone.now()).count()
             
             self._enviar_evento({
                 "tipo": "info",
-                "mensaje": f"No se encontraron activos con señales válidas. Activos habilitados: {activos_habilitados}, Cooldowns activos: {cooldowns_activos}",
+                "mensaje": f"No se encontraron activos disponibles. Habilitados: {activos_habilitados}, En cooldown: {cooldowns_activos}",
             })
             return None
         
@@ -288,18 +223,19 @@ class MotorTradingProfesional:
             })
             return None
         
-        # Determinar dirección final
+        # Determinar dirección SIMPLE: basada solo en momentum
         direccion = mejor_indicadores.direccion_sugerida
         if direccion == "NONE":
-            # Usar múltiples factores para decidir
+            # Fallback: usar momentum directamente
             if mejor_indicadores.momentum_pct > 0:
                 direccion = "CALL"
             elif mejor_indicadores.momentum_pct < 0:
                 direccion = "PUT"
             else:
+                # Sin momentum claro, saltar este ciclo
                 self._enviar_evento({
                     "tipo": "info",
-                    "mensaje": "No se pudo determinar dirección clara.",
+                    "mensaje": f"Sin momentum claro en {mejor_activo.nombre}. Esperando siguiente ciclo.",
                 })
                 return None
         
@@ -426,13 +362,19 @@ class MotorTradingProfesional:
         # Emitir evento con información completa
         self._emitir_evento_operacion(operacion)
         
-        # También enviar actualización completa del dashboard
+        # También enviar actualización completa del dashboard con historial
         try:
             from dashboard.services import enviar_actualizacion_dashboard
             enviar_actualizacion_dashboard()
         except Exception:
             # Si falla, no interrumpir el flujo
             pass
+        
+        # Forzar actualización del historial en el frontend
+        self._enviar_evento({
+            "tipo": "actualizar_historial",
+            "actualizar_panel": True,
+        })
         
         return operacion
 
