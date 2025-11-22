@@ -47,8 +47,8 @@ def enviar_actualizacion_dashboard():
             resultado=Operacion.Resultado.PERDIDA
         ).count()
         
-        # Últimas operaciones
-        ultimas_operaciones = list(operaciones[:20])
+        # Últimas operaciones (ordenadas por hora_inicio descendente)
+        ultimas_operaciones = list(operaciones.order_by('-hora_inicio')[:20])
         from historial.serializers import OperacionSerializer
         operaciones_data = OperacionSerializer(ultimas_operaciones, many=True).data
         

@@ -419,8 +419,20 @@ class MotorTradingProfesional:
         
         self.gestor_core.finalizar_operacion()
         
-        # Emitir evento
+        # CRÍTICO: Sincronizar balance DESPUÉS de registrar la operación
+        # Esto asegura que el balance y las operaciones estén sincronizados
+        self.gestor_core.sincronizar_balance_desde_api()
+        
+        # Emitir evento con información completa
         self._emitir_evento_operacion(operacion)
+        
+        # También enviar actualización completa del dashboard
+        try:
+            from dashboard.services import enviar_actualizacion_dashboard
+            enviar_actualizacion_dashboard()
+        except Exception:
+            # Si falla, no interrumpir el flujo
+            pass
         
         return operacion
 
