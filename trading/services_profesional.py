@@ -127,20 +127,47 @@ class MotorTradingProfesional:
 
     def _evaluar_activos(self) -> List[Dict]:
         """
-        Evalúa activos con estrategia SIMPLIFICADA basada en momentum.
-        Eliminados filtros complejos que causan overfitting.
+        Evalúa activos con estrategia MEJORADA basada en:
+        - Momentum (últimos 60 segundos)
+        - Winrate histórico del activo
+        - Priorización de horarios óptimos
         
         Returns:
             Lista de activos con sus indicadores y scores, ordenados por score
         """
-        # Obtener activos habilitados (sin priorización compleja)
+        from historial.models import Operacion
+        from django.db.models import Count, Q
+        from django.utils import timezone
+        
+        # Obtener activos habilitados
         activos = list(ActivoPermitido.objects.filter(habilitado=True))
         resultados = []
         
+        # Calcular winrate histórico por activo
+        winrates_historicos = {}
         for activo in activos:
-            # Solo verificar cooldown básico (evitar operar el mismo activo muy seguido)
+            ops = Operacion.objetos.reales().filter(activo=activo.nombre)
+            total = ops.count()
+            if total >= 5:  # Mínimo 5 operaciones para considerar winrate
+                ganadas = ops.filter(resultado=Operacion.Resultado.GANADA).count()
+                winrate = (ganadas / total * 100) if total > 0 else 0
+                winrates_historicos[activo.nombre] = winrate
+            else:
+                winrates_historicos[activo.nombre] = 50.0  # Neutral si no hay suficientes datos
+        
+        # Verificar horario actual
+        hora_actual = timezone.localtime(timezone.now()).hour
+        horario_optimo = hora_actual == 6  # 6:00 es el mejor horario según datos
+        
+        for activo in activos:
+            # Solo verificar cooldown básico
             if not verificar_cooldown(activo.id):
                 continue
+            
+            # FILTRAR activos con winrate muy bajo (<30%)
+            winrate_historico = winrates_historicos.get(activo.nombre, 50.0)
+            if winrate_historico < 30.0:
+                continue  # Evitar activos problemáticos
             
             # Calcular indicadores básicos (momentum simple)
             indicadores_data = self._calcular_indicadores_activo(activo)
@@ -153,12 +180,18 @@ class MotorTradingProfesional:
                 defaults=indicadores_data,
             )
             
-            # Score SIMPLIFICADO: Solo momentum y volatilidad básica
-            # Eliminados: consistencia, confianza horaria, micro-congestión, etc.
+            # Score MEJORADO: Momentum + Winrate histórico + Bonus horario
             momentum_score = abs(indicadores.momentum_pct) * Decimal("100")  # 0-100 basado en momentum
-            volatilidad_score = min(indicadores.volatilidad * Decimal("1000"), Decimal("30"))  # Bonus por volatilidad
+            volatilidad_score = min(indicadores.volatilidad * Decimal("1000"), Decimal("20"))  # Bonus por volatilidad
             
-            score = momentum_score + volatilidad_score
+            # Bonus por winrate histórico (activos con mejor historial tienen más score)
+            winrate_bonus = Decimal(str(winrate_historico)) - Decimal("50.0")  # -50 a +50
+            winrate_bonus = max(winrate_bonus, Decimal("0"))  # Solo bonus positivo
+            
+            # Bonus por horario óptimo
+            horario_bonus = Decimal("15.0") if horario_optimo else Decimal("0.0")
+            
+            score = momentum_score + volatilidad_score + winrate_bonus + horario_bonus
             
             # Actualizar score en indicadores
             indicadores.score_total = score
@@ -168,6 +201,7 @@ class MotorTradingProfesional:
                 "activo": activo,
                 "indicadores": indicadores,
                 "score": score,
+                "winrate_historico": winrate_historico,
             })
         
         # Ordenar por score descendente
@@ -231,8 +265,22 @@ class MotorTradingProfesional:
             })
             return None
         
-        # Determinar dirección SIMPLE: basada solo en momentum
+        # Determinar dirección: basada en momentum
+        # NOTA: Los datos muestran que las ganadas tienen momentum negativo
+        # Esto sugiere reversión de tendencia - cuando el precio baja, luego sube (PUT gana)
+        # Cuando el precio sube, luego baja (CALL pierde)
+        # Por ahora mantenemos la lógica original pero con umbral mínimo de momentum
         direccion = mejor_indicadores.direccion_sugerida
+        
+        # Requerir momentum mínimo significativo (evitar ruido)
+        momentum_abs = abs(mejor_indicadores.momentum_pct)
+        if momentum_abs < Decimal("0.01"):  # Momentum muy pequeño, saltar
+            self._enviar_evento({
+                "tipo": "info",
+                "mensaje": f"Momentum muy pequeño ({mejor_indicadores.momentum_pct:.4f}%) en {mejor_activo.nombre}. Esperando siguiente ciclo.",
+            })
+            return None
+        
         if direccion == "NONE":
             # Fallback: usar momentum directamente
             if mejor_indicadores.momentum_pct > 0:
@@ -240,7 +288,6 @@ class MotorTradingProfesional:
             elif mejor_indicadores.momentum_pct < 0:
                 direccion = "PUT"
             else:
-                # Sin momentum claro, saltar este ciclo
                 self._enviar_evento({
                     "tipo": "info",
                     "mensaje": f"Sin momentum claro en {mejor_activo.nombre}. Esperando siguiente ciclo.",
