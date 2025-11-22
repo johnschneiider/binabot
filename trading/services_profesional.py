@@ -19,23 +19,12 @@ from trading.services import _decimal_or_zero, _epoch_to_datetime
 from trading.database import actualizar_tick_cache, obtener_ticks_cache
 from trading.database.cache_manager import actualizar_indicadores_activo
 from trading.models import IndicadoresActivo
-from trading.ranking import calcular_score_activo
-# determinar_direccion se define al final del archivo
+# Estrategia simplificada - solo imports necesarios
 from trading.risk import (
     calcular_monto_adaptativo,
-    crear_cooldown,
-    detectar_micro_congestion,
     verificar_cooldown,
-    verificar_limites_activo,
 )
-from trading.scheduler import obtener_confianza_horaria
-from trading.utils import priorizar_activos_por_horario
 from trading.signals import (
-    calcular_consistencia,
-    calcular_ema,
-    calcular_fuerza_movimiento,
-    calcular_momentum,
-    calcular_rate_of_change,
     calcular_volatilidad,
 )
 
