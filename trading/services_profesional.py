@@ -42,7 +42,8 @@ class MotorTradingProfesional:
         
         # Configuración SIMPLIFICADA - Estrategia simple basada en momentum
         # Menos filtros = menos overfitting, más operaciones
-        self.periodo_analisis = 10  # Reducido: solo necesitamos momentum reciente
+        self.duracion_trade_segundos = 60  # Duración del trade (debe coincidir con duration del contrato)
+        self.periodo_analisis_segundos = 60  # Analizar los últimos 60 segundos (equivalente a la duración del trade)
         self.umbral_score_minimo = Decimal("15.00")  # Muy reducido: permitir más operaciones
         # Eliminados: umbral_consistencia, umbral_volatilidad_minima, umbral_confianza_horaria
 
@@ -64,32 +65,49 @@ class MotorTradingProfesional:
     ) -> Optional[Dict]:
         """
         Calcula indicadores SIMPLIFICADOS: solo momentum y volatilidad básica.
+        Analiza los últimos 60 segundos (equivalente a la duración del trade).
         Estrategia simple que funciona para todos los activos.
         
         Returns:
             Diccionario con indicadores o None si no hay datos suficientes
         """
-        # Actualizar cache de ticks
-        actualizar_tick_cache(activo, max_ticks=self.periodo_analisis)
+        # Obtener ticks de los últimos 60 segundos directamente desde la BD
+        # Esto asegura que el análisis sea equivalente a la duración del trade
+        from historial.models import Tick
+        desde = timezone.now() - timedelta(seconds=self.periodo_analisis_segundos)
         
-        # Obtener ticks desde cache
-        precios = obtener_ticks_cache(activo, cantidad=self.periodo_analisis)
+        ticks = (
+            Tick.objects.filter(
+                activo=activo.nombre,
+                epoch__gte=desde
+            )
+            .order_by("epoch")
+        )
         
-        # Mínimo de 5 ticks para calcular momentum simple
-        if len(precios) < 5:
+        if not ticks.exists():
             return None
         
-        # ESTRATEGIA SIMPLE: Momentum reciente (últimos 5 ticks)
+        # Convertir a lista de precios
+        precios = [Decimal(str(tick.precio)) for tick in ticks]
+        
+        # Mínimo de 2 ticks para calcular momentum (precio inicial y final)
+        if len(precios) < 2:
+            return None
+        
+        # ESTRATEGIA SIMPLE: Momentum en los últimos 60 segundos
+        # Esto es equivalente a la duración del trade (60 segundos)
         precio_actual = precios[-1]
-        precio_inicial = precios[-5] if len(precios) >= 5 else precios[0]
+        precio_inicial = precios[0]
         
         momentum_simple = precio_actual - precio_inicial
         momentum_pct = (momentum_simple / precio_inicial * 100) if precio_inicial > 0 else Decimal("0")
         
-        # Volatilidad simple: desviación estándar de los últimos precios
-        volatilidad = calcular_volatilidad(precios, periodo=min(len(precios), 10))
+        # Volatilidad simple: desviación estándar de los precios en el período
+        volatilidad = calcular_volatilidad(precios, periodo=len(precios))
         
         # Dirección simple: basada solo en momentum
+        # Si el precio subió en los últimos 60 segundos → CALL
+        # Si el precio bajó en los últimos 60 segundos → PUT
         if momentum_pct > 0:
             direccion = "CALL"
         elif momentum_pct < 0:
