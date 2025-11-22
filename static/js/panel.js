@@ -7,6 +7,7 @@ const endpoints = {
   temporizador: "/api/dashboard/temporizador/",
   simulacion: "/api/simulacion/resultados/",
   modoInverso: "/api/dashboard/modo-inverso/",
+  reiniciarServicios: "/api/dashboard/reiniciar-servicios/",
 };
 
 const formatoMoneda = new Intl.NumberFormat("es-CO", {
@@ -734,12 +735,86 @@ function inicializarModoInverso() {
   }
 }
 
+// Funciones para manejar el botón de reinicio de servicios
+async function reiniciarServicios() {
+  const btn = document.getElementById("btn-reiniciar-servicios");
+  if (!btn) return;
+  
+  // Deshabilitar botón durante la operación
+  btn.disabled = true;
+  const textoOriginal = btn.textContent;
+  btn.textContent = "⏳ Reiniciando...";
+  
+  try {
+    const response = await fetch(endpoints.reiniciarServicios, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCookie("csrftoken"),
+      },
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok || response.status === 207) {
+      // Éxito o éxito parcial
+      btn.textContent = "✅ Reiniciado";
+      btn.style.background = "linear-gradient(135deg, rgba(53, 218, 150, 0.2), rgba(53, 218, 150, 0.1))";
+      btn.style.borderColor = "rgba(53, 218, 150, 0.35)";
+      btn.style.color = "var(--color-positivo)";
+      
+      // Mostrar mensaje
+      alert(data.mensaje || "Servicios reiniciados correctamente");
+      
+      // Restaurar después de 3 segundos
+      setTimeout(() => {
+        btn.textContent = textoOriginal;
+        btn.style.background = "linear-gradient(135deg, rgba(255, 91, 122, 0.2), rgba(255, 91, 122, 0.1))";
+        btn.style.borderColor = "rgba(255, 91, 122, 0.35)";
+        btn.style.color = "var(--color-negativo)";
+        btn.disabled = false;
+      }, 3000);
+    } else {
+      throw new Error(data.error || "Error al reiniciar servicios");
+    }
+  } catch (error) {
+    console.error("Error al reiniciar servicios:", error);
+    btn.textContent = "❌ Error";
+    btn.style.background = "linear-gradient(135deg, rgba(255, 91, 122, 0.3), rgba(255, 91, 122, 0.2))";
+    btn.style.borderColor = "rgba(255, 91, 122, 0.5)";
+    
+    alert(`Error al reiniciar servicios: ${error.message}`);
+    
+    // Restaurar después de 3 segundos
+    setTimeout(() => {
+      btn.textContent = textoOriginal;
+      btn.style.background = "linear-gradient(135deg, rgba(255, 91, 122, 0.2), rgba(255, 91, 122, 0.1))";
+      btn.style.borderColor = "rgba(255, 91, 122, 0.35)";
+      btn.style.color = "var(--color-negativo)";
+      btn.disabled = false;
+    }, 3000);
+  }
+}
+
+function inicializarBotonReinicio() {
+  const btn = document.getElementById("btn-reiniciar-servicios");
+  if (btn) {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (confirm("¿Estás seguro de que deseas reiniciar los servicios del bot?\n\nEsto detendrá y volverá a iniciar los procesos del bot.")) {
+        reiniciarServicios();
+      }
+    });
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   inicializarParticulas();
   iniciarSocket();
   iniciarSocketDashboard();  // Nueva conexión para actualizaciones del dashboard
   iniciarReloj();
   inicializarModoInverso();  // Inicializar el switch de modo inverso
+  inicializarBotonReinicio();  // Inicializar el botón de reinicio
   refrescarPanel();  // Carga inicial
   // Reducir intervalo de refresco manual a 30 segundos como respaldo
   // Las actualizaciones principales vienen por WebSocket cada 10 segundos

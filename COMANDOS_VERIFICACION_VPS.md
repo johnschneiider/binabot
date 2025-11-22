@@ -21,6 +21,16 @@ journalctl -u binabot-loop.service -n 100 --no-pager
 journalctl -u binabot-loop.service --since "2 hours ago" --no-pager
 ```
 
+#reiniciar bot
+cd /var/www/vitalmix.com.co/app/src
+source ../.venv/bin/activate
+python manage.py shell -c "
+from core.models import ConfiguracionBot
+config = ConfiguracionBot.objects.first()
+config.reanudar()
+print('✅ Bot reanudado, estado =', config.estado)
+"s
+
 ### 3. Ver logs en tiempo real (seguimiento continuo)
 ```bash
 journalctl -u binabot-loop.service -f

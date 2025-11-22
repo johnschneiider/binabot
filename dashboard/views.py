@@ -210,3 +210,71 @@ class ModoInversoView(APIView):
             "modo_inverso": config.modo_inverso,
             "mensaje": "Modo inverso activado" if config.modo_inverso else "Modo inverso desactivado"
         })
+
+
+class ReiniciarServiciosView(APIView):
+    """
+    Vista para reiniciar los servicios systemd del bot.
+    """
+    def post(self, request):
+        import subprocess
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        servicios = [
+            "binabot-loop.service",
+            "binabot-ticks.service",
+        ]
+        
+        resultados = {}
+        errores = []
+        
+        for servicio in servicios:
+            try:
+                # Reiniciar el servicio
+                resultado = subprocess.run(
+                    ["sudo", "systemctl", "restart", servicio],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                
+                if resultado.returncode == 0:
+                    resultados[servicio] = "reiniciado"
+                else:
+                    resultados[servicio] = f"error: {resultado.stderr}"
+                    errores.append(f"{servicio}: {resultado.stderr}")
+                    
+            except subprocess.TimeoutExpired:
+                resultados[servicio] = "timeout"
+                errores.append(f"{servicio}: timeout al reiniciar")
+            except FileNotFoundError:
+                # En Windows o sin sudo, retornar error
+                return Response(
+                    {
+                        "error": "No se puede reiniciar servicios (solo disponible en Linux con sudo)",
+                        "detalle": "Este endpoint requiere ejecutarse en un servidor Linux con permisos sudo.",
+                    },
+                    status=500,
+                )
+            except Exception as e:
+                resultados[servicio] = f"error: {str(e)}"
+                errores.append(f"{servicio}: {str(e)}")
+                logger.error(f"Error reiniciando {servicio}: {e}", exc_info=True)
+        
+        if errores:
+            return Response(
+                {
+                    "mensaje": "Algunos servicios tuvieron errores al reiniciar",
+                    "resultados": resultados,
+                    "errores": errores,
+                },
+                status=207,  # Multi-Status
+            )
+        
+        return Response(
+            {
+                "mensaje": "Servicios reiniciados correctamente",
+                "resultados": resultados,
+            }
+        )

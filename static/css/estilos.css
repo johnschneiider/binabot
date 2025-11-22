@@ -237,6 +237,43 @@
   transform: translateX(20px);
 }
 
+.barra-superior__btn-reiniciar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 91, 122, 0.2), rgba(255, 91, 122, 0.1));
+  border: 1px solid rgba(255, 91, 122, 0.35);
+  color: var(--color-negativo);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transicion);
+  white-space: nowrap;
+  font-family: var(--fuente);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.barra-superior__btn-reiniciar:hover {
+  background: linear-gradient(135deg, rgba(255, 91, 122, 0.3), rgba(255, 91, 122, 0.2));
+  border-color: rgba(255, 91, 122, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(255, 91, 122, 0.3);
+}
+
+.barra-superior__btn-reiniciar:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(255, 91, 122, 0.2);
+}
+
+.barra-superior__btn-reiniciar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .marcador--estado .marcador__chip {
   background: rgba(60, 141, 255, 0.12);
   color: var(--color-primario);

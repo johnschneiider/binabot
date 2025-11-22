@@ -213,6 +213,10 @@ class ConfiguracionBot(models.Model):
         )
 
     def reanudar(self) -> None:
+        """
+        Reanuda la operativa después de una pausa.
+        IMPORTANTE: Recalcula el stop loss al 98% del balance actual (nuevo punto de partida).
+        """
         self.estado = self.Estado.OPERANDO
         self.pausado_desde = None
         self.pausa_finaliza = None
@@ -220,9 +224,12 @@ class ConfiguracionBot(models.Model):
         self.balance_meta_base = self.balance_actual
         self.balance_stop_loss_base = self.balance_actual
         self.meta_actual = Decimal("0.00")
-        self.stop_loss_actual = self.calcular_stop_loss(self.balance_stop_loss_base)
+        # CRÍTICO: Recalcular stop loss al 98% del balance actual cuando se reactiva
+        # Este es el único momento en que el stop loss puede "bajar" (recalcularse desde cero)
+        self.stop_loss_actual = self.calcular_stop_loss(self.balance_actual)
         self.en_operacion = False
-        self.mejor_horario = None
+        # NO limpiar mejor_horario - mantenerlo para priorizar cuando se reactive
+        # self.mejor_horario = None
         self.ultima_simulacion = None
         self.save(
             update_fields=[
@@ -236,7 +243,6 @@ class ConfiguracionBot(models.Model):
                 "stop_loss_actual",
                 "ultima_simulacion",
                 "en_operacion",
-                "mejor_horario",
                 "ultima_actualizacion",
             ]
         )

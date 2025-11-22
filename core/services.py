@@ -257,10 +257,17 @@ class GestorBotCore:
             if self.configuracion.stop_loss_actual <= 0:
                 self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(balance)
 
-        # IMPORTANTE: NO actualizar el stop loss aquí automáticamente
-        # El stop loss SOLO se actualiza cuando hay un trade ganador (en registrar_ganancia)
-        # Si el balance sube por otras razones (ajustes, comisiones, etc.), el stop loss NO se mueve
-        # Si el balance baja, el stop loss se mantiene fijo (arnés de seguridad)
+        # NUEVA LÓGICA: El stop loss siempre debe estar al 98% del balance de Deriv
+        # Si el balance sube, el stop loss sube (trailing stop loss)
+        # Si el balance baja, el stop loss NO baja (se mantiene fijo como arnés de seguridad)
+        # Solo actualizar si el bot está OPERANDO (no durante pausa)
+        if self.configuracion.estado == ConfiguracionBot.Estado.OPERANDO:
+            nuevo_stop_loss = self.configuracion.calcular_stop_loss(balance)
+            # Solo actualizar si el nuevo stop loss es MAYOR que el actual (trailing)
+            if nuevo_stop_loss > self.configuracion.stop_loss_actual:
+                self.configuracion.stop_loss_actual = nuevo_stop_loss
+                self.configuracion.balance_stop_loss_base = balance
+            # Si el balance baja, el stop_loss_actual NO cambia (se mantiene fijo)
         
         self.configuracion.meta_actual = Decimal("0.00")
 
@@ -276,7 +283,7 @@ class GestorBotCore:
             "meta_actual",
             "ultima_actualizacion",
         ]
-        # Solo actualizar balance_stop_loss_base y stop_loss_actual si se inicializaron
+        # Solo actualizar balance_stop_loss_base y stop_loss_actual si se inicializaron o actualizaron
         if self.configuracion.balance_stop_loss_base > 0:
             campos_actualizar.append("balance_stop_loss_base")
         if self.configuracion.stop_loss_actual > 0:
@@ -288,11 +295,115 @@ class GestorBotCore:
         # Si balance_actual <= stop_loss_actual, pausar
         self._verificar_stop_loss()
 
+    def ejecutar_trade_simulado_pausa(self) -> Optional[Operacion]:
+        """
+        Ejecuta un trade simulado durante la pausa.
+        Usa precios reales de ticks históricos pero NO usa capital real (es_simulada=True).
+        El trade se guarda en la BD para análisis posterior y priorización de activos/horarios.
+        """
+        if self.configuracion.estado != ConfiguracionBot.Estado.PAUSADO:
+            return None
+        
+        try:
+            from trading.services_profesional import MotorTradingProfesional
+            from historial.models import Tick
+            
+            motor = MotorTradingProfesional()
+            
+            # Obtener la mejor señal sin ejecutar el trade real
+            resultados = motor._evaluar_activos()
+            if not resultados:
+                return None
+            
+            mejor_resultado = resultados[0]
+            mejor_activo = mejor_resultado["activo"]
+            mejor_indicadores = mejor_resultado["indicadores"]
+            mejor_score = mejor_resultado["score"]
+            
+            if mejor_score < motor.umbral_score_minimo:
+                return None
+            
+            # Determinar dirección
+            from trading.ranking.scorer import determinar_direccion
+            direccion_str = determinar_direccion(mejor_indicadores)
+            if direccion_str == "NONE":
+                return None
+            
+            direccion = Operacion.Direccion.CALL if direccion_str == "CALL" else Operacion.Direccion.PUT
+            
+            # Aplicar modo inverso si está activo
+            config = self.configuracion
+            if config.modo_inverso:
+                direccion = Operacion.Direccion.PUT if direccion == Operacion.Direccion.CALL else Operacion.Direccion.CALL
+            
+            # Obtener ticks históricos recientes (últimos 2 minutos para simular 60 segundos)
+            ahora = timezone.now()
+            desde = ahora - timedelta(minutes=2)
+            ticks = list(Tick.objects.filter(
+                activo=mejor_activo.nombre,
+                epoch__gte=desde
+            ).order_by("epoch")[:120])  # Máximo 120 ticks (2 minutos)
+            
+            if len(ticks) < 60:  # Necesitamos al menos 60 ticks para simular 60 segundos
+                return None
+            
+            # Simular trade: precio de entrada (hace 60 ticks) y precio de cierre (ahora)
+            tick_entrada = ticks[0] if len(ticks) >= 60 else ticks[-60]
+            tick_cierre = ticks[-1]
+            
+            precio_entrada = tick_entrada.precio
+            precio_cierre = tick_cierre.precio
+            
+            # Determinar resultado
+            if direccion == Operacion.Direccion.CALL:
+                resultado = Operacion.Resultado.GANADA if precio_cierre > precio_entrada else Operacion.Resultado.PERDIDA
+            else:
+                resultado = Operacion.Resultado.GANADA if precio_cierre < precio_entrada else Operacion.Resultado.PERDIDA
+            
+            # Calcular beneficio simulado (no afecta el balance real)
+            monto_simulado = self.configuracion.calcular_monto_trade()
+            if resultado == Operacion.Resultado.GANADA:
+                beneficio = monto_simulado * Decimal("0.80")  # 80% de ganancia típica
+            else:
+                beneficio = -monto_simulado
+            
+            # Crear operación simulada
+            numero_contrato = f"SIM-{timezone.now().strftime('%Y%m%d%H%M%S')}"
+            operacion = Operacion.objects.create(
+                activo=mejor_activo.nombre,
+                direccion=direccion,
+                precio_entrada=precio_entrada,
+                precio_cierre=precio_cierre,
+                monto_invertido=Decimal("0.00"),  # No se invierte capital real
+                confianza=mejor_score,
+                resultado=resultado,
+                numero_contrato=numero_contrato,
+                hora_inicio=tick_entrada.epoch,
+                hora_fin=tick_cierre.epoch,
+                beneficio=beneficio,
+                es_simulada=True,
+            )
+            
+            # Actualizar estadísticas de activos y horarios para priorización
+            from trading.scheduler import actualizar_rendimiento_horario
+            actualizar_rendimiento_horario(mejor_activo, operacion)
+            
+            return operacion
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error ejecutando trade simulado durante pausa: {e}", exc_info=True)
+            return None
+
     def ejecutar_simulacion_pausa(self, intervalo_segundos: int = 60):
         """
         Ejecuta simulaciones mientras el bot está en pausa.
         Por defecto, ejecuta una simulación cada 60 segundos para mantener
         los datos actualizados continuamente.
+        
+        NUEVO: También ejecuta trades simulados (sin capital real) para analizar
+        horarios y activos con mejor desempeño.
         """
         if self.configuracion.estado != ConfiguracionBot.Estado.PAUSADO:
             return None
@@ -302,6 +413,10 @@ class GestorBotCore:
         if ultima and (ahora - ultima) < timedelta(seconds=intervalo_segundos):
             return None
 
+        # Ejecutar trade simulado (precios reales, sin capital real)
+        trade_simulado = self.ejecutar_trade_simulado_pausa()
+        
+        # También ejecutar simulación de horarios (análisis histórico)
         try:
             from simulacion.services import SimuladorHorariosService
 
@@ -311,11 +426,11 @@ class GestorBotCore:
             # Log del error para debugging pero no interrumpir el loop
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Error ejecutando simulación: {e}", exc_info=True)
-            return None
+            logger.error(f"Error ejecutando simulación de horarios: {e}", exc_info=True)
+            resultado = None
 
-        if resultado:
+        if resultado or trade_simulado:
             self.configuracion.ultima_simulacion = ahora
             self.configuracion.save(update_fields=["ultima_simulacion", "ultima_actualizacion"])
+        
         return resultado
-

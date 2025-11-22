@@ -7,6 +7,7 @@ from .views import (
     EstadisticasCallPutView,
     HistoricosView,
     ModoInversoView,
+    ReiniciarServiciosView,
     TemporizadorView,
     TickAnaliticaView,
     WinrateView,
@@ -26,5 +27,6 @@ urlpatterns = [
     path("ticks/", TickAnaliticaView.as_view(), name="dashboard-ticks"),
     path("estado-servicios/", EstadoServiciosView.as_view(), name="dashboard-estado-servicios"),
     path("modo-inverso/", ModoInversoView.as_view(), name="dashboard-modo-inverso"),
+    path("reiniciar-servicios/", ReiniciarServiciosView.as_view(), name="dashboard-reiniciar-servicios"),
 ]
 
