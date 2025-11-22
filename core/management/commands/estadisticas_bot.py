@@ -189,7 +189,7 @@ class Command(BaseCommand):
             beneficio_total = sum(op.beneficio for op in operaciones_totales)
             
             self.stdout.write(f"  Winrate total: {winrate_total:.2f}%")
-            self.stdout.write(f"  Beneficio total: ${beneficio_total}")
+            self.stdout.write(f"  Beneficio total: ${beneficio_total:.2f}")
             self.stdout.write(f"  Balance actual: ${config.balance_actual}")
             self.stdout.write(f"  Stop loss: ${config.stop_loss_actual}")
             
@@ -197,10 +197,21 @@ class Command(BaseCommand):
             margen = ((config.balance_actual - config.stop_loss_actual) / config.balance_actual * 100) if config.balance_actual > 0 else 0
             self.stdout.write(f"  Margen de seguridad: {margen:.2f}%")
             
-            if winrate_total >= 50:
-                self.stdout.write(self.style.SUCCESS("  ✅ Winrate positivo"))
+            # Análisis de rentabilidad
+            if winrate_total >= 50 and beneficio_total > 0:
+                self.stdout.write(self.style.SUCCESS("  ✅ Bot rentable"))
+            elif winrate_total >= 50:
+                self.stdout.write(self.style.WARNING("  ⚠️  Winrate bueno pero beneficio negativo (revisar montos)"))
             else:
-                self.stdout.write(self.style.WARNING("  ⚠️  Winrate por debajo del 50%"))
+                self.stdout.write(self.style.ERROR("  ❌ Winrate por debajo del 50% - Estrategia necesita ajustes"))
+                
+            # Comparar con período reciente
+            if total_periodo > 0:
+                winrate_periodo = (ganadas_periodo / total_periodo * 100)
+                if winrate_periodo < winrate_total:
+                    self.stdout.write(self.style.WARNING(f"  ⚠️  Tendencia negativa: Winrate reciente ({winrate_periodo:.2f}%) < Winrate total ({winrate_total:.2f}%)"))
+                elif winrate_periodo > winrate_total:
+                    self.stdout.write(self.style.SUCCESS(f"  ✅ Tendencia positiva: Winrate reciente ({winrate_periodo:.2f}%) > Winrate total ({winrate_total:.2f}%)"))
         else:
             self.stdout.write("  No hay suficientes datos para resumir")
 
