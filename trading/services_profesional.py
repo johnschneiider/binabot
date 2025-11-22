@@ -2,6 +2,7 @@
 Motor de trading profesional con análisis multi-activo optimizado.
 Reemplaza el sistema simple basado en 2 ticks por un análisis robusto.
 """
+from datetime import timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional
 
