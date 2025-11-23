@@ -96,7 +96,7 @@ class ConfiguracionBotInverso(models.Model):
     """
     MONTO_TRADE_PORCENTAJE = Decimal("0.005")
     META_PORCENTAJE = Decimal("0.01")
-    STOP_LOSS_PORCENTAJE = Decimal("0.02")
+    STOP_LOSS_PORCENTAJE = Decimal("0.05")  # 5% para bot inverso
 
     class Estado(models.TextChoices):
         OPERANDO = "operando", "Operando"
@@ -171,7 +171,7 @@ class ConfiguracionBotInverso(models.Model):
         return max(monto_calculado, Decimal("0.40"))
 
     def calcular_stop_loss(self, balance: Decimal) -> Decimal:
-        """Calcula el stop loss al 98% del balance."""
+        """Calcula el stop loss al 95% del balance (5% de pérdida máxima)."""
         return (balance * (Decimal("1") - self.STOP_LOSS_PORCENTAJE)).quantize(Decimal("0.01"))
 
     def calcular_meta(self, balance: Decimal) -> Decimal:
@@ -210,8 +210,8 @@ class ConfiguracionBotInverso(models.Model):
             ]
         )
 
-    def pausar(self, horas: int = 24) -> None:
-        """Pausa el bot por N horas."""
+    def pausar(self, horas: int = 1) -> None:
+        """Pausa el bot por N horas. Por defecto 1 hora."""
         from datetime import timedelta
         self.estado = self.Estado.PAUSADO
         self.pausado_desde = timezone.now()
