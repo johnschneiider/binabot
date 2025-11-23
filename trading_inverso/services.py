@@ -141,7 +141,7 @@ class MotorTradingInverso:
                 "tipo": "warning",
                 "mensaje": f"Balance ({config.balance_actual}) alcanzó stop loss ({config.stop_loss_actual}). Pausando bot inverso.",
             })
-            config.pausar(horas=24)
+            config.pausar(horas=1)
             return None
         
         # Invertir la dirección del bot principal
@@ -300,7 +300,7 @@ class MotorTradingInverso:
                     "tipo": "warning",
                     "mensaje": f"⚠️ Stop loss alcanzado. Pausando bot inverso por 24 horas.",
                 })
-                config.pausar(horas=24)
+                config.pausar(horas=1)
             
             config.en_operacion = False
             config.save(update_fields=["en_operacion", "ultima_actualizacion"])
