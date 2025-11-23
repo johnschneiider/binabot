@@ -21,8 +21,14 @@
         </div>
         <div class="barra-superior__acciones">
           <nav class="barra-superior__navegacion">
+            <a href="{% url 'home' %}" class="barra-superior__nav-link {% if request.resolver_match.url_name == 'home' %}activo{% endif %}">
+              🏠 Home
+            </a>
             <a href="{% url 'panel-principal' %}" class="barra-superior__nav-link {% if request.resolver_match.url_name == 'panel-principal' %}activo{% endif %}">
-              📊 Panel Principal
+              📊 Bot Principal
+            </a>
+            <a href="{% url 'trading_inverso:dashboard' %}" class="barra-superior__nav-link {% if request.resolver_match.app_name == 'trading_inverso' %}activo{% endif %}">
+              🔄 Bot Inverso
             </a>
             <a href="{% url 'ai_trading:dashboard' %}" class="barra-superior__nav-link {% if request.resolver_match.app_name == 'ai_trading' %}activo{% endif %}">
               🤖 Entrenamiento IA
