@@ -187,7 +187,8 @@ class ConfiguracionBot(models.Model):
             update_fields=["balance_actual", "perdida_acumulada", "ultima_actualizacion"]
         )
 
-    def pausar(self, horas: int = 24) -> None:
+    def pausar(self, horas: int = 1) -> None:
+        """Pausa el bot por N horas. Por defecto 1 hora."""
         self.estado = self.Estado.PAUSADO
         self.pausado_desde = timezone.now()
         self.pausa_finaliza = self.pausado_desde + timezone.timedelta(hours=horas)
