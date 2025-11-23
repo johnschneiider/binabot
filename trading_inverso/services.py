@@ -70,10 +70,13 @@ class MotorTradingInverso:
         """Envía evento a través de WebSockets."""
         if not self.channel_layer:
             return
-        async_to_sync(self.channel_layer.group_send)(
-            "deriv_estado_inverso",
-            {"type": "recibir_evento_deriv_inverso", "data": data},
-        )
+        try:
+            async_to_sync(self.channel_layer.group_send)(
+                "deriv_estado_inverso",
+                {"type": "recibir_evento_deriv_inverso", "data": data},
+            )
+        except Exception as e:
+            print(f"Error enviando evento WebSocket del bot inverso: {e}")
     
     def _invertir_direccion(self, direccion: str) -> str:
         """Invierte la dirección: CALL -> PUT, PUT -> CALL."""

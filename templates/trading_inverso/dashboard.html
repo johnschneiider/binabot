@@ -106,7 +106,74 @@
       reanudar: '/api/trading-inverso/reanudar/',
     };
 
-    // Función para actualizar estado del bot inverso
+    // WebSocket para actualizaciones en tiempo real
+    let socketBotInverso = null;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/bot-inverso/`;
+
+    function conectarWebSocket() {
+      try {
+        socketBotInverso = new WebSocket(wsUrl);
+        
+        socketBotInverso.onopen = () => {
+          console.log('✅ Conectado al WebSocket del bot inverso');
+        };
+        
+        socketBotInverso.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          
+          if (data.tipo === 'actualizacion_completa') {
+            // Actualizar estado
+            if (data.estado) {
+              document.getElementById('balance-actual').textContent = `$${parseFloat(data.estado.balance_actual).toFixed(2)}`;
+              document.getElementById('stop-loss-actual').textContent = `$${parseFloat(data.estado.stop_loss_actual).toFixed(2)}`;
+              document.getElementById('ganancia-acumulada').textContent = `$${parseFloat(data.estado.ganancia_acumulada).toFixed(2)}`;
+              document.getElementById('perdida-acumulada').textContent = `$${parseFloat(data.estado.perdida_acumulada).toFixed(2)}`;
+              
+              const estado = data.estado.estado === 'operando' ? 'Operando' : 'Pausado';
+              document.getElementById('badge-estado').textContent = estado;
+              document.getElementById('estado-bot').textContent = estado;
+              document.getElementById('badge-estado').className = `panel__estado-chip ${data.estado.estado === 'operando' ? 'chip--activo' : 'chip--pausado'}`;
+            }
+            
+            // Actualizar winrate
+            if (data.winrate) {
+              document.getElementById('winrate').textContent = data.winrate.winrate.toFixed(1);
+            }
+            
+            // Actualizar operaciones
+            if (data.operaciones) {
+              actualizarOperaciones(data.operaciones);
+            }
+          } else if (data.tipo === 'operacion') {
+            // Nueva operación - actualizar lista
+            actualizarOperaciones();
+          }
+        };
+        
+        socketBotInverso.onerror = (error) => {
+          console.error('Error en WebSocket del bot inverso:', error);
+        };
+        
+        socketBotInverso.onclose = () => {
+          console.log('WebSocket del bot inverso desconectado. Reconectando en 5 segundos...');
+          setTimeout(conectarWebSocket, 5000);
+        };
+      } catch (error) {
+        console.error('Error conectando WebSocket:', error);
+        // Fallback a polling si WebSocket falla
+        setTimeout(() => {
+          actualizarEstadoBot();
+          actualizarOperaciones();
+          setInterval(() => {
+            actualizarEstadoBot();
+            actualizarOperaciones();
+          }, 5000);
+        }, 1000);
+      }
+    }
+
+    // Función para actualizar estado del bot inverso (fallback)
     async function actualizarEstadoBot() {
       try {
         const res = await fetch(endpoints.estado);
@@ -128,11 +195,16 @@
     }
 
     // Función para actualizar operaciones
-    async function actualizarOperaciones() {
+    async function actualizarOperaciones(operacionesData = null) {
       try {
-        const res = await fetch(endpoints.historicos);
-        if (!res.ok) throw new Error('Error obteniendo operaciones');
-        const operaciones = await res.json();
+        let operaciones;
+        if (operacionesData) {
+          operaciones = operacionesData;
+        } else {
+          const res = await fetch(endpoints.historicos);
+          if (!res.ok) throw new Error('Error obteniendo operaciones');
+          operaciones = await res.json();
+        }
 
         const tbody = document.getElementById('operaciones-body');
         if (operaciones.length === 0) {
@@ -167,13 +239,10 @@
       }
     }
 
-    // Actualizar cada 5 segundos
+    // Inicializar: conectar WebSocket y hacer una actualización inicial
+    conectarWebSocket();
     actualizarEstadoBot();
     actualizarOperaciones();
-    setInterval(() => {
-      actualizarEstadoBot();
-      actualizarOperaciones();
-    }, 5000);
   </script>
 {% endblock %}
 
