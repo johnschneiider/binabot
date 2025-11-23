@@ -292,8 +292,14 @@ class GestorBotCore:
         self.configuracion.save(update_fields=campos_actualizar)
         
         # CRÍTICO: Verificar stop loss después de sincronizar balance
-        # Si balance_actual <= stop_loss_actual, pausar
-        self._verificar_stop_loss()
+        # PERO solo si el bot está OPERANDO (no si ya está pausado)
+        # Y solo si el balance realmente cayó por debajo del stop loss
+        # NO pausar durante sincronización si el bot está ganando
+        if self.configuracion.estado == ConfiguracionBot.Estado.OPERANDO:
+            # Solo verificar si el balance está realmente por debajo del stop loss
+            # Esto evita pausas incorrectas durante sincronizaciones
+            if self.configuracion.balance_actual <= self.configuracion.stop_loss_actual:
+                self._verificar_stop_loss()
 
     def ejecutar_trade_simulado_pausa(self) -> Optional[Operacion]:
         """
