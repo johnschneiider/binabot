@@ -21,6 +21,8 @@ def enviar_actualizacion_bot_inverso():
     
     try:
         gestor = GestorBotInverso()
+        # Sincronizar balance desde Deriv antes de obtener el estado
+        gestor.sincronizar_balance_desde_api()
         estado = gestor.obtener_estado()
         
         # Obtener estadísticas
