@@ -26,22 +26,36 @@ class GestorBotInverso:
         self.configuracion = ConfiguracionBotInverso.obtener()
     
     def sincronizar_balance_desde_api(self) -> None:
-        """Sincroniza el balance desde la API de Deriv."""
+        """Sincroniza el balance desde la API de Deriv. SIEMPRE actualiza desde Deriv."""
         from integracion_deriv.client import obtener_balance_sync
         
         try:
             respuesta = obtener_balance_sync()
             balance = Decimal(str(respuesta.get("balance", 0)))
             
-            if balance and balance > 0:
-                self.configuracion.balance_actual = balance
-                # Solo actualizar stop loss si está operando y sube
-                if self.configuracion.estado == ConfiguracionBotInverso.Estado.OPERANDO:
-                    nuevo_stop_loss = self.configuracion.calcular_stop_loss(balance)
-                    if nuevo_stop_loss > self.configuracion.stop_loss_actual:
-                        self.configuracion.stop_loss_actual = nuevo_stop_loss
-                        self.configuracion.balance_stop_loss_base = balance
-                self.configuracion.save(update_fields=["balance_actual", "stop_loss_actual", "balance_stop_loss_base", "ultima_actualizacion"])
+            # SIEMPRE actualizar el balance desde Deriv, incluso si es 0
+            # Esto asegura que siempre mostremos el balance real de la cuenta
+            balance_anterior = self.configuracion.balance_actual
+            self.configuracion.balance_actual = balance
+            
+            # Si el balance cambió o es la primera vez, inicializar bases
+            if balance_anterior <= 0 and balance > 0:
+                # Primera inicialización: establecer bases
+                if self.configuracion.balance_meta_base <= 0:
+                    self.configuracion.balance_meta_base = balance
+                if self.configuracion.balance_stop_loss_base <= 0:
+                    self.configuracion.balance_stop_loss_base = balance
+                if self.configuracion.stop_loss_actual <= 0:
+                    self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(balance)
+            
+            # Solo actualizar stop loss si está operando y sube (trailing stop loss)
+            if self.configuracion.estado == ConfiguracionBotInverso.Estado.OPERANDO:
+                nuevo_stop_loss = self.configuracion.calcular_stop_loss(balance)
+                if nuevo_stop_loss > self.configuracion.stop_loss_actual:
+                    self.configuracion.stop_loss_actual = nuevo_stop_loss
+                    self.configuracion.balance_stop_loss_base = balance
+            
+            self.configuracion.save(update_fields=["balance_actual", "stop_loss_actual", "balance_stop_loss_base", "balance_meta_base", "ultima_actualizacion"])
         except Exception as e:
             print(f"Error sincronizando balance inverso: {e}")
     
