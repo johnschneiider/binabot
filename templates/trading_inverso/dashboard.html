@@ -97,8 +97,8 @@
     </div>
   </section>
 
-  <script src="{% static 'js/panel.js' %}"></script>
   <script>
+    // NO cargar panel.js aquí para evitar conflictos con funciones globales del bot principal
     // Configurar endpoints para bot inverso
     const endpoints = {
       estado: '/api/trading-inverso/estado/',
