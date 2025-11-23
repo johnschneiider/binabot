@@ -121,7 +121,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.ERROR("   Bot Principal: ❌ NO HAY OPERACIONES"))
         
-        ultima_inversa = OperacionInversa.objects.filter(simulada=False).order_by('-hora_inicio').first()
+        ultima_inversa = OperacionInversa.objects.filter(es_simulada=False).order_by('-hora_inicio').first()
         if ultima_inversa:
             tiempo_desde = timezone.now() - ultima_inversa.hora_inicio
             horas = tiempo_desde.total_seconds() / 3600
