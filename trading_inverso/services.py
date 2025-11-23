@@ -31,7 +31,11 @@ class GestorBotInverso:
         
         try:
             respuesta = obtener_balance_sync()
-            balance = Decimal(str(respuesta.get("balance", 0)))
+            # La respuesta de Deriv tiene estructura: {"balance": {"balance": 85.67, "currency": "USD", ...}}
+            balance_info = respuesta.get("balance")
+            if not balance_info:
+                return
+            balance = Decimal(str(balance_info.get("balance", "0")))
             
             # SIEMPRE actualizar el balance desde Deriv, incluso si es 0
             # Esto asegura que siempre mostremos el balance real de la cuenta
