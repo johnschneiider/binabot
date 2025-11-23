@@ -298,7 +298,7 @@ class MotorTradingInverso:
             if beneficio < 0 and config.balance_actual <= config.stop_loss_actual:
                 self._enviar_evento({
                     "tipo": "warning",
-                    "mensaje": f"⚠️ Stop loss alcanzado. Pausando bot inverso por 24 horas.",
+                    "mensaje": f"⚠️ Stop loss alcanzado. Pausando bot inverso por 1 hora.",
                 })
                 config.pausar(horas=1)
             
