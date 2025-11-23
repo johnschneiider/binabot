@@ -187,7 +187,7 @@ class MotorTradingInverso:
         try:
             resultado_deriv = operar_contrato_sync(
                 symbol=operacion_principal.activo,
-                direction=direccion_inversa,
+                contract_type=direccion_inversa,
                 amount=float(monto_trade),
                 duration=60,
                 duration_unit="s",
