@@ -52,26 +52,36 @@ class GestorBotInverso:
                 if self.configuracion.stop_loss_actual <= 0:
                     self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(balance)
             
-            # Lógica de stop loss:
-            # 1. CORRECCIÓN CRÍTICA: Si el stop loss actual es mayor que el balance, recalcular
-            #    Esto puede pasar si el balance bajó desde una inicialización previa
-            # 2. Si el balance sube, aplicar trailing stop loss (solo sube)
-            # 3. Si el balance baja, el stop loss NO baja (se mantiene fijo como protección)
+            # IMPORTANTE: balance_stop_loss_base solo se actualiza cuando el bot inverso gana
+            # (en registrar_ganancia), NO cuando sincroniza desde Deriv
+            # Esto asegura que el stop loss se base en el balance inicial del bot inverso
             
-            nuevo_stop_loss = self.configuracion.calcular_stop_loss(balance)
+            # LÓGICA CRÍTICA: Stop loss basado en balance base del bot inverso, NO en balance compartido
+            # El balance_stop_loss_base solo se actualiza cuando el bot inverso gana (en registrar_ganancia)
+            # Esto evita que el stop loss se afecte por ganancias del bot principal
             
-            # CORRECCIÓN CRÍTICA: Si el stop loss actual es mayor que el balance, SIEMPRE recalcular
-            # Esto debe ejecutarse independientemente del estado del bot
-            if self.configuracion.stop_loss_actual > balance:
-                self.configuracion.stop_loss_actual = nuevo_stop_loss
+            # Si es la primera vez, inicializar balance_stop_loss_base
+            if self.configuracion.balance_stop_loss_base <= 0:
                 self.configuracion.balance_stop_loss_base = balance
-            # Solo aplicar trailing stop loss si está operando
-            elif self.configuracion.estado == ConfiguracionBotInverso.Estado.OPERANDO:
-                # Trailing stop loss: solo sube, nunca baja
-                if nuevo_stop_loss > self.configuracion.stop_loss_actual:
-                    self.configuracion.stop_loss_actual = nuevo_stop_loss
-                    self.configuracion.balance_stop_loss_base = balance
-                # Si el balance baja, el stop_loss_actual NO cambia (se mantiene fijo)
+            
+            # Calcular stop loss basado en balance_stop_loss_base (balance inicial del bot inverso)
+            # NO usar balance compartido de Deriv directamente
+            balance_base = self.configuracion.balance_stop_loss_base
+            nuevo_stop_loss = self.configuracion.calcular_stop_loss(balance_base)
+            
+            # CORRECCIÓN CRÍTICA: Si el stop loss actual es mayor que el balance base, recalcular
+            # Esto puede pasar si el balance base bajó desde una inicialización previa
+            if self.configuracion.stop_loss_actual > balance_base:
+                self.configuracion.stop_loss_actual = nuevo_stop_loss
+            
+            # Verificar si el balance actual (compartido) alcanzó el stop loss
+            # El stop loss se calcula sobre balance_base, pero se verifica contra balance (compartido)
+            if balance <= self.configuracion.stop_loss_actual:
+                # El balance compartido alcanzó el stop loss del bot inverso
+                # Esto puede pasar si el bot principal perdió mucho
+                # En este caso, pausar el bot inverso
+                if self.configuracion.estado == ConfiguracionBotInverso.Estado.OPERANDO:
+                    self.configuracion.pausar(horas=1)
             
             self.configuracion.save(update_fields=["balance_actual", "stop_loss_actual", "balance_stop_loss_base", "balance_meta_base", "ultima_actualizacion"])
         except Exception as e:

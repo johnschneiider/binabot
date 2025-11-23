@@ -183,10 +183,11 @@ class ConfiguracionBotInverso(models.Model):
         self.balance_actual += monto
         self.ganancia_acumulada += monto
         # Trailing stop loss: solo sube, nunca baja
-        nuevo_stop_loss = self.calcular_stop_loss(self.balance_actual)
+        # Actualizar balance_stop_loss_base con el nuevo balance (solo cuando este bot gana)
+        self.balance_stop_loss_base = self.balance_actual
+        nuevo_stop_loss = self.calcular_stop_loss(self.balance_stop_loss_base)
         if nuevo_stop_loss > self.stop_loss_actual:
             self.stop_loss_actual = nuevo_stop_loss
-            self.balance_stop_loss_base = self.balance_actual
         self.save(
             update_fields=[
                 "balance_actual",
