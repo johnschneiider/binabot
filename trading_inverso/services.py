@@ -69,10 +69,15 @@ class GestorBotInverso:
             balance_base = self.configuracion.balance_stop_loss_base
             nuevo_stop_loss = self.configuracion.calcular_stop_loss(balance_base)
             
-            # CORRECCIÓN CRÍTICA: Si el stop loss actual es mayor que el balance base, recalcular
-            # Esto puede pasar si el balance base bajó desde una inicialización previa
-            if self.configuracion.stop_loss_actual > balance_base:
-                self.configuracion.stop_loss_actual = nuevo_stop_loss
+            # CORRECCIÓN CRÍTICA: Recalcular stop loss si:
+            # 1. El stop loss actual es mayor que el balance base (inconsistencia)
+            # 2. El stop loss actual no coincide con el cálculo correcto (porcentaje cambió)
+            stop_loss_esperado = nuevo_stop_loss
+            diferencia = abs(self.configuracion.stop_loss_actual - stop_loss_esperado)
+            
+            # Si hay diferencia significativa (> $0.10) o el stop loss es mayor que el balance base, recalcular
+            if self.configuracion.stop_loss_actual > balance_base or diferencia > Decimal("0.10"):
+                self.configuracion.stop_loss_actual = stop_loss_esperado
             
             # Verificar si el balance actual (compartido) alcanzó el stop loss
             # El stop loss se calcula sobre balance_base, pero se verifica contra balance (compartido)
