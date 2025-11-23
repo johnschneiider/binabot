@@ -52,12 +52,23 @@ class GestorBotInverso:
                 if self.configuracion.stop_loss_actual <= 0:
                     self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(balance)
             
-            # Solo actualizar stop loss si está operando y sube (trailing stop loss)
+            # Lógica de stop loss:
+            # 1. Si el stop loss actual es mayor que el balance, recalcular (corrección de inconsistencia)
+            # 2. Si el balance sube, aplicar trailing stop loss (solo sube)
+            # 3. Si el balance baja, el stop loss NO baja (se mantiene fijo como protección)
             if self.configuracion.estado == ConfiguracionBotInverso.Estado.OPERANDO:
                 nuevo_stop_loss = self.configuracion.calcular_stop_loss(balance)
-                if nuevo_stop_loss > self.configuracion.stop_loss_actual:
+                
+                # CORRECCIÓN: Si el stop loss actual es mayor que el balance, recalcular
+                # Esto puede pasar si el balance bajó desde una inicialización previa
+                if self.configuracion.stop_loss_actual > balance:
                     self.configuracion.stop_loss_actual = nuevo_stop_loss
                     self.configuracion.balance_stop_loss_base = balance
+                # Trailing stop loss: solo sube, nunca baja
+                elif nuevo_stop_loss > self.configuracion.stop_loss_actual:
+                    self.configuracion.stop_loss_actual = nuevo_stop_loss
+                    self.configuracion.balance_stop_loss_base = balance
+                # Si el balance baja, el stop_loss_actual NO cambia (se mantiene fijo)
             
             self.configuracion.save(update_fields=["balance_actual", "stop_loss_actual", "balance_stop_loss_base", "balance_meta_base", "ultima_actualizacion"])
         except Exception as e:
