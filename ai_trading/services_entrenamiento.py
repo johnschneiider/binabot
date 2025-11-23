@@ -72,11 +72,23 @@ def iniciar_entrenamiento(
         global _proceso_entrenamiento_actual, _hilo_entrenamiento_actual, _entrenamiento_actual
         
         try:
-            # Obtener la ruta del manage.py
-            manage_py = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'manage.py')
+            # Obtener la ruta del manage.py - buscar desde el directorio actual
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            manage_py = os.path.join(base_dir, 'manage.py')
+            
+            # Si no existe, intentar desde el directorio del proyecto
             if not os.path.exists(manage_py):
-                # Intentar ruta alternativa
-                manage_py = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'manage.py')
+                # Buscar en el directorio padre
+                base_dir = os.path.dirname(base_dir)
+                manage_py = os.path.join(base_dir, 'manage.py')
+            
+            # Verificar que existe
+            if not os.path.exists(manage_py):
+                error_msg = f"No se encontró manage.py. Buscado en: {manage_py}"
+                logger.error(error_msg)
+                raise FileNotFoundError(error_msg)
+            
+            logger.info(f"Usando manage.py en: {manage_py}")
             
             # Construir comando
             comando = [
@@ -93,48 +105,71 @@ def iniciar_entrenamiento(
             ]
             
             logger.info(f"Iniciando entrenamiento: {' '.join(comando)}")
+            logger.info(f"Directorio de trabajo: {os.getcwd()}")
+            logger.info(f"Python ejecutable: {sys.executable}")
             
-            # Ejecutar comando
+            # Ejecutar comando con mejor manejo de errores
             proceso = subprocess.Popen(
                 comando,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
                 universal_newlines=True,
+                cwd=base_dir,  # Ejecutar desde el directorio del proyecto
             )
             
             _proceso_entrenamiento_actual = proceso
             
-            # Leer salida línea por línea
+            # Leer salida línea por línea desde stdout
+            salida_completa = []
             for linea in proceso.stdout:
-                logger.info(f"[Entrenamiento] {linea.strip()}")
+                linea_limpia = linea.strip()
+                if linea_limpia:
+                    logger.info(f"[Entrenamiento] {linea_limpia}")
+                    salida_completa.append(linea_limpia)
+            
+            # Leer errores de stderr
+            errores = []
+            for linea in proceso.stderr:
+                linea_limpia = linea.strip()
+                if linea_limpia:
+                    logger.error(f"[Entrenamiento ERROR] {linea_limpia}")
+                    errores.append(linea_limpia)
             
             # Esperar a que termine
-            proceso.wait()
+            returncode = proceso.wait()
+            
+            logger.info(f"Proceso terminado con código: {returncode}")
             
             # Actualizar estado
             with transaction.atomic():
                 entrenamiento.refresh_from_db()
-                if proceso.returncode == 0:
+                if returncode == 0:
                     entrenamiento.estado = EntrenamientoIA.Estado.COMPLETADO
+                    mensaje = f"Entrenamiento '{nombre_entrenamiento}' completado exitosamente"
+                    logger.info(mensaje)
                     enviar_estado_entrenamiento(
                         "completado",
-                        f"Entrenamiento '{nombre_entrenamiento}' completado exitosamente",
+                        mensaje,
                         entrenamiento.id
                     )
                 else:
+                    error_detalle = '\n'.join(errores[-10:]) if errores else 'Sin detalles de error'
+                    mensaje = f"Entrenamiento '{nombre_entrenamiento}' terminó con error (código {returncode})"
+                    logger.error(f"{mensaje}\nErrores: {error_detalle}")
                     entrenamiento.estado = EntrenamientoIA.Estado.ERROR
                     enviar_estado_entrenamiento(
                         "error",
-                        f"Entrenamiento '{nombre_entrenamiento}' terminó con error",
+                        f"{mensaje}. Últimos errores: {error_detalle[:200]}",
                         entrenamiento.id
                     )
                 entrenamiento.finalizada = timezone.now()
                 entrenamiento.save()
             
-        except Exception as e:
-            logger.error(f"Error durante el entrenamiento: {e}", exc_info=True)
+        except FileNotFoundError as e:
+            error_msg = f"Error: No se encontró manage.py o Python. {str(e)}"
+            logger.error(error_msg, exc_info=True)
             with transaction.atomic():
                 entrenamiento.refresh_from_db()
                 entrenamiento.estado = EntrenamientoIA.Estado.ERROR
@@ -142,7 +177,20 @@ def iniciar_entrenamiento(
                 entrenamiento.save()
                 enviar_estado_entrenamiento(
                     "error",
-                    f"Error durante el entrenamiento: {str(e)}",
+                    error_msg,
+                    entrenamiento.id
+                )
+        except Exception as e:
+            error_msg = f"Error durante el entrenamiento: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            with transaction.atomic():
+                entrenamiento.refresh_from_db()
+                entrenamiento.estado = EntrenamientoIA.Estado.ERROR
+                entrenamiento.finalizada = timezone.now()
+                entrenamiento.save()
+                enviar_estado_entrenamiento(
+                    "error",
+                    error_msg,
                     entrenamiento.id
                 )
         finally:

@@ -265,6 +265,13 @@ function inicializarGraficos() {
 
 // Control de entrenamiento
 async function iniciarEntrenamiento() {
+  const btnIniciar = document.getElementById('btn-iniciar');
+  const btnDetener = document.getElementById('btn-detener');
+  
+  // Deshabilitar botón mientras se procesa
+  btnIniciar.disabled = true;
+  btnIniciar.textContent = '⏳ Iniciando...';
+  
   const datos = {
     accion: 'iniciar',
     generaciones: parseInt(document.getElementById('input-generaciones').value),
@@ -274,6 +281,8 @@ async function iniciarEntrenamiento() {
     elite_size: parseInt(document.getElementById('input-elite').value),
     dias_datos: parseInt(document.getElementById('input-dias').value),
   };
+  
+  console.log('Iniciando entrenamiento con datos:', datos);
   
   try {
     const respuesta = await fetch(endpoints.controlEntrenamiento, {
@@ -285,10 +294,30 @@ async function iniciarEntrenamiento() {
       body: JSON.stringify(datos),
     });
     
+    console.log('Respuesta del servidor:', respuesta.status, respuesta.statusText);
+    
+    if (!respuesta.ok) {
+      const errorText = await respuesta.text();
+      console.error('Error HTTP:', respuesta.status, errorText);
+      throw new Error(`Error del servidor: ${respuesta.status} - ${errorText}`);
+    }
+    
     const resultado = await respuesta.json();
+    console.log('Resultado:', resultado);
     
     if (resultado.success) {
-      alert('Entrenamiento iniciado exitosamente');
+      // Actualizar UI
+      const badge = document.getElementById('badge-estado');
+      if (badge) {
+        badge.textContent = 'INICIANDO';
+        badge.className = 'ai-estado-badge ai-estado-badge--en_curso';
+      }
+      
+      setValor('progreso-texto', `Entrenamiento iniciado: ${resultado.mensaje || 'En curso...'}`);
+      
+      btnIniciar.disabled = true;
+      btnDetener.disabled = false;
+      
       // Limpiar gráficos
       datosFitness = { generaciones: [], promedio: [], mejor: [], peor: [] };
       if (chartFitness) {
@@ -301,12 +330,20 @@ async function iniciarEntrenamiento() {
         chartEvolucion.data.datasets.forEach(ds => ds.data = []);
         chartEvolucion.update();
       }
+      
+      console.log('✅ Entrenamiento iniciado exitosamente');
     } else {
-      alert('Error: ' + resultado.error);
+      const errorMsg = resultado.error || resultado.detalle || 'Error desconocido';
+      console.error('❌ Error al iniciar entrenamiento:', errorMsg);
+      alert('Error al iniciar entrenamiento:\n' + errorMsg);
+      btnIniciar.disabled = false;
+      btnIniciar.textContent = '▶ Iniciar Entrenamiento';
     }
   } catch (error) {
-    console.error('Error al iniciar entrenamiento:', error);
-    alert('Error al iniciar entrenamiento');
+    console.error('❌ Error al iniciar entrenamiento:', error);
+    alert('Error al iniciar entrenamiento:\n' + error.message);
+    btnIniciar.disabled = false;
+    btnIniciar.textContent = '▶ Iniciar Entrenamiento';
   }
 }
 

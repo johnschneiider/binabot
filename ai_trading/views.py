@@ -148,31 +148,58 @@ class ControlEntrenamientoView(APIView):
         if accion == 'iniciar':
             try:
                 from ai_trading.services_entrenamiento import iniciar_entrenamiento
+                import logging
+                
+                logger = logging.getLogger(__name__)
+                
+                # Validar parámetros
+                generaciones = int(request.data.get('generaciones', 10))
+                poblacion = int(request.data.get('poblacion', 20))
+                tasa_mutacion = float(request.data.get('tasa_mutacion', 0.10))
+                tasa_crossover = float(request.data.get('tasa_crossover', 0.80))
+                elite_size = int(request.data.get('elite_size', 5))
+                dias_datos = int(request.data.get('dias_datos', 1))
+                nombre = request.data.get('nombre')
+                
+                logger.info(f"Intentando iniciar entrenamiento con parámetros: "
+                          f"generaciones={generaciones}, poblacion={poblacion}, "
+                          f"tasa_mutacion={tasa_mutacion}, tasa_crossover={tasa_crossover}, "
+                          f"elite_size={elite_size}, dias_datos={dias_datos}, nombre={nombre}")
                 
                 entrenamiento = iniciar_entrenamiento(
-                    generaciones=int(request.data.get('generaciones', 10)),
-                    poblacion=int(request.data.get('poblacion', 20)),
-                    tasa_mutacion=float(request.data.get('tasa_mutacion', 0.10)),
-                    tasa_crossover=float(request.data.get('tasa_crossover', 0.80)),
-                    elite_size=int(request.data.get('elite_size', 5)),
-                    dias_datos=int(request.data.get('dias_datos', 1)),
-                    nombre=request.data.get('nombre'),
+                    generaciones=generaciones,
+                    poblacion=poblacion,
+                    tasa_mutacion=tasa_mutacion,
+                    tasa_crossover=tasa_crossover,
+                    elite_size=elite_size,
+                    dias_datos=dias_datos,
+                    nombre=nombre,
                 )
+                
+                logger.info(f"Entrenamiento iniciado exitosamente. ID: {entrenamiento.id}")
                 
                 return Response({
                     "success": True,
-                    "mensaje": "Entrenamiento iniciado",
+                    "mensaje": f"Entrenamiento '{entrenamiento.nombre}' iniciado exitosamente",
                     "entrenamiento_id": entrenamiento.id,
+                    "estado": entrenamiento.estado,
                 })
             except ValueError as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error de validación al iniciar entrenamiento: {e}", exc_info=True)
                 return Response({
                     "success": False,
                     "error": str(e),
                 }, status=400)
             except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error inesperado al iniciar entrenamiento: {e}", exc_info=True)
                 return Response({
                     "success": False,
                     "error": f"Error al iniciar entrenamiento: {str(e)}",
+                    "detalle": str(e) if hasattr(e, '__str__') else repr(e),
                 }, status=500)
         
         elif accion == 'detener':
