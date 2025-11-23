@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Bot Inverso - Dashboard{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{% static 'css/core/panel.css' %}">
+  <style>
+    .panel__titulo::before {
+      content: "🔄 ";
+    }
+    .bot-inverso-badge {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: #fff;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      margin-left: 1rem;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <div class="panel__hero">
+      <div class="panel__hero-col">
+        <p class="panel__tag">Bot Inverso</p>
+        <h2 class="panel__titulo">Mesa de control del bot inverso
+          <span class="bot-inverso-badge">ESTRATEGIA INVERSA</span>
+        </h2>
+
+        <div class="panel__estado-hero">
+          <span class="panel__estado-chip" id="badge-estado">--</span>
+          <span class="panel__estado-descripcion">Modo <strong id="estado-bot">--</strong></span>
+        </div>
+
+        <div class="panel__hero-metricas">
+          <div class="panel__hero-metrica">
+            <span>Balance disponible</span>
+            <strong class="dato" id="balance-actual">--</strong>
+            <small id="variacion-balance">Sin variaciones registradas</small>
+          </div>
+          <div class="panel__hero-metrica">
+            <span>Stop loss dinámico (2%)</span>
+            <strong class="dato" id="stop-loss-actual">--</strong>
+            <small>Se recalcula al cerrar cada trade ganador</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel__hero-col panel__hero-col--resumen">
+        <article class="tarjeta tarjeta--resumen">
+          <h3>Resumen financiero</h3>
+          <div class="tarjeta__grid">
+            <div class="tarjeta__metric">
+              <span>Balance neto</span>
+              <strong id="ganancia-acumulada">--</strong>
+            </div>
+            <div class="tarjeta__metric">
+              <span>Pérdida acumulada</span>
+              <strong id="perdida-acumulada">--</strong>
+            </div>
+            <div class="tarjeta__metric">
+              <span>Winrate</span>
+              <strong><span id="winrate">--</span> <small>%</small></strong>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div class="panel__seccion">
+      <h3 class="panel__seccion-titulo">Historial de operaciones inversas</h3>
+      <div class="panel__tabla-container">
+        <table class="panel__tabla" id="tabla-operaciones">
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Activo</th>
+              <th>Dirección</th>
+              <th>Monto</th>
+              <th>Resultado</th>
+              <th>Beneficio</th>
+              <th>Op. Principal</th>
+            </tr>
+          </thead>
+          <tbody id="operaciones-body">
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 2rem;">
+                Cargando operaciones...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <script src="{% static 'js/panel.js' %}"></script>
+  <script>
+    // Configurar endpoints para bot inverso
+    const endpoints = {
+      estado: '/api/trading-inverso/estado/',
+      historicos: '/api/trading-inverso/historicos/',
+      reanudar: '/api/trading-inverso/reanudar/',
+    };
+
+    // Función para actualizar estado del bot inverso
+    async function actualizarEstadoBot() {
+      try {
+        const res = await fetch(endpoints.estado);
+        if (!res.ok) throw new Error('Error obteniendo estado');
+        const data = await res.json();
+
+        document.getElementById('balance-actual').textContent = `$${parseFloat(data.balance_actual).toFixed(2)}`;
+        document.getElementById('stop-loss-actual').textContent = `$${parseFloat(data.stop_loss_actual).toFixed(2)}`;
+        document.getElementById('ganancia-acumulada').textContent = `$${parseFloat(data.ganancia_acumulada).toFixed(2)}`;
+        document.getElementById('perdida-acumulada').textContent = `$${parseFloat(data.perdida_acumulada).toFixed(2)}`;
+        
+        const estado = data.estado === 'operando' ? 'Operando' : 'Pausado';
+        document.getElementById('badge-estado').textContent = estado;
+        document.getElementById('estado-bot').textContent = estado;
+        document.getElementById('badge-estado').className = `panel__estado-chip ${data.estado === 'operando' ? 'chip--activo' : 'chip--pausado'}`;
+      } catch (error) {
+        console.error('Error actualizando estado:', error);
+      }
+    }
+
+    // Función para actualizar operaciones
+    async function actualizarOperaciones() {
+      try {
+        const res = await fetch(endpoints.historicos);
+        if (!res.ok) throw new Error('Error obteniendo operaciones');
+        const operaciones = await res.json();
+
+        const tbody = document.getElementById('operaciones-body');
+        if (operaciones.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">No hay operaciones aún</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = operaciones.map(op => {
+          const resultado = op.resultado === 'win' ? '✅ Ganada' : '❌ Perdida';
+          const beneficioClass = parseFloat(op.beneficio) >= 0 ? 'positivo' : 'negativo';
+          const hora = new Date(op.hora_inicio).toLocaleString('es-ES');
+          
+          return `
+            <tr>
+              <td>${hora}</td>
+              <td>${op.activo}</td>
+              <td>${op.direccion}</td>
+              <td>$${parseFloat(op.monto_invertido).toFixed(2)}</td>
+              <td>${resultado}</td>
+              <td class="${beneficioClass}">$${parseFloat(op.beneficio).toFixed(2)}</td>
+              <td><small>${op.operacion_principal_id || '--'}</small></td>
+            </tr>
+          `;
+        }).join('');
+
+        // Calcular winrate
+        const ganadas = operaciones.filter(op => op.resultado === 'win').length;
+        const winrate = operaciones.length > 0 ? ((ganadas / operaciones.length) * 100).toFixed(1) : '0.0';
+        document.getElementById('winrate').textContent = winrate;
+      } catch (error) {
+        console.error('Error actualizando operaciones:', error);
+      }
+    }
+
+    // Actualizar cada 5 segundos
+    actualizarEstadoBot();
+    actualizarOperaciones();
+    setInterval(() => {
+      actualizarEstadoBot();
+      actualizarOperaciones();
+    }, 5000);
+  </script>
+{% endblock %}
+

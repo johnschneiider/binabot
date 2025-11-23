@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "channels",
     "core",
     "trading",
+    "trading_inverso",
     "simulacion",
     "historial",
     "dashboard",

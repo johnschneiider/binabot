@@ -23,10 +23,12 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/dashboard/", include("dashboard.urls")),
     path("api/trading/", include("trading.urls")),
+    path("api/trading-inverso/", include("trading_inverso.urls")),
     path("api/simulacion/", include("simulacion.urls")),
     path("api/historial/", include("historial.urls")),
     path("api/notificaciones/", include("notificaciones.urls")),
     path("ai/", include("ai_trading.urls")),
+    path("bot-inverso/", include("trading_inverso.urls")),
     path("", include("core.urls")),
 ]
 
