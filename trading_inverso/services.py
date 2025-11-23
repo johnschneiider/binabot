@@ -183,7 +183,7 @@ class MotorTradingInverso:
             "mensaje": f"🔄 Ejecutando operación INVERSA: {operacion_principal.activo} {direccion_inversa} (Principal: {operacion_principal.direccion})",
         })
         
-        # Ejecutar operación en Deriv
+        # Ejecutar operación en Deriv usando la misma función que el bot principal
         try:
             resultado_deriv = operar_contrato_sync(
                 symbol=operacion_principal.activo,
@@ -203,69 +203,35 @@ class MotorTradingInverso:
                 config.save(update_fields=["en_operacion", "ultima_actualizacion"])
                 return None
             
-            # Obtener datos del contrato
-            buy = resultado_deriv.get("buy")
-            if not buy or not buy.get("contract_id"):
-                self._enviar_evento({
-                    "tipo": "error",
-                    "mensaje": "Deriv no retornó contract_id. No se creará operación.",
-                })
-                config.en_operacion = False
-                config.save(update_fields=["en_operacion", "ultima_actualizacion"])
-                return None
-            
-            contract_id = buy.get("contract_id")
-            
-            # Esperar resultado del contrato
-            import time
-            tiempo_espera = 0
-            tiempo_maximo = 70  # 60 segundos + margen
-            
-            while tiempo_espera < tiempo_maximo:
-                time.sleep(2)
-                tiempo_espera += 2
-                
-                # Verificar estado del contrato
-                from integracion_deriv.client import DerivWebsocketClient
-                import asyncio
-                
-                client = DerivWebsocketClient()
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                contract_info = loop.run_until_complete(client.obtener_contrato(contract_id))
-                loop.close()
-                
-                if contract_info and contract_info.get("status") == "sold":
-                    break
-            
-            # Obtener información final del contrato
-            client = DerivWebsocketClient()
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            open_contract = loop.run_until_complete(client.obtener_contrato(contract_id))
-            loop.close()
-            
+            # Obtener datos del contrato de la respuesta (igual que el bot principal)
+            open_contract = resultado_deriv.get("proposal_open_contract", {})
             if not open_contract:
                 self._enviar_evento({
                     "tipo": "error",
-                    "mensaje": "No se pudo obtener información del contrato final.",
+                    "mensaje": "Respuesta inválida de Deriv: sin proposal_open_contract.",
                 })
                 config.en_operacion = False
                 config.save(update_fields=["en_operacion", "ultima_actualizacion"])
                 return None
             
-            # Calcular beneficio
-            beneficio = _decimal_or_zero(
-                open_contract.get("profit") or open_contract.get("sell_price"),
-                "0.00"
-            )
+            contract_id_real = open_contract.get("contract_id") or resultado_deriv.get("buy", {}).get("contract_id")
+            if not contract_id_real:
+                self._enviar_evento({
+                    "tipo": "error",
+                    "mensaje": f"No se recibió contract_id de Deriv. Respuesta: {resultado_deriv}",
+                })
+                config.en_operacion = False
+                config.save(update_fields=["en_operacion", "ultima_actualizacion"])
+                return None
             
+            # Calcular beneficio (igual que el bot principal)
+            beneficio = _decimal_or_zero(open_contract.get("profit", 0), "0.01")
             precio_entrada = _decimal_or_zero(
-                open_contract.get("buy_price") or open_contract.get("entry_spot"),
+                open_contract.get("entry_spot") or open_contract.get("entry_tick") or open_contract.get("current_spot"),
                 "0.00001"
             )
             precio_cierre = _decimal_or_zero(
-                open_contract.get("sell_price") or open_contract.get("exit_spot") or open_contract.get("current_spot"),
+                open_contract.get("exit_spot") or open_contract.get("current_spot") or precio_entrada,
                 "0.00001"
             )
             hora_inicio = _epoch_to_datetime(open_contract.get("date_start")) or timezone.now()
@@ -287,7 +253,7 @@ class MotorTradingInverso:
                 monto_invertido=monto_trade,
                 confianza=Decimal("100.00"),  # 100% porque es inverso del principal
                 resultado=resultado,
-                numero_contrato=contract_id,
+                numero_contrato=str(contract_id_real),  # Usar contract_id_real
                 hora_inicio=hora_inicio,
                 hora_fin=hora_fin,
                 beneficio=beneficio,
