@@ -97,7 +97,7 @@ class Command(BaseCommand):
 
         # 4. Activos Permitidos
         self.stdout.write(self.style.WARNING("\n4. ACTIVOS PERMITIDOS..."))
-        activos = ActivoPermitido.objects.filter(activo=True)
+        activos = ActivoPermitido.objects.filter(habilitado=True)
         self.stdout.write(f"   Total activos activos: {activos.count()}")
         if activos.count() == 0:
             self.stdout.write(self.style.ERROR("   ❌ NO HAY ACTIVOS PERMITIDOS - Los bots no pueden operar"))

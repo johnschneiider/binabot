@@ -95,7 +95,7 @@ else:
 ```bash
 python manage.py shell -c "
 from core.models import ActivoPermitido
-activos = ActivoPermitido.objects.filter(activo=True)
+activos = ActivoPermitido.objects.filter(habilitado=True)
 print(f'Activos permitidos: {activos.count()}')
 for a in activos:
     print(f'  - {a.nombre}')
@@ -266,7 +266,7 @@ print(f"   En operación: {config_inverso.en_operacion}")
 print(f"   Puede operar: {config_inverso.estado == 'operando' and config_inverso.balance_actual > config_inverso.stop_loss_actual}")
 
 # 4. Activos
-activos = ActivoPermitido.objects.filter(activo=True)
+activos = ActivoPermitido.objects.filter(habilitado=True)
 print(f"\n📊 ACTIVOS PERMITIDOS: {activos.count()}")
 for a in activos[:10]:
     print(f"   - {a.nombre}")
