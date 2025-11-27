@@ -274,7 +274,8 @@ class MotorTradingProfesional:
         
         # Requerir momentum mínimo significativo (evitar ruido)
         momentum_abs = abs(mejor_indicadores.momentum_pct)
-        if momentum_abs < Decimal("0.01"):  # Momentum muy pequeño, saltar
+        # Umbral más bajo para permitir más operaciones cuando el resto de filtros ya son estrictos
+        if momentum_abs < Decimal("0.001"):  # Momentum muy pequeño, saltar
             self._enviar_evento({
                 "tipo": "info",
                 "mensaje": f"Momentum muy pequeño ({mejor_indicadores.momentum_pct:.4f}%) en {mejor_activo.nombre}. Esperando siguiente ciclo.",
