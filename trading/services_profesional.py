@@ -409,6 +409,24 @@ class MotorTradingProfesional:
         
         self.gestor_core.finalizar_operacion()
         
+        # CRÍTICO: Ejecutar operación inversa INMEDIATAMENTE (mismo activo, dirección opuesta)
+        # Esto asegura que ambas operaciones se ejecuten al mismo tiempo
+        try:
+            from trading_inverso.services import MotorTradingInverso
+            motor_inverso = MotorTradingInverso()
+            operacion_inversa = motor_inverso.ejecutar_ciclo_inverso(operacion)
+            if operacion_inversa:
+                self._enviar_evento({
+                    "tipo": "info",
+                    "mensaje": f"✅ Operación inversa ejecutada simultáneamente: {operacion_inversa.numero_contrato}",
+                })
+        except Exception as e:
+            # Si falla el bot inverso, no interrumpir el flujo del bot principal
+            self._enviar_evento({
+                "tipo": "warning",
+                "mensaje": f"⚠️ No se pudo ejecutar operación inversa: {e}",
+            })
+        
         # Sincronizar balance DESPUÉS de registrar la operación
         self.gestor_core.sincronizar_balance_desde_api()
         
