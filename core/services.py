@@ -346,13 +346,13 @@ class GestorBotCore:
             mejor_indicadores = mejor_resultado["indicadores"]
             mejor_score = mejor_resultado["score"]
             
-            if mejor_score < motor.umbral_score_minimo:
+            # Validar que la separación EMA es suficiente (umbral mínimo)
+            if mejor_score < motor.umbral_separacion_pct:
                 return None
             
-            # Determinar dirección
-            from trading.ranking.scorer import determinar_direccion
-            direccion_str = determinar_direccion(mejor_indicadores)
-            if direccion_str == "NONE":
+            # Determinar dirección (ya viene de los indicadores EMA)
+            direccion_str = mejor_indicadores.direccion_sugerida
+            if direccion_str == "NONE" or not direccion_str:
                 return None
             
             direccion = Operacion.Direccion.CALL if direccion_str == "CALL" else Operacion.Direccion.PUT
