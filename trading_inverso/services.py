@@ -1,20 +1,27 @@
 """
 Servicios para el bot de trading inverso.
-Este bot ejecuta la estrategia opuesta al bot principal.
+Este bot ejecuta la estrategia opuesta al bot principal usando EMAs.
 """
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Dict, List
 from datetime import timedelta
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
 from django.utils import timezone
+from django.conf import settings
 
 from historial.models import Operacion as OperacionPrincipal
 from integracion_deriv.client import operar_contrato_sync
 from trading.services import _decimal_or_zero, _epoch_to_datetime
-from trading.services_profesional import MotorTradingProfesional
+from trading.services_profesional import calcular_ema
+from trading.models import IndicadoresActivo
+from trading.risk import (
+    calcular_monto_adaptativo,
+    verificar_cooldown,
+)
+from core.models import ActivoPermitido
 
 from .models import OperacionInversa, ConfiguracionBotInverso
 
@@ -105,13 +112,20 @@ class GestorBotInverso:
 class MotorTradingInverso:
     """
     Motor de trading inverso.
-    Monitorea las operaciones del bot principal y ejecuta la dirección opuesta.
+    Usa la misma estrategia de EMAs que el bot principal pero con dirección invertida.
     """
     
     def __init__(self):
         self.gestor = GestorBotInverso()
         self.channel_layer = get_channel_layer()
-        self.motor_principal = MotorTradingProfesional()  # Para reutilizar lógica de análisis
+        self.ultimo_mensaje_diagnostico = None
+        
+        # Configuración SIMPLE - Estrategia basada en EMAs (igual que bot principal)
+        self.duracion_trade_segundos = 60
+        self.periodo_analisis_segundos = 120  # Analizar últimos 2 minutos
+        self.ema_rapida_periodo = 10  # EMA rápida: 10 ticks
+        self.ema_lenta_periodo = 30   # EMA lenta: 30 ticks
+        self.umbral_separacion_pct = Decimal("0.01")  # Mínimo 0.01% de separación
     
     def _enviar_evento(self, data: dict) -> None:
         """Envía evento a través de WebSockets."""
@@ -132,6 +146,349 @@ class MotorTradingInverso:
         elif direccion == "PUT":
             return "CALL"
         return direccion
+    
+    def _calcular_indicadores_activo(
+        self, activo: ActivoPermitido
+    ) -> Optional[Dict]:
+        """
+        Calcula indicadores SIMPLES basados en medias móviles (EMA).
+        MISMA lógica que el bot principal, pero la dirección se invierte después.
+        
+        Returns:
+            Diccionario con indicadores o None si no hay datos suficientes
+        """
+        from historial.models import Tick
+        
+        # Obtener ticks de los últimos 2 minutos
+        desde = timezone.now() - timedelta(seconds=self.periodo_analisis_segundos)
+        
+        ticks = (
+            Tick.objects.filter(
+                activo=activo.nombre,
+                epoch__gte=desde
+            )
+            .order_by("epoch")
+        )
+        
+        if not ticks.exists():
+            return None
+        
+        # Convertir a lista de precios
+        precios = [Decimal(str(tick.precio)) for tick in ticks]
+        
+        # Necesitamos al menos 30 ticks para calcular EMA lenta
+        if len(precios) < self.ema_lenta_periodo:
+            return None
+        
+        precio_actual = precios[-1]
+        
+        # Calcular EMAs (igual que bot principal)
+        ema_rapida = calcular_ema(precios, self.ema_rapida_periodo)
+        ema_lenta = calcular_ema(precios, self.ema_lenta_periodo)
+        
+        if ema_rapida == Decimal("0") or ema_lenta == Decimal("0"):
+            return None
+        
+        # Determinar dirección basada en crossover de EMAs
+        # NOTA: Esta es la dirección que usaría el bot principal
+        if ema_rapida > ema_lenta:
+            direccion_principal = "CALL"  # Bot principal haría CALL
+            separacion_pct = ((ema_rapida - ema_lenta) / ema_lenta * 100) if ema_lenta > 0 else Decimal("0")
+        elif ema_rapida < ema_lenta:
+            direccion_principal = "PUT"  # Bot principal haría PUT
+            separacion_pct = ((ema_lenta - ema_rapida) / ema_rapida * 100) if ema_rapida > 0 else Decimal("0")
+        else:
+            direccion_principal = "NONE"
+            separacion_pct = Decimal("0")
+        
+        # INVERTIR la dirección para el bot inverso
+        direccion = self._invertir_direccion(direccion_principal)
+        
+        # Calcular volatilidad simple
+        precio_max = max(precios)
+        precio_min = min(precios)
+        volatilidad = ((precio_max - precio_min) / precio_min * 100) if precio_min > 0 else Decimal("0")
+        
+        return {
+            "ema_rapida": ema_rapida,
+            "ema_lenta": ema_lenta,
+            "precio_actual": precio_actual,
+            "direccion_sugerida": direccion,  # Ya invertida
+            "separacion_pct": separacion_pct,
+            "volatilidad": volatilidad,
+            "ticks_analizados": len(precios),
+        }
+    
+    def _evaluar_activos(self) -> List[Dict]:
+        """
+        Evalúa activos con estrategia SIMPLE basada en EMAs (dirección invertida).
+        MISMA lógica que bot principal pero con dirección opuesta.
+        
+        Returns:
+            Lista de activos con sus indicadores y scores, ordenados por separación de EMAs
+        """
+        # Obtener activos habilitados
+        activos = list(ActivoPermitido.objects.filter(habilitado=True))
+        resultados = []
+        
+        for activo in activos:
+            # Solo verificar cooldown básico
+            if not verificar_cooldown(activo.id):
+                continue
+            
+            # Calcular indicadores (EMAs con dirección invertida)
+            indicadores_data = self._calcular_indicadores_activo(activo)
+            if not indicadores_data:
+                continue
+            
+            # Validar que hay suficiente separación entre EMAs
+            if indicadores_data["separacion_pct"] < self.umbral_separacion_pct:
+                continue
+            
+            # Validar que la dirección es clara
+            if indicadores_data["direccion_sugerida"] == "NONE":
+                continue
+            
+            # Guardar indicadores
+            indicadores, _ = IndicadoresActivo.objects.update_or_create(
+                activo=activo,
+                defaults={
+                    "momentum_simple": indicadores_data["ema_rapida"] - indicadores_data["ema_lenta"],
+                    "momentum_pct": indicadores_data["separacion_pct"],
+                    "volatilidad": indicadores_data["volatilidad"],
+                    "precio_actual": indicadores_data["precio_actual"],
+                    "direccion_sugerida": indicadores_data["direccion_sugerida"],
+                    "ticks_analizados": indicadores_data["ticks_analizados"],
+                    "score_total": indicadores_data["separacion_pct"],
+                },
+            )
+            
+            resultados.append({
+                "activo": activo,
+                "indicadores": indicadores,
+                "score": indicadores_data["separacion_pct"],
+            })
+        
+        # Ordenar por separación descendente
+        resultados.sort(key=lambda x: x["score"], reverse=True)
+        
+        return resultados
+    
+    @transaction.atomic
+    def ejecutar_ciclo_ema(self) -> Optional[OperacionInversa]:
+        """
+        Ejecuta un ciclo completo usando estrategia EMA (dirección invertida).
+        MISMA lógica que bot principal pero con dirección opuesta.
+        
+        Returns:
+            Operación inversa ejecutada o None
+        """
+        config = self.gestor.configuracion
+        
+        # Verificaciones previas
+        if config.estado != config.Estado.OPERANDO or config.en_operacion:
+            return None
+        
+        self.gestor.sincronizar_balance_desde_api()
+        config.refresh_from_db()
+        
+        if config.stop_loss_actual <= 0:
+            self._enviar_evento({
+                "tipo": "error",
+                "mensaje": "Stop loss no está configurado correctamente.",
+            })
+            return None
+        
+        # Evaluar todos los activos con EMAs (dirección invertida)
+        self._enviar_evento({
+            "tipo": "info",
+            "mensaje": "Evaluando activos con estrategia EMA (inversa)...",
+        })
+        
+        resultados = self._evaluar_activos()
+        
+        if not resultados:
+            activos_habilitados = ActivoPermitido.objects.filter(habilitado=True).count()
+            from trading.models import CooldownActivo
+            cooldowns_activos = CooldownActivo.objects.filter(finaliza_en__gt=timezone.now()).count()
+            
+            self._enviar_evento({
+                "tipo": "info",
+                "mensaje": f"No se encontraron señales EMA válidas (inversas). Habilitados: {activos_habilitados}, En cooldown: {cooldowns_activos}",
+            })
+            return None
+        
+        # Seleccionar el mejor activo (mayor separación entre EMAs)
+        mejor_resultado = resultados[0]
+        mejor_activo = mejor_resultado["activo"]
+        mejor_indicadores = mejor_resultado["indicadores"]
+        mejor_score = mejor_resultado["score"]
+        
+        # Validar que la separación es suficiente
+        if mejor_score < self.umbral_separacion_pct:
+            self._enviar_evento({
+                "tipo": "info",
+                "mensaje": f"Separación EMA insuficiente ({mejor_score:.4f}%) en {mejor_activo.nombre}. Mínimo requerido: {self.umbral_separacion_pct}%",
+            })
+            return None
+        
+        # Determinar dirección (ya está invertida en _calcular_indicadores_activo)
+        direccion = mejor_indicadores.direccion_sugerida
+        
+        if direccion == "NONE":
+            self._enviar_evento({
+                "tipo": "info",
+                "mensaje": f"Sin señal EMA clara en {mejor_activo.nombre}. Esperando siguiente ciclo.",
+            })
+            return None
+        
+        contract_type = direccion
+        
+        # Calcular monto adaptativo
+        monto_trade = calcular_monto_adaptativo(
+            balance=config.balance_actual,
+            volatilidad=mejor_indicadores.volatilidad,
+        )
+        
+        # Marcar operación en curso
+        config.en_operacion = True
+        config.activo_seleccionado = mejor_activo.nombre
+        config.save(update_fields=["en_operacion", "activo_seleccionado", "ultima_actualizacion"])
+        
+        # Ejecutar contrato
+        if not settings.DERIV_API_TOKEN:
+            self._enviar_evento({
+                "tipo": "error",
+                "mensaje": "Token de Deriv no configurado.",
+            })
+            config.en_operacion = False
+            config.save(update_fields=["en_operacion", "ultima_actualizacion"])
+            return None
+        
+        try:
+            respuesta = operar_contrato_sync(
+                symbol=mejor_activo.nombre,
+                amount=float(monto_trade),
+                duration=60,
+                duration_unit="s",
+                contract_type=contract_type,
+            )
+        except Exception as exc:
+            self._enviar_evento({"tipo": "error", "mensaje": str(exc)})
+            config.en_operacion = False
+            config.save(update_fields=["en_operacion", "ultima_actualizacion"])
+            return None
+        
+        if respuesta.get("error"):
+            error_info = respuesta.get("error", {})
+            self._enviar_evento({
+                "tipo": "error",
+                "mensaje": f"Error de Deriv API: {error_info.get('message', 'Error desconocido')}",
+            })
+            config.en_operacion = False
+            config.save(update_fields=["en_operacion", "ultima_actualizacion"])
+            return None
+        
+        open_contract = respuesta.get("proposal_open_contract", {})
+        if not open_contract:
+            self._enviar_evento({
+                "tipo": "error",
+                "mensaje": "Respuesta inválida de Deriv: sin proposal_open_contract.",
+            })
+            config.en_operacion = False
+            config.save(update_fields=["en_operacion", "ultima_actualizacion"])
+            return None
+        
+        # CRÍTICO: Validar contract_id ANTES de crear la operación (evitar PEND-)
+        contract_id_real = open_contract.get("contract_id") or respuesta.get("buy", {}).get("contract_id")
+        if not contract_id_real:
+            self._enviar_evento({
+                "tipo": "error",
+                "mensaje": f"No se recibió contract_id de Deriv. NO se creará operación. Respuesta: {respuesta}",
+            })
+            config.en_operacion = False
+            config.save(update_fields=["en_operacion", "ultima_actualizacion"])
+            return None
+        
+        # Validar que contract_id es numérico (no PEND-)
+        try:
+            int(contract_id_real)
+        except (ValueError, TypeError):
+            self._enviar_evento({
+                "tipo": "error",
+                "mensaje": f"Contract ID inválido (no numérico): {contract_id_real}. NO se creará operación.",
+            })
+            config.en_operacion = False
+            config.save(update_fields=["en_operacion", "ultima_actualizacion"])
+            return None
+        
+        beneficio = _decimal_or_zero(open_contract.get("profit", 0), "0.01")
+        precio_entrada = _decimal_or_zero(
+            open_contract.get("entry_spot") or open_contract.get("entry_tick") or mejor_indicadores.precio_actual,
+            "0.00001",
+        )
+        precio_cierre = _decimal_or_zero(
+            open_contract.get("sell_spot")
+            or open_contract.get("exit_tick")
+            or open_contract.get("sell_price")
+            or open_contract.get("current_spot"),
+            "0.00001",
+        )
+        hora_inicio = _epoch_to_datetime(open_contract.get("date_start")) or timezone.now()
+        hora_fin = _epoch_to_datetime(open_contract.get("date_expiry") or open_contract.get("sell_time")) or timezone.now()
+        
+        if beneficio > 0:
+            resultado = OperacionInversa.Resultado.GANADA
+        elif beneficio < 0:
+            resultado = OperacionInversa.Resultado.PERDIDA
+        else:
+            resultado = OperacionInversa.Resultado.PERDIDA
+        
+        # Crear operación inversa SOLO si tenemos contract_id válido
+        operacion_inversa = OperacionInversa.objects.create(
+            activo=mejor_activo.nombre,
+            direccion=OperacionInversa.Direccion.CALL if direccion == "CALL" else OperacionInversa.Direccion.PUT,
+            precio_entrada=precio_entrada,
+            precio_cierre=precio_cierre,
+            monto_invertido=monto_trade,
+            confianza=mejor_score,
+            resultado=resultado,
+            numero_contrato=str(contract_id_real),  # SIEMPRE numérico, nunca PEND-
+            hora_inicio=hora_inicio,
+            hora_fin=hora_fin,
+            beneficio=beneficio,
+            es_simulada=False,
+        )
+        
+        # Actualizar balance y estadísticas
+        if beneficio > 0:
+            config.registrar_ganancia(beneficio)
+            self._enviar_evento({
+                "tipo": "success",
+                "mensaje": f"✅ Operación INVERSA GANADA: {mejor_activo.nombre} {direccion} | Beneficio: ${beneficio}",
+            })
+        else:
+            config.registrar_perdida(abs(beneficio))
+            self._enviar_evento({
+                "tipo": "warning",
+                "mensaje": f"❌ Operación INVERSA PERDIDA: {mejor_activo.nombre} {direccion} | Pérdida: ${abs(beneficio)}",
+            })
+        
+        # Verificar stop loss después de la pérdida
+        if beneficio < 0 and config.balance_actual <= config.stop_loss_actual:
+            self._enviar_evento({
+                "tipo": "warning",
+                "mensaje": f"⚠️ Stop loss alcanzado. Pausando bot inverso por 1 hora.",
+            })
+            config.pausar(horas=1)
+        
+        config.en_operacion = False
+        config.save(update_fields=["en_operacion", "ultima_actualizacion"])
+        
+        # Sincronizar balance desde API
+        self.gestor.sincronizar_balance_desde_api()
+        
+        return operacion_inversa
     
     @transaction.atomic
     def ejecutar_ciclo_inverso(self, operacion_principal: OperacionPrincipal) -> Optional[OperacionInversa]:

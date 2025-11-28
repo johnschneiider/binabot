@@ -1,24 +1,24 @@
 """
 Comando para ejecutar el bot inverso.
-Este bot monitorea las operaciones del bot principal y ejecuta la dirección opuesta.
+Este bot usa la misma estrategia EMA que el bot principal pero con dirección invertida.
+Opera de forma independiente, no solo reaccionando a operaciones del bot principal.
 """
 import time
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from historial.models import Operacion as OperacionPrincipal
 
 from trading_inverso.services import MotorTradingInverso, GestorBotInverso
 
 
 class Command(BaseCommand):
-    help = "Inicia el loop del bot inverso que ejecuta operaciones opuestas al bot principal."
+    help = "Inicia el loop del bot inverso usando estrategia EMA (dirección invertida)."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--intervalo",
             type=int,
-            default=5,
-            help="Segundos de espera entre cada verificación de operaciones del bot principal.",
+            default=60,
+            help="Segundos de espera entre cada ciclo de evaluación/operación.",
         )
 
     def handle(self, *args, **options):
@@ -26,15 +26,9 @@ class Command(BaseCommand):
         motor = MotorTradingInverso()
         gestor = GestorBotInverso()
 
-        self.stdout.write(self.style.SUCCESS("🤖 Bot Inverso iniciado."))
-        self.stdout.write(f"Intervalo de verificación: {intervalo}s")
-        self.stdout.write("Monitoreando operaciones del bot principal...")
-
-        # Obtener la última operación del bot principal antes de iniciar
-        ultima_operacion_id = None
-        ultima_operacion = OperacionPrincipal.objetos.reales().order_by('-hora_inicio').first()
-        if ultima_operacion:
-            ultima_operacion_id = ultima_operacion.id
+        self.stdout.write(self.style.SUCCESS("🤖 Bot Inverso iniciado (Estrategia EMA inversa)."))
+        self.stdout.write(f"Intervalo de ciclo: {intervalo}s")
+        self.stdout.write("Operando de forma independiente con EMAs (dirección invertida)...")
 
         while True:
             try:
@@ -55,68 +49,50 @@ class Command(BaseCommand):
                 estado = gestor.obtener_estado()
 
                 if estado.estado == gestor.configuracion.Estado.OPERANDO:
-                    # Buscar nuevas operaciones del bot principal
-                    operaciones_nuevas = OperacionPrincipal.objetos.reales().filter(
-                        id__gt=ultima_operacion_id if ultima_operacion_id else 0
-                    ).order_by('id')
-
-                    for operacion_principal in operaciones_nuevas:
-                        # Verificar que la operación esté completada (no pendiente)
-                        if operacion_principal.resultado == OperacionPrincipal.Resultado.PENDIENTE:
-                            continue
-
-                        # Verificar que no sea simulada
-                        if operacion_principal.es_simulada:
-                            continue
-
+                    # Log detallado del estado antes de ejecutar
+                    self.stdout.write(
+                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Estado: OPERANDO | "
+                        f"en_operacion={estado.en_operacion} | "
+                        f"balance={estado.balance_actual}"
+                    )
+                    
+                    if estado.en_operacion:
                         self.stdout.write(
-                            f"[{timezone.now():%Y-%m-%d %H:%M:%S}] 🔄 Nueva operación principal detectada: "
-                            f"{operacion_principal.activo} {operacion_principal.direccion} "
-                            f"({operacion_principal.resultado})"
-                        )
-
-                        # Ejecutar operación inversa
-                        if not estado.en_operacion:
-                            operacion_inversa = motor.ejecutar_ciclo_inverso(operacion_principal)
-                            if operacion_inversa:
-                                self.stdout.write(
-                                    self.style.SUCCESS(
-                                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ✓ Operación INVERSA ejecutada: "
-                                        f"{operacion_inversa.numero_contrato} "
-                                        f"{operacion_inversa.resultado.upper()} "
-                                        f"beneficio={operacion_inversa.beneficio}"
-                                    )
-                                )
-                                ultima_operacion_id = operacion_principal.id
-                            else:
-                                self.stdout.write(
-                                    self.style.WARNING(
-                                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ⚠️ No se pudo ejecutar operación inversa."
-                                    )
-                                )
-                        else:
-                            self.stdout.write(
-                                f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ⏸️  Bot inverso ya tiene una operación en curso, esperando..."
-                            )
-
-                    # Actualizar última operación procesada
-                    if operaciones_nuevas.exists():
-                        ultima_operacion_id = operaciones_nuevas.last().id
-
-                elif estado.estado == gestor.configuracion.Estado.PAUSADO:
-                    tiempo_restante = None
-                    if estado.pausa_finaliza:
-                        tiempo_restante = estado.pausa_finaliza - timezone.now()
-                        horas = int(tiempo_restante.total_seconds() / 3600)
-                        minutos = int((tiempo_restante.total_seconds() % 3600) / 60)
-                        self.stdout.write(
-                            f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ⏸️  Bot inverso PAUSADO. "
-                            f"Se reactivará en: {horas}h {minutos}m"
+                            f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ⏸️  Bot inverso ya tiene una operación en curso, esperando..."
                         )
                     else:
-                        self.stdout.write(
-                            f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ⏸️  Bot inverso PAUSADO."
-                        )
+                        # Ejecutar ciclo con estrategia EMA (dirección invertida)
+                        operacion = motor.ejecutar_ciclo_ema()
+                        if operacion:
+                            self.stdout.write(
+                                self.style.SUCCESS(
+                                    f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ✓ Operación INVERSA {operacion.numero_contrato} "
+                                    f"{operacion.resultado.upper()} "
+                                    f"beneficio={operacion.beneficio}"
+                                )
+                            )
+                        else:
+                            # Log cuando no se ejecuta operación para diagnóstico
+                            mensaje_extra = ""
+                            if hasattr(motor, 'ultimo_mensaje_diagnostico') and motor.ultimo_mensaje_diagnostico:
+                                mensaje_extra = f" | {motor.ultimo_mensaje_diagnostico}"
+                            self.stdout.write(
+                                f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ⚠️  Ciclo ejecutado pero no se generó operación inversa{mensaje_extra}"
+                            )
+                else:
+                    self.stdout.write(
+                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Bot inverso en pausa (estado: {estado.estado}). "
+                        "Esperando reanudación automática."
+                    )
+                    
+                    if estado.pausa_finaliza:
+                        tiempo_restante = estado.pausa_finaliza - timezone.now()
+                        if tiempo_restante.total_seconds() > 0:
+                            horas = int(tiempo_restante.total_seconds() / 3600)
+                            minutos = int((tiempo_restante.total_seconds() % 3600) / 60)
+                            self.stdout.write(
+                                f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Se reactivará en: {horas}h {minutos}m"
+                            )
 
                 time.sleep(intervalo)
 
@@ -124,12 +100,20 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING("\n🛑 Bot inverso detenido por el usuario."))
                 break
             except Exception as e:
-                self.stdout.write(
+                import traceback
+                error_traceback = traceback.format_exc()
+                self.stderr.write(
                     self.style.ERROR(
-                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ❌ Error: {str(e)}"
+                        f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ❌ Error en el loop: {e}"
                     )
                 )
-                import traceback
-                self.stdout.write(traceback.format_exc())
+                self.stderr.write(
+                    self.style.ERROR(
+                        f"Traceback completo:\n{error_traceback}"
+                    )
+                )
+                self.stdout.write(
+                    f"[{timezone.now():%Y-%m-%d %H:%M:%S}] Continuando el loop después del error..."
+                )
                 time.sleep(intervalo)
 
