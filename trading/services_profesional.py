@@ -1,6 +1,6 @@
 """
-Motor de trading profesional con análisis multi-activo optimizado.
-Reemplaza el sistema simple basado en 2 ticks por un análisis robusto.
+Motor de trading profesional con estrategia SIMPLE basada en medias móviles (EMA).
+Estrategia simplificada: EMA rápida vs EMA lenta para determinar dirección.
 """
 from datetime import timedelta
 from decimal import Decimal
@@ -17,40 +17,64 @@ from core.services import GestorBotCore
 from historial.models import Operacion
 from integracion_deriv.client import operar_contrato_sync
 from trading.services import _decimal_or_zero, _epoch_to_datetime
-from trading.database import actualizar_tick_cache, obtener_ticks_cache
-from trading.database.cache_manager import actualizar_indicadores_activo
 from trading.models import IndicadoresActivo
-# Estrategia simplificada - solo imports necesarios
 from trading.risk import (
     calcular_monto_adaptativo,
     verificar_cooldown,
 )
-from trading.signals import (
-    calcular_volatilidad,
-)
+
+
+def calcular_ema(precios: List[Decimal], periodo: int) -> Decimal:
+    """
+    Calcula la Media Móvil Exponencial (EMA) de una lista de precios.
+    
+    Args:
+        precios: Lista de precios ordenados cronológicamente
+        periodo: Período de la EMA (ej: 10, 20, 30)
+    
+    Returns:
+        Valor de la EMA o Decimal("0") si no hay suficientes datos
+    """
+    if len(precios) < periodo:
+        return Decimal("0")
+    
+    # Usar solo los últimos 'periodo' precios
+    precios_periodo = precios[-periodo:]
+    
+    # Calcular EMA: empezar con SMA, luego aplicar fórmula exponencial
+    sma = sum(precios_periodo) / Decimal(str(len(precios_periodo)))
+    
+    # Multiplicador para EMA
+    multiplicador = Decimal("2") / Decimal(str(periodo + 1))
+    
+    # Calcular EMA iterativamente
+    ema = sma
+    for precio in precios_periodo:
+        ema = (precio * multiplicador) + (ema * (Decimal("1") - multiplicador))
+    
+    return ema.quantize(Decimal("0.00001"))
 
 
 class MotorTradingProfesional:
     """
-    Motor de trading profesional con análisis multi-activo.
-    Evalúa 88 activos simultáneamente usando indicadores técnicos avanzados.
+    Motor de trading profesional con estrategia SIMPLE basada en medias móviles.
+    Estrategia: EMA rápida (10) vs EMA lenta (30) - crossover determina dirección.
     """
 
     def __init__(self) -> None:
         self.gestor_core = GestorBotCore()
         self.channel_layer = get_channel_layer()
-        self.ultimo_mensaje_diagnostico = None  # Para logging detallado
+        self.ultimo_mensaje_diagnostico = None
         
-        # Configuración SIMPLIFICADA - Estrategia simple basada en momentum
-        # Menos filtros = menos overfitting, más operaciones
-        self.duracion_trade_segundos = 60  # Duración del trade (debe coincidir con duration del contrato)
-        self.periodo_analisis_segundos = 60  # Analizar los últimos 60 segundos (equivalente a la duración del trade)
-        self.umbral_score_minimo = Decimal("15.00")  # Muy reducido: permitir más operaciones
-        # Eliminados: umbral_consistencia, umbral_volatilidad_minima, umbral_confianza_horaria
+        # Configuración SIMPLE - Estrategia basada en EMAs
+        self.duracion_trade_segundos = 60
+        self.periodo_analisis_segundos = 120  # Analizar últimos 2 minutos para tener suficientes ticks
+        self.ema_rapida_periodo = 10  # EMA rápida: 10 ticks
+        self.ema_lenta_periodo = 30   # EMA lenta: 30 ticks
+        self.umbral_separacion_pct = Decimal("0.01")  # Mínimo 0.01% de separación entre EMAs para operar
 
     def _enviar_evento(self, data: Dict) -> None:
         """Envía evento a través de WebSockets."""
-        # Guardar mensajes de info/error para diagnóstico
         if data.get("tipo") in ("info", "error", "warning"):
             self.ultimo_mensaje_diagnostico = data.get("mensaje", "")
         
@@ -65,16 +89,20 @@ class MotorTradingProfesional:
         self, activo: ActivoPermitido
     ) -> Optional[Dict]:
         """
-        Calcula indicadores SIMPLIFICADOS: solo momentum y volatilidad básica.
-        Analiza los últimos 60 segundos (equivalente a la duración del trade).
-        Estrategia simple que funciona para todos los activos.
+        Calcula indicadores SIMPLES basados en medias móviles (EMA).
+        
+        Estrategia:
+        - EMA rápida (10 períodos) vs EMA lenta (30 períodos)
+        - Si EMA rápida > EMA lenta → CALL (tendencia alcista)
+        - Si EMA rápida < EMA lenta → PUT (tendencia bajista)
+        - Solo operar si hay suficiente separación entre EMAs (evitar ruido)
         
         Returns:
             Diccionario con indicadores o None si no hay datos suficientes
         """
-        # Obtener ticks de los últimos 60 segundos directamente desde la BD
-        # Esto asegura que el análisis sea equivalente a la duración del trade
         from historial.models import Tick
+        
+        # Obtener ticks de los últimos 2 minutos (necesitamos al menos 30 ticks para EMA lenta)
         desde = timezone.now() - timedelta(seconds=self.periodo_analisis_segundos)
         
         ticks = (
@@ -91,120 +119,97 @@ class MotorTradingProfesional:
         # Convertir a lista de precios
         precios = [Decimal(str(tick.precio)) for tick in ticks]
         
-        # Mínimo de 2 ticks para calcular momentum (precio inicial y final)
-        if len(precios) < 2:
+        # Necesitamos al menos 30 ticks para calcular EMA lenta
+        if len(precios) < self.ema_lenta_periodo:
             return None
         
-        # ESTRATEGIA SIMPLE: Momentum en los últimos 60 segundos
-        # Esto es equivalente a la duración del trade (60 segundos)
         precio_actual = precios[-1]
-        precio_inicial = precios[0]
         
-        momentum_simple = precio_actual - precio_inicial
-        momentum_pct = (momentum_simple / precio_inicial * 100) if precio_inicial > 0 else Decimal("0")
+        # Calcular EMAs
+        ema_rapida = calcular_ema(precios, self.ema_rapida_periodo)
+        ema_lenta = calcular_ema(precios, self.ema_lenta_periodo)
         
-        # Volatilidad simple: desviación estándar de los precios en el período
-        volatilidad = calcular_volatilidad(precios, periodo=len(precios))
+        if ema_rapida == Decimal("0") or ema_lenta == Decimal("0"):
+            return None
         
-        # Dirección simple: basada solo en momentum
-        # Si el precio subió en los últimos 60 segundos → CALL
-        # Si el precio bajó en los últimos 60 segundos → PUT
-        if momentum_pct > 0:
+        # Determinar dirección basada en crossover de EMAs
+        if ema_rapida > ema_lenta:
             direccion = "CALL"
-        elif momentum_pct < 0:
+            separacion_pct = ((ema_rapida - ema_lenta) / ema_lenta * 100) if ema_lenta > 0 else Decimal("0")
+        elif ema_rapida < ema_lenta:
             direccion = "PUT"
+            separacion_pct = ((ema_lenta - ema_rapida) / ema_rapida * 100) if ema_rapida > 0 else Decimal("0")
         else:
             direccion = "NONE"
+            separacion_pct = Decimal("0")
+        
+        # Calcular volatilidad simple (rango de precios)
+        precio_max = max(precios)
+        precio_min = min(precios)
+        volatilidad = ((precio_max - precio_min) / precio_min * 100) if precio_min > 0 else Decimal("0")
         
         return {
-            "momentum_simple": momentum_simple,
-            "momentum_pct": momentum_pct,
-            "volatilidad": volatilidad,
+            "ema_rapida": ema_rapida,
+            "ema_lenta": ema_lenta,
             "precio_actual": precio_actual,
             "direccion_sugerida": direccion,
+            "separacion_pct": separacion_pct,
+            "volatilidad": volatilidad,
             "ticks_analizados": len(precios),
         }
 
     def _evaluar_activos(self) -> List[Dict]:
         """
-        Evalúa activos con estrategia MEJORADA basada en:
-        - Momentum (últimos 60 segundos)
-        - Winrate histórico del activo
-        - Priorización de horarios óptimos
+        Evalúa activos con estrategia SIMPLE basada en EMAs.
+        Eliminada toda la complejidad: winrate histórico, horarios, etc.
+        Solo EMAs puras.
         
         Returns:
-            Lista de activos con sus indicadores y scores, ordenados por score
+            Lista de activos con sus indicadores y scores, ordenados por separación de EMAs
         """
-        from historial.models import Operacion
-        from django.db.models import Count, Q
-        from django.utils import timezone
-        
         # Obtener activos habilitados
         activos = list(ActivoPermitido.objects.filter(habilitado=True))
         resultados = []
-        
-        # Calcular winrate histórico por activo
-        winrates_historicos = {}
-        for activo in activos:
-            ops = Operacion.objetos.reales().filter(activo=activo.nombre)
-            total = ops.count()
-            if total >= 5:  # Mínimo 5 operaciones para considerar winrate
-                ganadas = ops.filter(resultado=Operacion.Resultado.GANADA).count()
-                winrate = (ganadas / total * 100) if total > 0 else 0
-                winrates_historicos[activo.nombre] = winrate
-            else:
-                winrates_historicos[activo.nombre] = 50.0  # Neutral si no hay suficientes datos
-        
-        # Verificar horario actual
-        hora_actual = timezone.localtime(timezone.now()).hour
-        horario_optimo = hora_actual == 6  # 6:00 es el mejor horario según datos
         
         for activo in activos:
             # Solo verificar cooldown básico
             if not verificar_cooldown(activo.id):
                 continue
             
-            # FILTRAR activos con winrate muy bajo (<30%)
-            winrate_historico = winrates_historicos.get(activo.nombre, 50.0)
-            if winrate_historico < 30.0:
-                continue  # Evitar activos problemáticos
-            
-            # Calcular indicadores básicos (momentum simple)
+            # Calcular indicadores (EMAs)
             indicadores_data = self._calcular_indicadores_activo(activo)
             if not indicadores_data:
+                continue
+            
+            # Validar que hay suficiente separación entre EMAs (evitar ruido)
+            if indicadores_data["separacion_pct"] < self.umbral_separacion_pct:
+                continue
+            
+            # Validar que la dirección es clara
+            if indicadores_data["direccion_sugerida"] == "NONE":
                 continue
             
             # Guardar indicadores
             indicadores, _ = IndicadoresActivo.objects.update_or_create(
                 activo=activo,
-                defaults=indicadores_data,
+                defaults={
+                    "momentum_simple": indicadores_data["ema_rapida"] - indicadores_data["ema_lenta"],
+                    "momentum_pct": indicadores_data["separacion_pct"],
+                    "volatilidad": indicadores_data["volatilidad"],
+                    "precio_actual": indicadores_data["precio_actual"],
+                    "direccion_sugerida": indicadores_data["direccion_sugerida"],
+                    "ticks_analizados": indicadores_data["ticks_analizados"],
+                    "score_total": indicadores_data["separacion_pct"],  # Score = separación de EMAs
+                },
             )
-            
-            # Score MEJORADO: Momentum + Winrate histórico + Bonus horario
-            momentum_score = abs(indicadores.momentum_pct) * Decimal("100")  # 0-100 basado en momentum
-            volatilidad_score = min(indicadores.volatilidad * Decimal("1000"), Decimal("20"))  # Bonus por volatilidad
-            
-            # Bonus por winrate histórico (activos con mejor historial tienen más score)
-            winrate_bonus = Decimal(str(winrate_historico)) - Decimal("50.0")  # -50 a +50
-            winrate_bonus = max(winrate_bonus, Decimal("0"))  # Solo bonus positivo
-            
-            # Bonus por horario óptimo
-            horario_bonus = Decimal("15.0") if horario_optimo else Decimal("0.0")
-            
-            score = momentum_score + volatilidad_score + winrate_bonus + horario_bonus
-            
-            # Actualizar score en indicadores
-            indicadores.score_total = score
-            indicadores.save()
             
             resultados.append({
                 "activo": activo,
                 "indicadores": indicadores,
-                "score": score,
-                "winrate_historico": winrate_historico,
+                "score": indicadores_data["separacion_pct"],  # Mayor separación = mejor señal
             })
         
-        # Ordenar por score descendente
+        # Ordenar por separación descendente (mayor separación = mejor señal)
         resultados.sort(key=lambda x: x["score"], reverse=True)
         
         return resultados
@@ -236,7 +241,7 @@ class MotorTradingProfesional:
         # Evaluar todos los activos
         self._enviar_evento({
             "tipo": "info",
-            "mensaje": "Evaluando activos disponibles...",
+            "mensaje": "Evaluando activos con estrategia EMA...",
         })
         
         resultados = self._evaluar_activos()
@@ -248,52 +253,33 @@ class MotorTradingProfesional:
             
             self._enviar_evento({
                 "tipo": "info",
-                "mensaje": f"No se encontraron activos disponibles. Habilitados: {activos_habilitados}, En cooldown: {cooldowns_activos}",
+                "mensaje": f"No se encontraron señales EMA válidas. Habilitados: {activos_habilitados}, En cooldown: {cooldowns_activos}",
             })
             return None
         
-        # Seleccionar el mejor activo (Top 1)
+        # Seleccionar el mejor activo (mayor separación entre EMAs)
         mejor_resultado = resultados[0]
         mejor_activo = mejor_resultado["activo"]
         mejor_indicadores = mejor_resultado["indicadores"]
         mejor_score = mejor_resultado["score"]
         
-        if mejor_score < self.umbral_score_minimo:
+        # Validar que la separación es suficiente
+        if mejor_score < self.umbral_separacion_pct:
             self._enviar_evento({
                 "tipo": "info",
-                "mensaje": f"Score máximo ({mejor_score}) no alcanza el umbral mínimo ({self.umbral_score_minimo}). Activo: {mejor_activo.nombre}",
+                "mensaje": f"Separación EMA insuficiente ({mejor_score:.4f}%) en {mejor_activo.nombre}. Mínimo requerido: {self.umbral_separacion_pct}%",
             })
             return None
         
-        # Determinar dirección: basada en momentum
-        # NOTA: Los datos muestran que las ganadas tienen momentum negativo
-        # Esto sugiere reversión de tendencia - cuando el precio baja, luego sube (PUT gana)
-        # Cuando el precio sube, luego baja (CALL pierde)
-        # Por ahora mantenemos la lógica original pero con umbral mínimo de momentum
+        # Determinar dirección basada en EMAs
         direccion = mejor_indicadores.direccion_sugerida
         
-        # Requerir momentum mínimo significativo (evitar ruido)
-        momentum_abs = abs(mejor_indicadores.momentum_pct)
-        # Umbral más bajo para permitir más operaciones cuando el resto de filtros ya son estrictos
-        if momentum_abs < Decimal("0.001"):  # Momentum muy pequeño, saltar
+        if direccion == "NONE":
             self._enviar_evento({
                 "tipo": "info",
-                "mensaje": f"Momentum muy pequeño ({mejor_indicadores.momentum_pct:.4f}%) en {mejor_activo.nombre}. Esperando siguiente ciclo.",
+                "mensaje": f"Sin señal EMA clara en {mejor_activo.nombre}. Esperando siguiente ciclo.",
             })
             return None
-        
-        if direccion == "NONE":
-            # Fallback: usar momentum directamente
-            if mejor_indicadores.momentum_pct > 0:
-                direccion = "CALL"
-            elif mejor_indicadores.momentum_pct < 0:
-                direccion = "PUT"
-            else:
-                self._enviar_evento({
-                    "tipo": "info",
-                    "mensaje": f"Sin momentum claro en {mejor_activo.nombre}. Esperando siguiente ciclo.",
-                })
-                return None
         
         # MODO INVERSO: Si está activado, invertir la dirección
         direccion_original = direccion
@@ -303,7 +289,6 @@ class MotorTradingProfesional:
                 "tipo": "info",
                 "mensaje": f"🔄 Modo inverso: {direccion_original} → {direccion} (Activo: {mejor_activo.nombre})",
             })
-            # Log también en stdout para que aparezca en los logs del sistema
             import sys
             print(f"[{timezone.now():%Y-%m-%d %H:%M:%S}] 🔄 Modo inverso: {direccion_original} → {direccion} (Activo: {mejor_activo.nombre})", file=sys.stderr)
         
@@ -358,11 +343,23 @@ class MotorTradingProfesional:
             self.gestor_core.finalizar_operacion()
             return None
         
+        # CRÍTICO: Validar contract_id ANTES de crear la operación (evitar PEND-)
         contract_id_real = open_contract.get("contract_id") or respuesta.get("buy", {}).get("contract_id")
         if not contract_id_real:
             self._enviar_evento({
                 "tipo": "error",
-                "mensaje": f"No se recibió contract_id de Deriv. Respuesta: {respuesta}",
+                "mensaje": f"No se recibió contract_id de Deriv. NO se creará operación. Respuesta: {respuesta}",
+            })
+            self.gestor_core.finalizar_operacion()
+            return None
+        
+        # Validar que contract_id es numérico (no PEND-)
+        try:
+            int(contract_id_real)
+        except (ValueError, TypeError):
+            self._enviar_evento({
+                "tipo": "error",
+                "mensaje": f"Contract ID inválido (no numérico): {contract_id_real}. NO se creará operación.",
             })
             self.gestor_core.finalizar_operacion()
             return None
@@ -389,41 +386,40 @@ class MotorTradingProfesional:
         else:
             resultado = Operacion.Resultado.PERDIDA
         
+        # Crear operación SOLO si tenemos contract_id válido
         operacion = Operacion.objetos.create(
             activo=mejor_activo.nombre,
             direccion=Operacion.Direccion.CALL if direccion == "CALL" else Operacion.Direccion.PUT,
             precio_entrada=precio_entrada,
             precio_cierre=precio_cierre,
             monto_invertido=monto_trade,
-            confianza=mejor_score,
+            confianza=mejor_score,  # Usar separación EMA como confianza
             resultado=resultado,
-            numero_contrato=str(contract_id_real),
+            numero_contrato=str(contract_id_real),  # SIEMPRE numérico, nunca PEND-
             hora_inicio=hora_inicio,
             hora_fin=hora_fin,
             beneficio=beneficio,
             es_simulada=False,
         )
         
-        # Registrar resultado y actualizar rendimiento horario
+        # Registrar resultado
         self.gestor_core.registrar_resultado_operacion(operacion)
         from trading.scheduler import actualizar_rendimiento_horario
         actualizar_rendimiento_horario(mejor_activo, operacion)
         
         self.gestor_core.finalizar_operacion()
         
-        # CRÍTICO: Sincronizar balance DESPUÉS de registrar la operación
-        # Esto asegura que el balance y las operaciones estén sincronizados
+        # Sincronizar balance DESPUÉS de registrar la operación
         self.gestor_core.sincronizar_balance_desde_api()
         
         # Emitir evento con información completa
         self._emitir_evento_operacion(operacion)
         
-        # También enviar actualización completa del dashboard con historial
+        # Actualizar dashboard
         try:
             from dashboard.services import enviar_actualizacion_dashboard
             enviar_actualizacion_dashboard()
         except Exception:
-            # Si falla, no interrumpir el flujo
             pass
         
         # Forzar actualización del historial en el frontend
@@ -451,53 +447,3 @@ class MotorTradingProfesional:
             },
         }
         self._enviar_evento(data)
-
-
-def determinar_direccion_simple(
-    precios: List[Decimal],
-    ema: Decimal,
-    roc: Decimal,
-) -> str:
-    """
-    Determina dirección usando múltiples factores.
-    
-    Args:
-        precios: Lista de precios
-        ema: Valor de EMA
-        roc: Rate of Change
-    
-    Returns:
-        "CALL", "PUT" o "NONE"
-    """
-    precio_actual = precios[-1]
-    
-    factores_call = 0
-    factores_put = 0
-    
-    # Factor 1: EMA vs Precio
-    if ema > precio_actual:
-        factores_call += 1
-    elif ema < precio_actual:
-        factores_put += 1
-    
-    # Factor 2: ROC
-    if roc > 0:
-        factores_call += 1
-    elif roc < 0:
-        factores_put += 1
-    
-    # Factor 3: Momentum reciente
-    if len(precios) >= 5:
-        momentum_reciente = precios[-1] - precios[-5]
-        if momentum_reciente > 0:
-            factores_call += 1
-        elif momentum_reciente < 0:
-            factores_put += 1
-    
-    if factores_call > factores_put:
-        return "CALL"
-    elif factores_put > factores_call:
-        return "PUT"
-    else:
-        return "NONE"
-
