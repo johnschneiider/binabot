@@ -109,8 +109,28 @@ class GestorBotCore:
         """
         Verifica si el balance actual llegó al stop loss (balance mínimo).
         El stop loss es un balance mínimo que nunca baja, solo sube.
+        
+        MEJORA: No pausa inmediatamente después de una operación ganada para evitar
+        pausas prematuras causadas por discrepancias temporales de balance.
         """
         if self.configuracion.balance_actual <= self.configuracion.stop_loss_actual:
+            # Verificar si la última operación fue ganada (evitar pausa inmediata después de win)
+            from historial.models import Operacion
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            ultima_operacion = Operacion.objetos.reales().order_by('-hora_inicio').first()
+            
+            # Si la última operación fue ganada hace menos de 2 minutos, NO pausar todavía
+            # Esto evita pausas prematuras por discrepancias temporales de balance
+            if ultima_operacion and ultima_operacion.resultado == Operacion.Resultado.GANADA:
+                tiempo_desde_operacion = timezone.now() - ultima_operacion.hora_inicio
+                if tiempo_desde_operacion < timedelta(minutes=2):
+                    # Esperar al menos 2 minutos después de una ganada antes de pausar
+                    # Esto da tiempo a que se sincronice correctamente el balance
+                    return
+            
+            # Si pasó el tiempo o la última fue pérdida, proceder con la pausa
             self.configuracion.pausar()
             self.configuracion.mejor_horario = None
             self.configuracion.save(update_fields=["mejor_horario"])
@@ -257,7 +277,7 @@ class GestorBotCore:
             if self.configuracion.stop_loss_actual <= 0:
                 self.configuracion.stop_loss_actual = self.configuracion.calcular_stop_loss(balance)
 
-        # NUEVA LÓGICA: El stop loss siempre debe estar al 98% del balance de Deriv
+        # NUEVA LÓGICA: El stop loss siempre debe estar al 95% del balance de Deriv
         # Si el balance sube, el stop loss sube (trailing stop loss)
         # Si el balance baja, el stop loss NO baja (se mantiene fijo como arnés de seguridad)
         # Solo actualizar si el bot está OPERANDO (no durante pausa)
@@ -294,7 +314,7 @@ class GestorBotCore:
         # CRÍTICO: Verificar stop loss después de sincronizar balance
         # PERO solo si el bot está OPERANDO (no si ya está pausado)
         # Y solo si el balance realmente cayó por debajo del stop loss
-        # NO pausar durante sincronización si el bot está ganando
+        # _verificar_stop_loss() ahora tiene protección para no pausar inmediatamente después de ganadas
         if self.configuracion.estado == ConfiguracionBot.Estado.OPERANDO:
             # Solo verificar si el balance está realmente por debajo del stop loss
             # Esto evita pausas incorrectas durante sincronizaciones

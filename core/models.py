@@ -88,14 +88,15 @@ class ConfiguracionBot(models.Model):
 
     def calcular_stop_loss(self, balance: Optional[Decimal] = None) -> Decimal:
         """
-        Calcula el stop loss como balance mínimo (balance * 0.98).
+        Calcula el stop loss como balance mínimo (balance * 0.95).
         El stop loss es un balance mínimo que nunca baja, solo sube.
+        Aumentado a 95% (antes 98%) para dar más margen y evitar pausas prematuras.
         """
         balance_calculo = balance if balance is not None else self.balance_actual
         if balance_calculo <= 0:
             return Decimal("0.00")
-        # Stop loss = balance * 0.98 (2% menos)
-        return (balance_calculo * Decimal("0.98")).quantize(Decimal("0.01"))
+        # Stop loss = balance * 0.95 (5% menos) - más margen para evitar pausas prematuras
+        return (balance_calculo * Decimal("0.95")).quantize(Decimal("0.01"))
 
     def _asegurar_bases_y_objetivos(self) -> None:
         cambios = False
