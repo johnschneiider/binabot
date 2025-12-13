@@ -26,7 +26,7 @@ class Command(BaseCommand):
         self.stdout.write("")
 
         if total_habilitados == 0:
-            self.stdout.write(self.style.ERROR("❌ PROBLEMA: No hay activos habilitados"))
+            self.stdout.write(self.style.ERROR("[ERROR] PROBLEMA: No hay activos habilitados"))
             return
 
         # Verificar ticks recientes por activo
@@ -52,13 +52,13 @@ class Command(BaseCommand):
                 activos_con_suficientes_ticks.append((activo.nombre, ticks_recientes))
 
         if activos_sin_ticks:
-            self.stdout.write(self.style.WARNING(f"❌ Activos SIN ticks recientes ({len(activos_sin_ticks)}):"))
+            self.stdout.write(self.style.WARNING(f"[SIN TICKS] Activos SIN ticks recientes ({len(activos_sin_ticks)}):"))
             for nombre in activos_sin_ticks[:5]:
                 self.stdout.write(f"   - {nombre}")
             self.stdout.write("")
 
         if activos_con_pocos_ticks:
-            self.stdout.write(self.style.WARNING(f"⚠️  Activos con POCOS ticks (necesitan {motor.ema_lenta_periodo}, tienen menos):"))
+            self.stdout.write(self.style.WARNING(f"[POCOS TICKS] Activos con POCOS ticks (necesitan {motor.ema_lenta_periodo}, tienen menos):"))
             for nombre, count in activos_con_pocos_ticks[:5]:
                 self.stdout.write(f"   - {nombre}: {count} ticks (necesita {motor.ema_lenta_periodo})")
             self.stdout.write("")
@@ -77,7 +77,7 @@ class Command(BaseCommand):
             resultados = motor._evaluar_activos()
             
             if not resultados:
-                self.stdout.write(self.style.ERROR("❌ PROBLEMA: No se encontraron señales EMA válidas"))
+                self.stdout.write(self.style.ERROR("[ERROR] PROBLEMA: No se encontraron señales EMA válidas"))
                 self.stdout.write("   Posibles causas:")
                 self.stdout.write("   - Separación entre EMAs menor al umbral (0.01%)")
                 self.stdout.write("   - Dirección = NONE (EMAs muy cercanas)")
@@ -92,7 +92,7 @@ class Command(BaseCommand):
                     indicadores = resultado["indicadores"]
                     direccion = indicadores.direccion_sugerida
                     
-                    estado = "✅ VÁLIDA" if score >= motor.umbral_separacion_pct and direccion != "NONE" else "❌ INSUFICIENTE"
+                    estado = "[OK] VÁLIDA" if score >= motor.umbral_separacion_pct and direccion != "NONE" else "[INSUFICIENTE]"
                     self.stdout.write(
                         f"   {i}. {activo.nombre}: "
                         f"Separación={score:.4f}%, "
