@@ -300,6 +300,21 @@ class MotorTradingProfesional:
             volatilidad=mejor_indicadores.volatilidad,
         )
         
+        # Log detallado para diagnóstico
+        self._enviar_evento({
+            "tipo": "info",
+            "mensaje": f"📊 Preparando operación: {mejor_activo.nombre} {direccion}, Monto: {monto_trade}, Separación EMA: {mejor_score:.4f}%",
+        })
+        import sys
+        print(f"[{timezone.now():%Y-%m-%d %H:%M:%S}] 📊 Preparando operación: {mejor_activo.nombre} {direccion}, Monto: {monto_trade}, Separación EMA: {mejor_score:.4f}%", file=sys.stderr)
+        
+        if monto_trade <= 0:
+            self._enviar_evento({
+                "tipo": "error",
+                "mensaje": f"Monto de trade inválido: {monto_trade}. No se puede operar.",
+            })
+            return None
+        
         # Marcar operación en curso
         self.gestor_core.marcar_operacion_en_curso(mejor_activo.nombre)
         
@@ -313,6 +328,13 @@ class MotorTradingProfesional:
             return None
         
         try:
+            self._enviar_evento({
+                "tipo": "info",
+                "mensaje": f"📤 Enviando contrato a Deriv: {mejor_activo.nombre}, {contract_type}, Monto: {monto_trade}",
+            })
+            import sys
+            print(f"[{timezone.now():%Y-%m-%d %H:%M:%S}] 📤 Enviando contrato a Deriv: {mejor_activo.nombre}, {contract_type}, Monto: {monto_trade}", file=sys.stderr)
+            
             respuesta = operar_contrato_sync(
                 symbol=mejor_activo.nombre,
                 amount=float(monto_trade),
@@ -320,8 +342,16 @@ class MotorTradingProfesional:
                 duration_unit="s",
                 contract_type=contract_type,
             )
+            
+            self._enviar_evento({
+                "tipo": "info",
+                "mensaje": f"📥 Respuesta recibida de Deriv: {respuesta.get('error', 'OK')}",
+            })
+            print(f"[{timezone.now():%Y-%m-%d %H:%M:%S}] 📥 Respuesta recibida de Deriv: {respuesta.get('error', 'OK')}", file=sys.stderr)
         except Exception as exc:
-            self._enviar_evento({"tipo": "error", "mensaje": str(exc)})
+            self._enviar_evento({"tipo": "error", "mensaje": f"Excepción al operar: {str(exc)}"})
+            import sys
+            print(f"[{timezone.now():%Y-%m-%d %H:%M:%S}] ❌ Excepción al operar: {exc}", file=sys.stderr, exc_info=True)
             self.gestor_core.finalizar_operacion()
             return None
         
