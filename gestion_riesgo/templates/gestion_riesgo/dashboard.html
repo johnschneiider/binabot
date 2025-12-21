@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard · Bot Deriv</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
+      .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+      .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; background: #fff; }
+      .muted { color: #6b7280; font-size: 12px; }
+      .big { font-size: 22px; font-weight: 700; }
+      .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #e5e7eb; }
+      .ok { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+      .bad { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+      .neutral { background: #eff6ff; border-color: #bfdbfe; color: #1e3a8a; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+      th { font-size: 12px; color: #374151; background: #f9fafb; position: sticky; top: 0; }
+      .row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+  </head>
+  <body>
+    <div class="row">
+      <div>
+        <div class="big">Dashboard (tiempo real)</div>
+        <div class="muted">Actualiza cada ~1s consultando <span class="mono">/api/estado/</span></div>
+      </div>
+      <div class="muted" id="ultima_actualizacion">—</div>
+    </div>
+
+    <div class="grid" style="margin-top: 14px;">
+      <div class="card">
+        <div class="muted">Símbolo</div>
+        <div class="big mono" id="simbolo">{{ cuenta.simbolo|default:"—" }}</div>
+      </div>
+      <div class="card">
+        <div class="muted">Balance Deriv (API)</div>
+        <div class="big mono" id="balance_deriv">{% if cuenta and cuenta.balance_deriv != None %}{{ cuenta.balance_deriv }}{% else %}—{% endif %}</div>
+        <div class="muted">Moneda: <span class="mono" id="moneda_deriv">{{ cuenta.moneda_deriv|default:"—" }}</span></div>
+        <div class="muted">Equity interna (paper): <span class="mono" id="capital_actual">{{ cuenta.capital_actual|default:"—" }}</span></div>
+      </div>
+      <div class="card">
+        <div class="muted">Estado de riesgo</div>
+        {% if cuenta and cuenta.bloqueado %}
+          <div class="badge bad" id="bloqueado">BLOQUEADO</div>
+        {% else %}
+          <div class="badge ok" id="bloqueado">OK</div>
+        {% endif %}
+        <div class="muted" style="margin-top: 8px;">Último tick: <span class="mono" id="ultimo_tick">{{ cuenta.ultimo_tick_epoch|default:"—" }}</span> · Precio: <span class="mono" id="ultimo_precio">{{ cuenta.ultimo_precio|default:"—" }}</span></div>
+      </div>
+      <div class="card">
+        <div class="muted">Señal (wᵀx) · Top contribuciones</div>
+        <div class="row" style="margin-top: 6px;">
+          <div class="big mono" id="senal_valor">{% if cuenta and cuenta.senal_valor != None %}{{ cuenta.senal_valor }}{% else %}—{% endif %}</div>
+          {% if cuenta and cuenta.senal_decision %}
+            {% if cuenta.senal_decision == "COMPRA" %}
+              <div class="badge ok mono" id="senal_decision_badge">COMPRA</div>
+            {% elif cuenta.senal_decision == "VENTA" %}
+              <div class="badge bad mono" id="senal_decision_badge">VENTA</div>
+            {% else %}
+              <div class="badge neutral mono" id="senal_decision_badge">NO_OPERAR</div>
+            {% endif %}
+          {% else %}
+            <div class="badge neutral mono" id="senal_decision_badge">—</div>
+          {% endif %}
+        </div>
+        <div class="muted" style="margin-top: 8px;" id="senal_contribuciones">
+          {% if cuenta and cuenta.senal_top_contribuciones %}
+            {{ cuenta.senal_top_contribuciones }}
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 14px;">
+      <div class="row">
+        <div>
+          <div class="big">Operaciones Deriv (reales, últimas 50)</div>
+          <div class="muted">Solo entradas ejecutadas por este bot · Muestra profit y moneda (afecta balance real)</div>
+        </div>
+      </div>
+
+      <div style="max-height: 520px; overflow: auto; margin-top: 10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Contract</th>
+              <th>Estado</th>
+              <th>Profit</th>
+              <th>Moneda</th>
+              <th>Duración</th>
+              <th>Fecha/Hora (Colombia)</th>
+            </tr>
+          </thead>
+          <tbody id="tabla_operaciones_deriv">
+            {% for op in operaciones_deriv %}
+              <tr>
+                <td class="mono">{{ op.contract_id }}</td>
+                <td>{{ op.estado }}</td>
+                <td class="mono">{{ op.profit|default:"—" }}</td>
+                <td class="mono">{{ op.moneda|default:"—" }}</td>
+                <td class="mono">
+                  {% if op.duracion_segundos != None %}
+                    {{ op.duracion_segundos }}s
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td class="mono">
+                  {% if op.fecha_hora %}
+                    {{ op.fecha_hora|date:"Y-m-d H:i:s" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="9" class="muted">Aún no hay operaciones Deriv.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TABLA DE OPERACIONES INTERNAS OCULTA POR REQUERIMIENTO: SOLO MOSTRAR OPERACIONES REALES (DERIV) -->
+
+    <script>
+      function fmt2(x) {
+        if (x === null || x === undefined) return "—";
+        const n = Number(x);
+        if (Number.isNaN(n)) return String(x);
+        return n.toFixed(2);
+      }
+
+      function setText(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = value;
+      }
+
+      function setBloqueado(flag) {
+        const el = document.getElementById("bloqueado");
+        if (!el) return;
+        if (flag) {
+          el.textContent = "BLOQUEADO";
+          el.className = "badge bad";
+        } else {
+          el.textContent = "OK";
+          el.className = "badge ok";
+        }
+      }
+
+      function setSenalDecision(dec) {
+        const el = document.getElementById("senal_decision_badge");
+        if (!el) return;
+        const d = (dec || "").toUpperCase();
+        if (d === "COMPRA") {
+          el.textContent = "COMPRA";
+          el.className = "badge ok mono";
+        } else if (d === "VENTA") {
+          el.textContent = "VENTA";
+          el.className = "badge bad mono";
+        } else if (d === "NO_OPERAR") {
+          el.textContent = "NO_OPERAR";
+          el.className = "badge neutral mono";
+        } else {
+          el.textContent = "—";
+          el.className = "badge neutral mono";
+        }
+      }
+
+      function renderContribuciones(lista) {
+        const el = document.getElementById("senal_contribuciones");
+        if (!el) return;
+        if (!lista || !Array.isArray(lista) || lista.length === 0) {
+          el.textContent = "—";
+          return;
+        }
+        // lista: [{ variable, contribucion, x, w }]
+        const lines = lista.slice(0, 5).map(it => {
+          const v = it.variable || "—";
+          const c = (it.contribucion === null || it.contribucion === undefined) ? "—" : fmt2(it.contribucion);
+          return `${v}: ${c}`;
+        });
+        el.textContent = lines.join(" · ");
+      }
+
+      function renderOpsDeriv(ops) {
+        const tbody = document.getElementById("tabla_operaciones_deriv");
+        if (!tbody) return;
+        if (!ops || ops.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="muted">Aún no hay operaciones Deriv.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = ops.map(op => {
+          const dur = (op.duracion_segundos !== null && op.duracion_segundos !== undefined)
+            ? `${Number(op.duracion_segundos)}s`
+            : ((op.opened_epoch && op.closed_epoch) ? `${Number(op.closed_epoch) - Number(op.opened_epoch)}s` : "—");
+          const fh = op.fecha_hora ? String(op.fecha_hora) : "—";
+          return `
+            <tr>
+              <td class="mono">${op.contract_id}</td>
+              <td>${op.estado}</td>
+              <td class="mono">${(op.profit === null || op.profit === undefined) ? "—" : fmt2(op.profit)}</td>
+              <td class="mono">${op.moneda || "—"}</td>
+              <td class="mono">${dur}</td>
+              <td class="mono">${fh}</td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      async function refrescar() {
+        try {
+          const res = await fetch("/api/estado/", { cache: "no-store" });
+          if (!res.ok) return;
+          const data = await res.json();
+          const c = data.cuenta;
+          if (c) {
+            setText("simbolo", c.simbolo);
+            setText("balance_deriv", (c.balance_deriv === null || c.balance_deriv === undefined) ? "—" : fmt2(c.balance_deriv));
+            setText("moneda_deriv", c.moneda_deriv || "—");
+            setText("capital_actual", fmt2(c.capital_actual));
+            setText("ultimo_tick", String(c.ultimo_tick_epoch));
+            setText("ultimo_precio", String(c.ultimo_precio));
+            setBloqueado(Boolean(c.bloqueado));
+            setText("senal_valor", (c.senal_valor === null || c.senal_valor === undefined) ? "—" : fmt2(c.senal_valor));
+            setSenalDecision(c.senal_decision);
+            renderContribuciones(c.senal_top_contribuciones);
+            setText("ultima_actualizacion", "Actualizado: " + new Date().toLocaleTimeString());
+          }
+          renderOpsDeriv(data.operaciones_deriv || []);
+        } catch (e) {
+          // SILENCIOSO: SI EL BOT/SERVIDOR NO ESTÁN DISPONIBLES, NO ROMPE LA UI.
+        }
+      }
+
+      refrescar();
+      setInterval(refrescar, 1000);
+    </script>
+  </body>
+</html>
+
+
