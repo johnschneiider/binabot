@@ -5,7 +5,7 @@ from datetime import datetime, timezone as dt_timezone
 from django.utils import timezone
 from django.http import JsonResponse
 from django.shortcuts import render
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_http_methods
 from django.db.models import F
 
 from .models import Cuenta, OperacionDeriv
@@ -25,7 +25,7 @@ def _fecha_hora_colombia_desde_epoch(epoch: int | None) -> datetime | None:
     return timezone.localtime(dt_utc)
 
 
-@require_GET
+@require_http_methods(["GET", "HEAD"])
 def dashboard(request):
     """
     DASHBOARD WEB PARA MONITOREO (BALANCE + OPERACIONES) EN "TIEMPO REAL" (POLLING).
@@ -49,7 +49,7 @@ def dashboard(request):
     )
 
 
-@require_GET
+@require_http_methods(["GET", "HEAD"])
 def estado_json(request):
     """
     ENDPOINT PARA POLLING DESDE EL FRONTEND.
