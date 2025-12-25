@@ -124,6 +124,9 @@ CALIBRADOR_COSTO_POR_TRADE = float(os.getenv("CALIBRADOR_COSTO_POR_TRADE", "0.0"
 # Guardrails: rechazar umbrales que generen muy pocos trades o demasiado drawdown en test.
 CALIBRADOR_MIN_TRADES_TEST = int(os.getenv("CALIBRADOR_MIN_TRADES_TEST", "10"))
 CALIBRADOR_MAX_DD_TEST = float(os.getenv("CALIBRADOR_MAX_DD_TEST", "10.0"))
+CALIBRADOR_MAX_TRADE_RATE = float(os.getenv("CALIBRADOR_MAX_TRADE_RATE", "0.20"))
+# target por defecto: dirección (mejor escala para umbrales tipo 0.75)
+CALIBRADOR_TARGET = os.getenv("CALIBRADOR_TARGET", "sign").strip().lower()
 
 # ===== RIESGO =====
 CAPITAL_INICIAL = float(os.getenv("CAPITAL_INICIAL", "100.0"))

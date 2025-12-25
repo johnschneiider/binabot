@@ -139,6 +139,13 @@ class Command(BaseCommand):
         parser.add_argument("--salida", type=str, default=None, help="Ruta JSON de salida.")
         parser.add_argument("--no-escribir", action="store_true", help="Solo imprime; no escribe archivo.")
         parser.add_argument(
+            "--target",
+            type=str,
+            default=None,
+            choices=["sign", "return"],
+            help="Qué aprende el ridge: 'sign' (dirección) o 'return' (retorno). Default: sign.",
+        )
+        parser.add_argument(
             "--payout-win",
             type=float,
             default=None,
@@ -155,6 +162,12 @@ class Command(BaseCommand):
             type=int,
             default=None,
             help="Mínimo de trades en el tramo de test para aceptar umbrales.",
+        )
+        parser.add_argument(
+            "--max-trade-rate",
+            type=float,
+            default=None,
+            help="Máxima tasa de trades permitida en OOS (trades / puntos). Ej: 0.15",
         )
         parser.add_argument(
             "--max-dd-test",
@@ -176,6 +189,8 @@ class Command(BaseCommand):
         costo_por_trade = float(options.get("costo_por_trade") or getattr(settings, "CALIBRADOR_COSTO_POR_TRADE", 0.0))
         min_trades_test = int(options.get("min_trades_test") or getattr(settings, "CALIBRADOR_MIN_TRADES_TEST", 10))
         max_dd_test = float(options.get("max_dd_test") or getattr(settings, "CALIBRADOR_MAX_DD_TEST", 10.0))
+        target = str(options.get("target") or getattr(settings, "CALIBRADOR_TARGET", "sign")).strip().lower()
+        max_trade_rate = float(options.get("max_trade_rate") or getattr(settings, "CALIBRADOR_MAX_TRADE_RATE", 0.20))
 
         if count <= 200:
             raise CommandError("ticks-count muy bajo. Usa al menos ~1000 para algo mínimamente estable.")
@@ -184,7 +199,24 @@ class Command(BaseCommand):
         if train_n <= 0 or test_n <= 0:
             raise CommandError("train-ticks y test-ticks deben ser > 0.")
 
-        asyncio.run(self._run(symbol=symbol, count=count, horizon=horizon, train_n=train_n, test_n=test_n, lam=lam, salida=salida, no_escribir=no_escribir))
+        asyncio.run(
+            self._run(
+                symbol=symbol,
+                count=count,
+                horizon=horizon,
+                train_n=train_n,
+                test_n=test_n,
+                lam=lam,
+                salida=salida,
+                no_escribir=no_escribir,
+                payout_win=payout_win,
+                costo_por_trade=costo_por_trade,
+                min_trades_test=min_trades_test,
+                max_dd_test=max_dd_test,
+                target=target,
+                max_trade_rate=max_trade_rate,
+            )
+        )
 
     async def _run(
         self,
@@ -201,6 +233,8 @@ class Command(BaseCommand):
         costo_por_trade: float = 0.0,
         min_trades_test: int = 10,
         max_dd_test: float = 10.0,
+        target: str = "sign",
+        max_trade_rate: float = 0.20,
     ) -> None:
         self.stdout.write(self.style.SUCCESS(f"[WF] Descargando ticks_history: symbol={symbol} count={count}"))
         async with ClienteDerivWS(token="") as cliente:
@@ -252,7 +286,16 @@ class Command(BaseCommand):
                 X[i, j] = float(xi.get(k, 0.0))
             p0 = float(precios_feat[i])
             p1 = float(precios_feat[i + horizon])
-            y[i] = 0.0 if p0 == 0 else (p1 - p0) / p0
+            if target == "return":
+                y[i] = 0.0 if p0 == 0 else (p1 - p0) / p0
+            else:
+                # target por defecto: dirección (clasificación lineal por mínimos cuadrados)
+                if p1 > p0:
+                    y[i] = 1.0
+                elif p1 < p0:
+                    y[i] = -1.0
+                else:
+                    y[i] = 0.0
 
         # ===== WALK-FORWARD =====
         self.stdout.write(self.style.SUCCESS(f"[WF] Dataset: n={X.shape[0]} p={p} horizon={horizon}"))
@@ -295,14 +338,18 @@ class Command(BaseCommand):
         if scores_all.size < 50:
             raise CommandError("Muy pocos puntos OOS para seleccionar umbrales. Sube ticks-count o ajusta train/test.")
 
-        abs_scores = np.abs(scores_all)
-        # Cuantiles altos => menos trades, normalmente más “calidad” (pero no siempre).
+        abs_scores = np.abs(scores_all.astype(float))
+        # Cuantiles altos => menos trades. No imponemos "piso" fijo porque el score puede ser pequeño
+        # (especialmente si target='return').
         quantiles = [0.70, 0.80, 0.85, 0.90, 0.92, 0.94, 0.96, 0.98, 0.99]
         candidatos = sorted({float(np.quantile(abs_scores, q)) for q in quantiles if 0.0 < q < 1.0})
-        # Evitar umbrales ~0 (operaría demasiado).
-        candidatos = [c for c in candidatos if c > 0.05]
+        # Si todos los scores son ~0, no hay nada que calibrar.
+        candidatos = [c for c in candidatos if c > 0.0]
         if not candidatos:
-            candidatos = [max(0.1, float(np.median(abs_scores)))]
+            raise CommandError(
+                "El score OOS quedó ~0 para todos los puntos; no se pueden elegir umbrales.\n"
+                "Sugerencias: usar --target sign, revisar normalización, o aumentar ticks-count."
+            )
 
         mejor = {
             "umbral_compra": float(settings.UMBRAL_COMPRA),
@@ -338,8 +385,11 @@ class Command(BaseCommand):
             winrate = 0.0 if trades_total <= 0 else (wins_total / trades_total)
             if trades_total <= 0.0:
                 continue
+            trade_rate = float(trades_total) / float(scores_all.size)
             # Constraints para no “forzar” actividad y terminar sobre‑operando.
             if trades_total < float(min_trades_test):
+                continue
+            if trade_rate > float(max_trade_rate):
                 continue
             if max_dd_peor > float(max_dd_test):
                 continue
@@ -419,6 +469,8 @@ class Command(BaseCommand):
                 "costo_por_trade": float(costo_por_trade),
                 "min_trades_test": int(min_trades_test),
                 "max_dd_test": float(max_dd_test),
+                "target": str(target),
+                "max_trade_rate": float(max_trade_rate),
                 "umbral_compra_recomendado": float(mejor["umbral_compra"]),
                 "umbral_venta_recomendado": float(mejor["umbral_venta"]),
                 "trades_oos": float(mejor["trades"]),
