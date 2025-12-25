@@ -47,7 +47,13 @@ class ClienteDerivWS:
     """
 
     def __init__(self, token: Optional[str] = None) -> None:
-        self.token = token or getattr(settings, "DERIV_API_TOKEN", "") or ""
+        # Importante:
+        # - token=None => usar settings.DERIV_API_TOKEN (modo "normal" del bot)
+        # - token=""   => forzar "sin token" (útil para research/calibración; evita authorize y fugas de credenciales)
+        if token is None:
+            self.token = getattr(settings, "DERIV_API_TOKEN", "") or ""
+        else:
+            self.token = token
         self._ws: Any | None = None
 
     async def __aenter__(self) -> "ClienteDerivWS":
