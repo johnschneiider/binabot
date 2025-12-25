@@ -116,6 +116,15 @@ CALIBRADOR_TEST_TICKS = int(os.getenv("CALIBRADOR_TEST_TICKS", "500"))
 CALIBRADOR_LAMBDA_RIDGE = float(os.getenv("CALIBRADOR_LAMBDA_RIDGE", "1.0"))
 CALIBRADOR_HORIZON_TICKS = int(os.getenv("CALIBRADOR_HORIZON_TICKS", str(DERIV_DURACION_TICKS)))
 
+# ===== CALIBRADOR (EVALUACIÓN OOS REALISTA PARA BINARIAS) =====
+# Payout aproximado por trade ganador en unidades de stake=1 (ej: 0.95 => gana 0.95, pierde 1.0).
+CALIBRADOR_PAYOUT_WIN = float(os.getenv("CALIBRADOR_PAYOUT_WIN", "0.95"))
+# Costo aproximado por trade (slippage/fees/spread) en unidades de stake=1.
+CALIBRADOR_COSTO_POR_TRADE = float(os.getenv("CALIBRADOR_COSTO_POR_TRADE", "0.0"))
+# Guardrails: rechazar umbrales que generen muy pocos trades o demasiado drawdown en test.
+CALIBRADOR_MIN_TRADES_TEST = int(os.getenv("CALIBRADOR_MIN_TRADES_TEST", "10"))
+CALIBRADOR_MAX_DD_TEST = float(os.getenv("CALIBRADOR_MAX_DD_TEST", "10.0"))
+
 # ===== RIESGO =====
 CAPITAL_INICIAL = float(os.getenv("CAPITAL_INICIAL", "100.0"))
 MAX_RIESGO_POR_OPERACION = float(os.getenv("MAX_RIESGO_POR_OPERACION", "0.01"))

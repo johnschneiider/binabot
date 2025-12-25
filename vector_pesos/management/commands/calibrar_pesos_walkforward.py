@@ -53,6 +53,78 @@ def _corr(a: np.ndarray, b: np.ndarray) -> float:
         return 0.0
     return float(np.corrcoef(a, b)[0, 1])
 
+def _simular_binaria_por_ticks(
+    *,
+    scores: np.ndarray,
+    precios: np.ndarray,
+    horizon: int,
+    umbral_compra: float,
+    umbral_venta: float,
+    payout_win: float,
+    costo_por_trade: float,
+) -> dict[str, float]:
+    """
+    SIMULACIÓN SIMPLE (OUT-OF-SAMPLE) PARA UNA OPCIÓN BINARIA POR TICKS.
+
+    Supuestos:
+    - Si score >= umbral_compra => "CALL" (sube).
+    - Si score <= umbral_venta  => "PUT"  (baja).
+    - La operación dura `horizon` ticks; mientras está abierta no abrimos otra (skip).
+    - PnL por trade (en unidades de stake=1):
+        +payout_win si acierta
+        -1.0       si falla
+      y luego restamos `costo_por_trade` (slippage/fees aproximados).
+
+    Nota: esto NO es garantía de resultados, pero evita calibrar con métricas irreales.
+    """
+    n = int(scores.shape[0])
+    if n <= horizon or horizon <= 0:
+        return {"trades": 0.0, "winrate": 0.0, "pnl_total": 0.0, "max_drawdown": 0.0}
+
+    equity = 0.0
+    peak = 0.0
+    max_dd = 0.0
+    trades = 0
+    wins = 0
+
+    i = 0
+    while i + horizon < n:
+        s = float(scores[i])
+        direccion = 0
+        if s >= float(umbral_compra):
+            direccion = 1
+        elif s <= float(umbral_venta):
+            direccion = -1
+
+        if direccion == 0:
+            i += 1
+            continue
+
+        p0 = float(precios[i])
+        p1 = float(precios[i + horizon])
+        mov = p1 - p0
+        win = (mov > 0.0) if direccion == 1 else (mov < 0.0)
+        pnl = (float(payout_win) if win else -1.0) - float(costo_por_trade)
+
+        equity += pnl
+        peak = max(peak, equity)
+        max_dd = max(max_dd, peak - equity)
+        trades += 1
+        if win:
+            wins += 1
+
+        # Mientras está abierta (duración por ticks), no abrimos otra.
+        i += horizon
+
+    winrate = 0.0 if trades <= 0 else (float(wins) / float(trades))
+    return {
+        "trades": float(trades),
+        "wins": float(wins),
+        "winrate": float(winrate),
+        "pnl_total": float(equity),
+        "max_drawdown": float(max_dd),
+    }
+
 
 class Command(BaseCommand):
     help = "Calibra pesos w con walk-forward (ridge) usando ticks_history de Deriv."
@@ -66,6 +138,30 @@ class Command(BaseCommand):
         parser.add_argument("--lambda-ridge", type=float, default=None, help="Regularización ridge (λ).")
         parser.add_argument("--salida", type=str, default=None, help="Ruta JSON de salida.")
         parser.add_argument("--no-escribir", action="store_true", help="Solo imprime; no escribe archivo.")
+        parser.add_argument(
+            "--payout-win",
+            type=float,
+            default=None,
+            help="Payout por trade ganador (stake=1). Ej: 0.95. (Solo para evaluación, no trading real).",
+        )
+        parser.add_argument(
+            "--costo-por-trade",
+            type=float,
+            default=None,
+            help="Costo aproximado por trade (slippage/fees) en unidades de stake=1. Ej: 0.01",
+        )
+        parser.add_argument(
+            "--min-trades-test",
+            type=int,
+            default=None,
+            help="Mínimo de trades en el tramo de test para aceptar umbrales.",
+        )
+        parser.add_argument(
+            "--max-dd-test",
+            type=float,
+            default=None,
+            help="Máximo drawdown permitido (en unidades de stake=1 acumuladas) para aceptar umbrales.",
+        )
 
     def handle(self, *args, **options) -> None:  # noqa: ANN001
         symbol = (options.get("symbol") or settings.DERIV_SYMBOL).strip()
@@ -76,6 +172,10 @@ class Command(BaseCommand):
         lam = float(options.get("lambda_ridge") or settings.CALIBRADOR_LAMBDA_RIDGE)
         salida = str(options.get("salida") or settings.PESOS_ARCHIVO)
         no_escribir = bool(options.get("no_escribir"))
+        payout_win = float(options.get("payout_win") or getattr(settings, "CALIBRADOR_PAYOUT_WIN", 0.95))
+        costo_por_trade = float(options.get("costo_por_trade") or getattr(settings, "CALIBRADOR_COSTO_POR_TRADE", 0.0))
+        min_trades_test = int(options.get("min_trades_test") or getattr(settings, "CALIBRADOR_MIN_TRADES_TEST", 10))
+        max_dd_test = float(options.get("max_dd_test") or getattr(settings, "CALIBRADOR_MAX_DD_TEST", 10.0))
 
         if count <= 200:
             raise CommandError("ticks-count muy bajo. Usa al menos ~1000 para algo mínimamente estable.")
@@ -97,6 +197,10 @@ class Command(BaseCommand):
         lam: float,
         salida: str,
         no_escribir: bool,
+        payout_win: float = 0.95,
+        costo_por_trade: float = 0.0,
+        min_trades_test: int = 10,
+        max_dd_test: float = 10.0,
     ) -> None:
         self.stdout.write(self.style.SUCCESS(f"[WF] Descargando ticks_history: symbol={symbol} count={count}"))
         async with ClienteDerivWS(token="") as cliente:
@@ -116,20 +220,21 @@ class Command(BaseCommand):
         )
 
         X_list: list[dict[str, float]] = []
-        precios: list[float] = []
+        precios_feat: list[float] = []
+        epochs_feat: list[int] = []
 
         for td in ticks:
-            precios.append(float(td.precio))
-            x = constructor.actualizar_con_tick(Tick(precio=float(td.precio), epoch=int(td.epoch)))
+            tick = Tick(precio=float(td.precio), epoch=int(td.epoch))
+            x = constructor.actualizar_con_tick(tick)
             x_eval = normalizador.actualizar_y_normalizar(x) if bool(settings.NORMALIZAR_VECTOR) else x
             if not constructor.listo_para_operar():
                 continue
             X_list.append(x_eval)
+            precios_feat.append(float(tick.precio))
+            epochs_feat.append(int(tick.epoch))
 
-        # Alinear precios con X_list (se recortó warm-up)
-        # Asumimos que el warm-up consumió (len(ticks) - len(X_list)) ticks aproximadamente.
-        # Para robustez, reconstruimos precios en paralelo:
-        precios_feat = precios[-len(X_list):]
+        if len(X_list) != len(precios_feat):
+            raise CommandError("Error de alineación: X_list y precios_feat no coinciden en tamaño.")
 
         if len(X_list) < (train_n + test_n + horizon + 10):
             raise CommandError("Tras warm-up quedaron pocos puntos. Baja MIN_TICKS_CALENTAMIENTO o sube ticks-count.")
@@ -155,6 +260,9 @@ class Command(BaseCommand):
 
         idx = 0
         w_ultimo = np.zeros((p,), dtype=float)
+        # Para evaluación OOS con umbrales: guardamos scores y precios del tramo test por ventana.
+        oos_scores: list[np.ndarray] = []
+        oos_precios: list[np.ndarray] = []
         while (idx + train_n + test_n) <= X.shape[0]:
             X_tr = X[idx : idx + train_n]
             y_tr = y[idx : idx + train_n]
@@ -165,6 +273,10 @@ class Command(BaseCommand):
             w_ultimo = w
 
             scores = X_te @ w
+            oos_scores.append(scores.astype(float))
+            # precios alineados a X/y (n_total). Para test tomamos el mismo rango:
+            pr_te = np.asarray(precios_feat[idx + train_n : idx + train_n + test_n], dtype=float)
+            oos_precios.append(pr_te)
             res.append(
                 ResultadoWF(
                     start_idx=int(idx),
@@ -177,6 +289,120 @@ class Command(BaseCommand):
 
             idx += test_n
 
+        # ===== BUSCAR UMBRALES (CONSTRAINTS) SOBRE OOS =====
+        # Estrategia conservadora: umbrales simétricos (thr y -thr) elegidos por grid de cuantiles.
+        scores_all = np.concatenate(oos_scores, axis=0) if oos_scores else np.asarray([], dtype=float)
+        if scores_all.size < 50:
+            raise CommandError("Muy pocos puntos OOS para seleccionar umbrales. Sube ticks-count o ajusta train/test.")
+
+        abs_scores = np.abs(scores_all)
+        # Cuantiles altos => menos trades, normalmente más “calidad” (pero no siempre).
+        quantiles = [0.70, 0.80, 0.85, 0.90, 0.92, 0.94, 0.96, 0.98, 0.99]
+        candidatos = sorted({float(np.quantile(abs_scores, q)) for q in quantiles if 0.0 < q < 1.0})
+        # Evitar umbrales ~0 (operaría demasiado).
+        candidatos = [c for c in candidatos if c > 0.05]
+        if not candidatos:
+            candidatos = [max(0.1, float(np.median(abs_scores)))]
+
+        mejor = {
+            "umbral_compra": float(settings.UMBRAL_COMPRA),
+            "umbral_venta": float(settings.UMBRAL_VENTA),
+            "pnl_total": float("-inf"),
+            "winrate": 0.0,
+            "trades": 0.0,
+            "max_drawdown": float("inf"),
+            "guardrails_aplicados": True,
+        }
+
+        # Evaluación OOS por ventana (promediamos PnL y sumamos trades).
+        for thr in candidatos:
+            pnl_total = 0.0
+            trades_total = 0.0
+            wins_total = 0.0
+            max_dd_peor = 0.0
+            for sc, pr in zip(oos_scores, oos_precios, strict=False):
+                m = _simular_binaria_por_ticks(
+                    scores=sc,
+                    precios=pr,
+                    horizon=horizon,
+                    umbral_compra=thr,
+                    umbral_venta=-thr,
+                    payout_win=payout_win,
+                    costo_por_trade=costo_por_trade,
+                )
+                pnl_total += float(m["pnl_total"])
+                trades_total += float(m["trades"])
+                wins_total += float(m["wins"])
+                max_dd_peor = max(max_dd_peor, float(m["max_drawdown"]))
+
+            winrate = 0.0 if trades_total <= 0 else (wins_total / trades_total)
+            if trades_total <= 0.0:
+                continue
+            # Constraints para no “forzar” actividad y terminar sobre‑operando.
+            if trades_total < float(min_trades_test):
+                continue
+            if max_dd_peor > float(max_dd_test):
+                continue
+
+            # Objetivo principal: PnL total (con costos).
+            if pnl_total > float(mejor["pnl_total"]):
+                mejor = {
+                    "umbral_compra": float(thr),
+                    "umbral_venta": float(-thr),
+                    "pnl_total": float(pnl_total),
+                    "winrate": float(winrate),
+                    "trades": float(trades_total),
+                    "max_drawdown": float(max_dd_peor),
+                    "guardrails_aplicados": True,
+                }
+
+        # Fallback: si ningún umbral pasó guardrails, elegimos el mejor PnL OOS sin restricciones
+        # y avisamos. Esto evita devolver "-inf" y permite revisar manualmente antes de activar en real.
+        if float(mejor["pnl_total"]) == float("-inf"):
+            mejor_relajado = dict(mejor)
+            for thr in candidatos:
+                pnl_total = 0.0
+                trades_total = 0.0
+                wins_total = 0.0
+                max_dd_peor = 0.0
+                for sc, pr in zip(oos_scores, oos_precios, strict=False):
+                    m = _simular_binaria_por_ticks(
+                        scores=sc,
+                        precios=pr,
+                        horizon=horizon,
+                        umbral_compra=thr,
+                        umbral_venta=-thr,
+                        payout_win=payout_win,
+                        costo_por_trade=costo_por_trade,
+                    )
+                    pnl_total += float(m["pnl_total"])
+                    trades_total += float(m["trades"])
+                    wins_total += float(m["wins"])
+                    max_dd_peor = max(max_dd_peor, float(m["max_drawdown"]))
+                winrate = 0.0 if trades_total <= 0 else (wins_total / trades_total)
+                if trades_total <= 0.0:
+                    continue
+                if pnl_total > float(mejor_relajado["pnl_total"]):
+                    mejor_relajado = {
+                        "umbral_compra": float(thr),
+                        "umbral_venta": float(-thr),
+                        "pnl_total": float(pnl_total),
+                        "winrate": float(winrate),
+                        "trades": float(trades_total),
+                        "max_drawdown": float(max_dd_peor),
+                        "guardrails_aplicados": False,
+                    }
+            mejor = mejor_relajado
+            if float(mejor["pnl_total"]) == float("-inf"):
+                raise CommandError(
+                    "No se generó ningún trade en la evaluación OOS para ningún umbral candidato.\n"
+                    "Sugerencias:\n"
+                    "- Sube ticks-count (ej: 20000+)\n"
+                    "- Baja train/test para tener más ventanas OOS\n"
+                    "- Reduce costos (CALIBRADOR_COSTO_POR_TRADE) si estás sobre-penalizando\n"
+                    "- Revisa NORMALIZACION_ALPHA/CLIP si el score queda demasiado comprimido"
+                )
+
         # ===== EXPORTAR PESOS =====
         pesos = {str(k): float(w_ultimo[j]) for j, k in enumerate(nombres)}
         resumen = {
@@ -188,6 +414,19 @@ class Command(BaseCommand):
             "lambda_ridge": float(lam),
             "n_muestras": int(X.shape[0]),
             "p_features": int(p),
+            "evaluacion_oos": {
+                "payout_win": float(payout_win),
+                "costo_por_trade": float(costo_por_trade),
+                "min_trades_test": int(min_trades_test),
+                "max_dd_test": float(max_dd_test),
+                "umbral_compra_recomendado": float(mejor["umbral_compra"]),
+                "umbral_venta_recomendado": float(mejor["umbral_venta"]),
+                "trades_oos": float(mejor["trades"]),
+                "winrate_oos": float(mejor["winrate"]),
+                "pnl_total_oos": float(mejor["pnl_total"]),
+                "max_drawdown_oos": float(mejor["max_drawdown"]),
+                "guardrails_aplicados": bool(mejor.get("guardrails_aplicados", True)),
+            },
             "ventanas": [r.__dict__ for r in res[-10:]],  # SOLO LAS ÚLTIMAS 10 PARA NO HACERLO ENORME
         }
 
@@ -196,6 +435,19 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("[WF] Pesos (última ventana)"))
         for k, v in sorted(pesos.items(), key=lambda kv: abs(float(kv[1])), reverse=True)[:10]:
             self.stdout.write(f"  {k}: {v:+.6f}")
+
+        ev = resumen.get("evaluacion_oos") or {}
+        if isinstance(ev, dict):
+            self.stdout.write(self.style.SUCCESS("[WF] Recomendación (OOS, con guardrails)"))
+            self.stdout.write(
+                "  "
+                f"umbral_compra={ev.get('umbral_compra_recomendado')} "
+                f"umbral_venta={ev.get('umbral_venta_recomendado')} "
+                f"trades={ev.get('trades_oos')} "
+                f"winrate={ev.get('winrate_oos')} "
+                f"pnl_total={ev.get('pnl_total_oos')} "
+                f"max_dd={ev.get('max_drawdown_oos')}"
+            )
 
         if not no_escribir:
             path = Path(salida)
