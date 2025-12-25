@@ -170,10 +170,21 @@ class Command(BaseCommand):
             help="Máxima tasa de trades permitida en OOS (trades / puntos). Ej: 0.15",
         )
         parser.add_argument(
+            "--min-edge-winrate",
+            type=float,
+            default=None,
+            help="Margen mínimo sobre el winrate de break-even para aceptar umbrales. Ej: 0.02",
+        )
+        parser.add_argument(
             "--max-dd-test",
             type=float,
             default=None,
             help="Máximo drawdown permitido (en unidades de stake=1 acumuladas) para aceptar umbrales.",
+        )
+        parser.add_argument(
+            "--forzar-escritura",
+            action="store_true",
+            help="Permite escribir el JSON incluso si NO pasó guardrails o si el PnL OOS es <= 0 (NO recomendado).",
         )
 
     def handle(self, *args, **options) -> None:  # noqa: ANN001
@@ -191,6 +202,10 @@ class Command(BaseCommand):
         max_dd_test = float(options.get("max_dd_test") or getattr(settings, "CALIBRADOR_MAX_DD_TEST", 10.0))
         target = str(options.get("target") or getattr(settings, "CALIBRADOR_TARGET", "sign")).strip().lower()
         max_trade_rate = float(options.get("max_trade_rate") or getattr(settings, "CALIBRADOR_MAX_TRADE_RATE", 0.20))
+        min_edge_winrate = float(
+            options.get("min_edge_winrate") or getattr(settings, "CALIBRADOR_MIN_EDGE_WINRATE", 0.02)
+        )
+        forzar_escritura = bool(options.get("forzar_escritura"))
 
         if count <= 200:
             raise CommandError("ticks-count muy bajo. Usa al menos ~1000 para algo mínimamente estable.")
@@ -215,6 +230,8 @@ class Command(BaseCommand):
                 max_dd_test=max_dd_test,
                 target=target,
                 max_trade_rate=max_trade_rate,
+                min_edge_winrate=min_edge_winrate,
+                forzar_escritura=forzar_escritura,
             )
         )
 
@@ -235,6 +252,8 @@ class Command(BaseCommand):
         max_dd_test: float = 10.0,
         target: str = "sign",
         max_trade_rate: float = 0.20,
+        min_edge_winrate: float = 0.02,
+        forzar_escritura: bool = False,
     ) -> None:
         self.stdout.write(self.style.SUCCESS(f"[WF] Descargando ticks_history: symbol={symbol} count={count}"))
         async with ClienteDerivWS(token="") as cliente:
@@ -361,6 +380,12 @@ class Command(BaseCommand):
             "guardrails_aplicados": True,
         }
 
+        # Winrate de break-even para binaria con stake=1:
+        # E[pnl] = w*(payout - cost) + (1-w)*(-1 - cost) = w*(payout+1) - 1 - cost
+        # => w >= (1+cost) / (1+payout)
+        breakeven_winrate = (1.0 + float(costo_por_trade)) / (1.0 + float(payout_win))
+        min_winrate_aceptable = float(breakeven_winrate) + float(min_edge_winrate)
+
         # Evaluación OOS por ventana (promediamos PnL y sumamos trades).
         for thr in candidatos:
             pnl_total = 0.0
@@ -392,6 +417,9 @@ class Command(BaseCommand):
             if trade_rate > float(max_trade_rate):
                 continue
             if max_dd_peor > float(max_dd_test):
+                continue
+            # Constraint de rentabilidad mínima teórica (según payout/costo) + margen.
+            if float(winrate) < float(min_winrate_aceptable):
                 continue
 
             # Objetivo principal: PnL total (con costos).
@@ -467,6 +495,9 @@ class Command(BaseCommand):
             "evaluacion_oos": {
                 "payout_win": float(payout_win),
                 "costo_por_trade": float(costo_por_trade),
+                "breakeven_winrate": float(breakeven_winrate),
+                "min_edge_winrate": float(min_edge_winrate),
+                "min_winrate_aceptable": float(min_winrate_aceptable),
                 "min_trades_test": int(min_trades_test),
                 "max_dd_test": float(max_dd_test),
                 "target": str(target),
@@ -490,7 +521,8 @@ class Command(BaseCommand):
 
         ev = resumen.get("evaluacion_oos") or {}
         if isinstance(ev, dict):
-            self.stdout.write(self.style.SUCCESS("[WF] Recomendación (OOS, con guardrails)"))
+            tag = "con guardrails" if bool(ev.get("guardrails_aplicados", True)) else "SIN guardrails (fallback)"
+            self.stdout.write(self.style.SUCCESS(f"[WF] Recomendación (OOS, {tag})"))
             self.stdout.write(
                 "  "
                 f"umbral_compra={ev.get('umbral_compra_recomendado')} "
@@ -500,8 +532,26 @@ class Command(BaseCommand):
                 f"pnl_total={ev.get('pnl_total_oos')} "
                 f"max_dd={ev.get('max_drawdown_oos')}"
             )
+            self.stdout.write(
+                "  "
+                f"breakeven_winrate={ev.get('breakeven_winrate')} "
+                f"min_winrate_aceptable={ev.get('min_winrate_aceptable')}"
+            )
 
         if not no_escribir:
+            # Seguridad: no escribir un modelo "perdedor" o sin guardrails salvo confirmación explícita.
+            if not forzar_escritura:
+                if not bool(mejor.get("guardrails_aplicados", True)):
+                    raise CommandError(
+                        "El calibrador encontró umbrales solo con fallback (SIN guardrails). No se escribirá el archivo.\n"
+                        "Si de verdad quieres escribirlo, re-ejecuta con --forzar-escritura."
+                    )
+                if float(mejor.get("pnl_total", 0.0)) <= 0.0:
+                    raise CommandError(
+                        "El PnL OOS recomendado es <= 0. No se escribirá el archivo para proteger el modo real.\n"
+                        "Ajusta parámetros (payout/costo/ventanas) o usa --forzar-escritura bajo tu responsabilidad."
+                    )
+
             path = Path(salida)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

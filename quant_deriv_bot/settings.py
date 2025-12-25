@@ -127,6 +127,8 @@ CALIBRADOR_MAX_DD_TEST = float(os.getenv("CALIBRADOR_MAX_DD_TEST", "10.0"))
 CALIBRADOR_MAX_TRADE_RATE = float(os.getenv("CALIBRADOR_MAX_TRADE_RATE", "0.20"))
 # target por defecto: dirección (mejor escala para umbrales tipo 0.75)
 CALIBRADOR_TARGET = os.getenv("CALIBRADOR_TARGET", "sign").strip().lower()
+# Margen mínimo sobre el break-even winrate (por payout/costo) para aceptar umbrales.
+CALIBRADOR_MIN_EDGE_WINRATE = float(os.getenv("CALIBRADOR_MIN_EDGE_WINRATE", "0.02"))
 
 # ===== RIESGO =====
 CAPITAL_INICIAL = float(os.getenv("CAPITAL_INICIAL", "100.0"))
