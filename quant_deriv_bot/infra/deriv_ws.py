@@ -111,29 +111,78 @@ class ClienteDerivWS:
         POR QUÉ:
         - SIRVE PARA INVESTIGACIÓN/CALIBRACIÓN (WALK-FORWARD) SIN DEPENDER DE ARCHIVOS EXTERNOS.
         - NO REQUIERE TOKEN PARA MERCADOS DISPONIBLES PÚBLICAMENTE (AUNQUE DEPENDE DEL SÍMBOLO).
-        """
-        await self.enviar(
-            {
-                "ticks_history": str(symbol),
-                "adjust_start_time": 1,
-                "count": int(count),
-                "end": "latest",
-                "style": "ticks",
-            }
-        )
-        msg = await self.recibir(timeout_segundos=30)
-        if msg.get("error"):
-            raise RuntimeError(msg["error"])
 
-        hist = msg.get("history") or {}
-        precios = hist.get("prices") or []
-        tiempos = hist.get("times") or []
+        IMPORTANTE (DERIV):
+        - En la práctica, Deriv suele limitar `count` a ~5000 por request. Para counts mayores,
+          hacemos paginación hacia atrás usando `end=<epoch>` y concatenamos sin duplicados.
+        """
+        objetivo = max(0, int(count))
+        if objetivo <= 0:
+            return []
+
+        # Límite práctico por request en Deriv WS (aun si pides más).
+        chunk_max = 5000
         out: list[TickDeriv] = []
-        for p, t in zip(precios, tiempos):
-            try:
-                out.append(TickDeriv(symbol=str(symbol), precio=float(p), epoch=int(t)))
-            except Exception:
-                continue
+        vistos_epoch: set[int] = set()
+
+        end: int | str = "latest"
+        # Safety: evita loops infinitos si el backend no entrega más datos.
+        max_paginas = (objetivo // chunk_max) + 3
+
+        for _ in range(max_paginas):
+            restante = objetivo - len(out)
+            if restante <= 0:
+                break
+
+            pedir = min(chunk_max, restante)
+            await self.enviar(
+                {
+                    "ticks_history": str(symbol),
+                    "adjust_start_time": 1,
+                    "count": int(pedir),
+                    "end": end,
+                    "style": "ticks",
+                }
+            )
+            msg = await self.recibir(timeout_segundos=30)
+            if msg.get("error"):
+                raise RuntimeError(msg["error"])
+
+            hist = msg.get("history") or {}
+            precios = hist.get("prices") or []
+            tiempos = hist.get("times") or []
+            if not precios or not tiempos:
+                break
+
+            # Deriv entrega arrays en orden cronológico (normalmente viejo->nuevo).
+            # Hacemos de-dup por epoch.
+            batch: list[TickDeriv] = []
+            for p, t in zip(precios, tiempos):
+                try:
+                    epoch = int(t)
+                    if epoch in vistos_epoch:
+                        continue
+                    vistos_epoch.add(epoch)
+                    batch.append(TickDeriv(symbol=str(symbol), precio=float(p), epoch=epoch))
+                except Exception:
+                    continue
+
+            if not batch:
+                break
+
+            out.extend(batch)
+
+            # Preparar la siguiente página hacia atrás: pedir “antes del tick más viejo”.
+            oldest_epoch = min(td.epoch for td in batch)
+            end = max(0, int(oldest_epoch) - 1)
+
+            # Pequeño respiro para evitar rate limiting/keepalive issues.
+            await asyncio.sleep(0.15)
+
+        # Queremos devolver los más recientes `objetivo` ticks en orden cronológico.
+        out.sort(key=lambda td: int(td.epoch))
+        if len(out) > objetivo:
+            out = out[-objetivo:]
         return out
 
 
