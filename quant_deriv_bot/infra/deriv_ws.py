@@ -141,18 +141,34 @@ class ClienteDerivWS:
                 break
 
             pedir = min(chunk_max, restante)
-            await self.enviar(
-                {
-                    "ticks_history": str(symbol),
-                    "adjust_start_time": 1,
-                    "count": int(pedir),
-                    "end": end,
-                    "style": "ticks",
-                }
-            )
-            msg = await self.recibir(timeout_segundos=30)
-            if msg.get("error"):
-                raise RuntimeError(msg["error"])
+
+            payload = {
+                "ticks_history": str(symbol),
+                "adjust_start_time": 1,
+                "count": int(pedir),
+                "end": end,
+                "style": "ticks",
+            }
+
+            # Deriv a veces responde "WrongResponse" de forma intermitente. Reintentamos con backoff.
+            ultimo_error: dict[str, Any] | None = None
+            msg: dict[str, Any] | None = None
+            for intento in range(1, 6):
+                await self.enviar(payload)
+                msg = await self.recibir(timeout_segundos=30)
+                if not msg.get("error"):
+                    ultimo_error = None
+                    break
+                ultimo_error = msg.get("error")
+                code = str((ultimo_error or {}).get("code") or "")
+                if code not in {"WrongResponse", "RateLimit"}:
+                    raise RuntimeError(ultimo_error)
+                # backoff suave: 0.4,0.8,1.6,3.2,6.4
+                await asyncio.sleep(0.4 * (2 ** (intento - 1)))
+
+            if ultimo_error is not None:
+                raise RuntimeError(ultimo_error)
+            assert msg is not None
 
             hist = msg.get("history") or {}
             precios = hist.get("prices") or []
