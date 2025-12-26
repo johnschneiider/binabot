@@ -20,6 +20,11 @@
       .row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
+      .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+      .tab { cursor: pointer; user-select: none; padding: 6px 10px; border-radius: 999px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; }
+      .tab.active { background: #111827; color: #fff; border-color: #111827; }
+      .chart-wrap { position: relative; height: 260px; }
+
       /* ===== RESPONSIVE (MÓVIL) ===== */
       @media (max-width: 980px) {
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -101,6 +106,25 @@
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
+          <div class="big">Balance (gráfica)</div>
+          <div class="muted">Eje X: tiempo · Eje Y: balance</div>
+        </div>
+        <div class="tabs">
+          <div class="tab active" data-range="hour">Últimos 60 min</div>
+          <div class="tab" data-range="day">Últimas 2h</div>
+          <div class="tab" data-range="week">Semana</div>
+          <div class="tab" data-range="month">Mes</div>
+        </div>
+      </div>
+      <div class="chart-wrap" style="margin-top: 10px;">
+        <canvas id="balance_chart"></canvas>
+      </div>
+      <div class="muted" style="margin-top: 8px;">Fuente: snapshots (muestreo) · Config: <span class="mono">BALANCE_SNAPSHOT_CADA_SEG</span></div>
+    </div>
+
+    <div class="card" style="margin-top: 14px;">
+      <div class="row">
+        <div>
           <div class="big">Operaciones Deriv (reales, últimas 50)</div>
           <div class="muted">Solo entradas ejecutadas por este bot · Muestra profit y moneda (afecta balance real)</div>
         </div>
@@ -150,6 +174,7 @@
 
     <!-- TABLA DE OPERACIONES INTERNAS OCULTA POR REQUERIMIENTO: SOLO MOSTRAR OPERACIONES REALES (DERIV) -->
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
       function fmt2(x) {
         if (x === null || x === undefined) return "—";
@@ -240,6 +265,76 @@
         }).join("");
       }
 
+      // ===== GRÁFICA BALANCE =====
+      let balanceChart = null;
+      let rangoActivo = "hour";
+
+      function setTabsActive(range) {
+        document.querySelectorAll(".tab").forEach(el => {
+          el.classList.toggle("active", el.getAttribute("data-range") === range);
+        });
+      }
+
+      function ensureChart() {
+        const ctx = document.getElementById("balance_chart");
+        if (!ctx) return;
+        if (balanceChart) return;
+        balanceChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [{
+              label: "Balance",
+              data: [],
+              borderColor: "#4f46e5",
+              backgroundColor: "rgba(79,70,229,0.12)",
+              fill: true,
+              tension: 0.25,
+              pointRadius: 0,
+              borderWidth: 2,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { mode: "index", intersect: false },
+            },
+            interaction: { mode: "index", intersect: false },
+            scales: {
+              x: {
+                ticks: { maxTicksLimit: 10, autoSkip: true },
+                grid: { display: false },
+              },
+              y: {
+                grid: { color: "rgba(0,0,0,0.06)" },
+              },
+            },
+          },
+        });
+      }
+
+      async function cargarBalance(range) {
+        try {
+          ensureChart();
+          if (!balanceChart) return;
+          const res = await fetch(`/api/balance/?range=${encodeURIComponent(range)}`, { cache: "no-store" });
+          if (!res.ok) return;
+          const data = await res.json();
+          const pts = Array.isArray(data.points) ? data.points : [];
+          const labels = pts.map(p => String(p.t).slice(11, 16)); // HH:MM
+          // En semana/mes, mostramos fecha+hora para evitar ambigüedad
+          const labelsWide = pts.map(p => String(p.t).slice(5, 16).replace(" ", " ")); // MM-DD HH:MM
+          balanceChart.data.labels = (range === "week" || range === "month") ? labelsWide : labels;
+          balanceChart.data.datasets[0].data = pts.map(p => Number(p.balance));
+          balanceChart.update();
+        } catch (e) {
+          // silencioso
+        }
+      }
+
       async function refrescar() {
         try {
           const res = await fetch("/api/estado/", { cache: "no-store" });
@@ -271,6 +366,18 @@
 
       refrescar();
       setInterval(refrescar, 1000);
+
+      // Tabs + refresh balance
+      document.querySelectorAll(".tab").forEach(el => {
+        el.addEventListener("click", () => {
+          const r = el.getAttribute("data-range") || "hour";
+          rangoActivo = r;
+          setTabsActive(r);
+          cargarBalance(r);
+        });
+      });
+      cargarBalance(rangoActivo);
+      setInterval(() => cargarBalance(rangoActivo), 30000);
     </script>
   </body>
 </html>

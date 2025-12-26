@@ -8,7 +8,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from django.db.models import F
 
-from .models import Cuenta, OperacionDeriv
+from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv
 
 
 def _fecha_hora_colombia_desde_epoch(epoch: int | None) -> datetime | None:
@@ -103,4 +103,52 @@ def estado_json(request):
         }
     return JsonResponse({"cuenta": cuenta_dict, "operaciones_deriv": ops_deriv})
 
+
+@require_http_methods(["GET", "HEAD"])
+def balance_json(request):
+    """
+    Serie temporal del balance (para gráfica).
+
+    Filtros:
+    - range=hour  => últimos 60 minutos
+    - range=day   => últimas 2 horas
+    - range=week  => últimos 7 días
+    - range=month => últimas 4 semanas
+    """
+    rango = (request.GET.get("range") or "hour").strip().lower()
+    ahora = timezone.now()
+
+    if rango == "hour":
+        desde = ahora - timezone.timedelta(minutes=60)
+    elif rango == "day":
+        desde = ahora - timezone.timedelta(hours=2)
+    elif rango == "week":
+        desde = ahora - timezone.timedelta(days=7)
+    elif rango == "month":
+        desde = ahora - timezone.timedelta(days=28)
+    else:
+        # fallback seguro
+        desde = ahora - timezone.timedelta(minutes=60)
+
+    cuenta = Cuenta.objects.order_by("-updated_at").first()
+    if not cuenta:
+        return JsonResponse({"cuenta_id": None, "points": []})
+
+    qs = (
+        BalanceDerivSnapshot.objects.filter(cuenta_id=cuenta.id, created_at__gte=desde)
+        .order_by("created_at")
+        .values("created_at", "balance", "moneda")
+    )
+
+    points = []
+    for row in qs:
+        dt_local = timezone.localtime(row["created_at"])
+        points.append(
+            {
+                "t": dt_local.strftime("%Y-%m-%d %H:%M:%S"),
+                "balance": float(row["balance"]),
+                "moneda": row.get("moneda") or "",
+            }
+        )
+    return JsonResponse({"cuenta_id": cuenta.id, "range": rango, "points": points})
 

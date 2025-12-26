@@ -12,7 +12,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from gestion_riesgo.gestor_riesgo import GestorRiesgo
-from gestion_riesgo.models import Cuenta, Operacion, OperacionDeriv
+from gestion_riesgo.models import BalanceDerivSnapshot, Cuenta, Operacion, OperacionDeriv
 from quant_deriv_bot.infra.deriv_ws import ClienteDerivWS, dormir_segundos
 from vector_pesos.gestor_pesos import GestorPesos
 from vector_pesos.senal import evaluar_senal
@@ -159,6 +159,7 @@ class Command(BaseCommand):
         ultimo_persist = 0.0
         ultimo_historial = 0.0
         ultimo_log = 0.0
+        ultimo_balance_snapshot = 0.0
         balance_moneda = ""
 
         # MODO REAL: DOBLE BLOQUEO (FLAG + ENV CONFIRMACIÓN).
@@ -389,6 +390,27 @@ class Command(BaseCommand):
                                     gestor_riesgo.bloqueado = bloqueado_real
 
                                 await _actualizar_balance_real()
+
+                                # ===== SNAPSHOT PARA GRÁFICA (MUESTREO) =====
+                                ahora_s = time.monotonic()
+                                cada = float(getattr(settings, "BALANCE_SNAPSHOT_CADA_SEG", 60))
+                                if cada <= 0:
+                                    cada = 60.0
+                                if (ahora_s - ultimo_balance_snapshot) >= cada:
+                                    ultimo_balance_snapshot = ahora_s
+                                    try:
+                                        await sync_to_async(
+                                            lambda: BalanceDerivSnapshot.objects.create(
+                                                cuenta_id=int(cuenta.id),
+                                                balance=float(balance_val),
+                                                moneda=str(currency),
+                                                epoch=int(time.time()),
+                                            ),
+                                            thread_sensitive=True,
+                                        )()
+                                    except Exception:
+                                        # No rompe trading si falla el storage de la gráfica.
+                                        pass
                             else:
                                 await sync_to_async(
                                     lambda: Cuenta.objects.filter(id=cuenta.id).update(

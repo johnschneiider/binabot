@@ -92,6 +92,7 @@ DERIV_MAX_DURACION_TICKS = int(os.getenv("DERIV_MAX_DURACION_TICKS", "10"))
 DERIV_MIN_STAKE = float(os.getenv("DERIV_MIN_STAKE", "1.0"))
 DERIV_HISTORIAL_LIMIT = int(os.getenv("DERIV_HISTORIAL_LIMIT", "50"))
 DERIV_HISTORIAL_CADA_SEGUNDOS = int(os.getenv("DERIV_HISTORIAL_CADA_SEGUNDOS", "10"))
+BALANCE_SNAPSHOT_CADA_SEG = int(os.getenv("BALANCE_SNAPSHOT_CADA_SEG", "60"))
 
 # ===== ROBUSTEZ TRADING REAL =====
 # Si Deriv/WS no responde a proposal/buy o se pierde un mensaje, el bot puede quedar "pegado" en estado esperando.

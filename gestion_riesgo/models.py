@@ -53,6 +53,30 @@ class Cuenta(models.Model):
         return f"Cuenta({self.simbolo}) balance={b:.2f} bloqueado={self.bloqueado} motivo={self.riesgo_motivo}"
 
 
+class BalanceDerivSnapshot(models.Model):
+    """
+    HISTORIAL DE BALANCE REAL (DERIV) PARA GRAFICAR.
+
+    Nota: se escribe con muestreo (ej. cada 60s) desde el bot para evitar crecimiento infinito.
+    """
+
+    cuenta = models.ForeignKey(Cuenta, on_delete=models.CASCADE, related_name="balance_snapshots")
+    balance = models.FloatField()
+    moneda = models.CharField(max_length=16, blank=True, default="")
+    epoch = models.BigIntegerField(null=True, blank=True)  # epoch UTC si se conoce
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["cuenta", "-created_at"]),
+            models.Index(fields=["-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"BalanceSnapshot(cuenta={self.cuenta_id} balance={self.balance:.2f})"
+
+
 class Operacion(models.Model):
     """
     REGISTRO DE OPERACIONES (PAPER) PARA VISUALIZACIÓN.
