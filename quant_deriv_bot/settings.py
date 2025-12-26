@@ -90,6 +90,12 @@ DERIV_MIN_STAKE = float(os.getenv("DERIV_MIN_STAKE", "1.0"))
 DERIV_HISTORIAL_LIMIT = int(os.getenv("DERIV_HISTORIAL_LIMIT", "50"))
 DERIV_HISTORIAL_CADA_SEGUNDOS = int(os.getenv("DERIV_HISTORIAL_CADA_SEGUNDOS", "10"))
 
+# ===== ROBUSTEZ TRADING REAL =====
+# Si Deriv/WS no responde a proposal/buy o se pierde un mensaje, el bot puede quedar "pegado" en estado esperando.
+# Estos timeouts activan un watchdog que resetea el estado y/o re-suscribe el contrato abierto tras reconexión.
+DERIV_TIMEOUT_PROPUESTA_SEG = float(os.getenv("DERIV_TIMEOUT_PROPUESTA_SEG", "15"))
+DERIV_TIMEOUT_CONTRATO_SEG = float(os.getenv("DERIV_TIMEOUT_CONTRATO_SEG", "120"))
+
 # ===== PARÁMETROS CUANTITATIVOS =====
 UMBRAL_COMPRA = float(os.getenv("UMBRAL_COMPRA", "0.75"))
 UMBRAL_VENTA = float(os.getenv("UMBRAL_VENTA", "-0.75"))

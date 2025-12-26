@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -129,6 +130,8 @@ class Command(BaseCommand):
         operacion_abierta: Operacion | None = None
         contrato_abierto_id: int | None = None
         esperando: dict | None = None
+        esperando_desde: float = 0.0
+        ultimo_open_contract: float = 0.0
 
         # ===== PERSISTENCIA: CUENTA =====
         cuenta = await sync_to_async(self._obtener_o_crear_cuenta, thread_sensitive=True)(
@@ -155,6 +158,29 @@ class Command(BaseCommand):
             )
         if modo_real and not settings.DERIV_API_TOKEN:
             raise CommandError("Modo real requiere DERIV_API_TOKEN con permisos de 'trade'.")
+
+        # ===== CONFIG EFECTIVA (LOG 1 VEZ) =====
+        pesos_archivo = getattr(settings, "PESOS_ARCHIVO", "") or ""
+        pesos_info = "PESOS_ARCHIVO=<vacío>"
+        if pesos_archivo:
+            try:
+                existe = os.path.exists(pesos_archivo)
+                mtime = os.path.getmtime(pesos_archivo) if existe else None
+                pesos_info = f"PESOS_ARCHIVO={pesos_archivo} existe={existe} mtime={mtime}"
+            except Exception:
+                pesos_info = f"PESOS_ARCHIVO={pesos_archivo} (error al inspeccionar archivo)"
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "[CFG] "
+                f"modo_real={modo_real} symbol={symbol} "
+                f"dur_ticks={int(settings.DERIV_DURACION_TICKS)} "
+                f"umbral_compra={float(settings.UMBRAL_COMPRA)} umbral_venta={float(settings.UMBRAL_VENTA)} "
+                f"normalizar={bool(settings.NORMALIZAR_VECTOR)} "
+                f"alpha={float(settings.NORMALIZACION_ALPHA)} clip={float(settings.NORMALIZACION_CLIP)} "
+                + pesos_info
+            )
+        )
 
         def _limite_alcanzado() -> bool:
             if ilimitado:
@@ -188,6 +214,21 @@ class Command(BaseCommand):
                     else:
                         self.stderr.write(self.style.WARNING("[WS] Sin DERIV_API_TOKEN: no se puede suscribir a balance."))
                         self.stdout.write(self.style.SUCCESS("[WS] Suscrito (solo ticks). Esperando ticks..."))
+
+                    # Si veníamos con un contrato abierto de una conexión previa, re-suscribir.
+                    if modo_real and contrato_abierto_id is not None:
+                        try:
+                            await cliente.enviar(
+                                {"proposal_open_contract": 1, "contract_id": int(contrato_abierto_id), "subscribe": 1}
+                            )
+                            self.stderr.write(
+                                self.style.WARNING(
+                                    f"[TRADING] Re-suscripción contrato abierto tras reconexión: contract_id={int(contrato_abierto_id)}"
+                                )
+                            )
+                            ultimo_open_contract = time.monotonic()
+                        except Exception as e:
+                            self.stderr.write(self.style.WARNING(f"[TRADING] Falló re-suscripción open_contract: {e}"))
 
                     async for ev in cliente.stream_eventos(symbol, incluir_balance=incluir_balance):
                         if ev.get("tipo") == "balance":
@@ -250,6 +291,7 @@ class Command(BaseCommand):
                             if modo_real:
                                 contrato = ev["raw"].get("proposal_open_contract") or {}
                                 await self._procesar_open_contract(cuenta_id=int(cuenta.id), simbolo=symbol, contrato=contrato)
+                                ultimo_open_contract = time.monotonic()
                                 # SI SE CIERRA, LIBERAR PARA PERMITIR NUEVA OPERACIÓN.
                                 if int(contrato.get("is_sold", 0)) == 1:
                                     contrato_abierto_id = None
@@ -269,6 +311,7 @@ class Command(BaseCommand):
                             if proposal_id:
                                 await cliente.enviar({"buy": proposal_id, "price": ask})
                                 esperando = {"tipo": "buy"}
+                                esperando_desde = time.monotonic()
                             continue
                         if ev.get("tipo") == "buy" and esperando and esperando.get("tipo") == "buy":
                             buy = ev["raw"].get("buy") or {}
@@ -278,6 +321,7 @@ class Command(BaseCommand):
                             if contrato_id:
                                 contrato_abierto_id = int(contrato_id)
                                 await cliente.enviar({"proposal_open_contract": 1, "contract_id": int(contrato_id), "subscribe": 1})
+                                ultimo_open_contract = time.monotonic()
                                 await sync_to_async(self._db_registrar_compra_deriv, thread_sensitive=True)(
                                     cuenta_id=int(cuenta.id),
                                     simbolo=symbol,
@@ -302,6 +346,44 @@ class Command(BaseCommand):
                             if bool(settings.NORMALIZAR_VECTOR)
                             else x
                         )
+
+                        # ===== WATCHDOG TRADING REAL =====
+                        # Evita quedarse días sin operar por un estado "esperando" atascado tras un timeout/error WS.
+                        ahora_wd = time.monotonic()
+                        if modo_real and esperando is not None and esperando_desde > 0:
+                            if (ahora_wd - esperando_desde) >= float(settings.DERIV_TIMEOUT_PROPUESTA_SEG):
+                                self.stderr.write(
+                                    self.style.WARNING(
+                                        f"[TRADING] Timeout esperando '{esperando.get('tipo')}'. Reset estado. "
+                                        f"contract_abierto_id={contrato_abierto_id}"
+                                    )
+                                )
+                                esperando = None
+                                esperando_desde = 0.0
+
+                        if modo_real and contrato_abierto_id is not None and ultimo_open_contract > 0:
+                            if (ahora_wd - ultimo_open_contract) >= float(settings.DERIV_TIMEOUT_CONTRATO_SEG):
+                                # No liberamos a ciegas: pedimos profit_table y re-suscribimos 1 vez.
+                                self.stderr.write(
+                                    self.style.WARNING(
+                                        f"[TRADING] Timeout sin updates de open_contract. "
+                                        f"Re-suscribiendo + profit_table. contract_id={int(contrato_abierto_id)}"
+                                    )
+                                )
+                                try:
+                                    await cliente.enviar(
+                                        {"proposal_open_contract": 1, "contract_id": int(contrato_abierto_id), "subscribe": 1}
+                                    )
+                                    await cliente.enviar(
+                                        {
+                                            "profit_table": 1,
+                                            "description": 1,
+                                            "limit": int(settings.DERIV_HISTORIAL_LIMIT),
+                                        }
+                                    )
+                                    ultimo_open_contract = time.monotonic()
+                                except Exception as e:
+                                    self.stderr.write(self.style.WARNING(f"[TRADING] Falló watchdog open_contract: {e}"))
 
                         # PESOS ACTUALES (HOY FIJOS; MAÑANA IA)
                         w = gestor_pesos.obtener_pesos_desde_ia(x)
@@ -387,6 +469,7 @@ class Command(BaseCommand):
                                         }
                                     )
                                     esperando = {"tipo": "proposal", "stake": float(stake)}
+                                    esperando_desde = time.monotonic()
 
                         # ===== LOG DE ALTA SEÑAL (SIEMPRE, INCLUSO EN MODO REAL) =====
                         ahora_l = time.monotonic()
@@ -491,10 +574,16 @@ class Command(BaseCommand):
             except asyncio.TimeoutError:
                 # SI NO LLEGAN MENSAJES EN 60s, SE ASUME PROBLEMA DE RED/PROXY Y SE REINTENTA.
                 self.stderr.write(self.style.WARNING("[WS] Timeout sin ticks (60s). Reintentando..."))
+                # IMPORTANTE: no conservar estados de órdenes a través de reconexión (evita quedar pegado).
+                esperando = None
+                esperando_desde = 0.0
                 await dormir_segundos(3.0)
                 continue
             except Exception as e:
                 self.stderr.write(self.style.ERROR(f"[WS] Error: {e}. Reintentando en 3s..."))
+                # IMPORTANTE: no conservar estados de órdenes a través de reconexión (evita quedar pegado).
+                esperando = None
+                esperando_desde = 0.0
                 await dormir_segundos(3.0)
                 continue
 
