@@ -86,6 +86,9 @@ DERIV_SYMBOL = os.getenv("DERIV_SYMBOL", "R_100").strip()
 DERIV_MODO_REAL = (os.getenv("DERIV_MODO_REAL", "False").strip().lower() in {"1", "true", "yes", "y"})
 DERIV_CONFIRMAR_REAL = os.getenv("DERIV_CONFIRMAR_REAL", "NO").strip().upper()
 DERIV_DURACION_TICKS = int(os.getenv("DERIV_DURACION_TICKS", "5"))
+# Para contratos por ticks (duration_unit="t") Deriv suele limitar a 1..10 (depende del market).
+# Esto evita que el bot intente enviar propuestas imposibles y quede en loop de reconexión.
+DERIV_MAX_DURACION_TICKS = int(os.getenv("DERIV_MAX_DURACION_TICKS", "10"))
 DERIV_MIN_STAKE = float(os.getenv("DERIV_MIN_STAKE", "1.0"))
 DERIV_HISTORIAL_LIMIT = int(os.getenv("DERIV_HISTORIAL_LIMIT", "50"))
 DERIV_HISTORIAL_CADA_SEGUNDOS = int(os.getenv("DERIV_HISTORIAL_CADA_SEGUNDOS", "10"))

@@ -145,6 +145,7 @@ class Command(BaseCommand):
         esperando_desde: float = 0.0
         ultimo_open_contract: float = 0.0
         watchdog_open_contract_intentos: int = 0
+        ultimo_warn_duracion: float = 0.0
 
         # ===== PERSISTENCIA: CUENTA =====
         cuenta = await sync_to_async(self._obtener_o_crear_cuenta, thread_sensitive=True)(
@@ -546,9 +547,20 @@ class Command(BaseCommand):
                                 stake = max(0.0, min(stake, float(gestor_riesgo.capital_actual)))
                                 if stake > 0:
                                     contract_type = "CALL" if resultado.decision == "COMPRA" else "PUT"
+                                    dur = int(settings.DERIV_DURACION_TICKS)
+                                    dur_max = int(getattr(settings, "DERIV_MAX_DURACION_TICKS", 10))
+                                    if dur_max > 0 and dur > dur_max:
+                                        ahora_w = time.monotonic()
+                                        if (ahora_w - ultimo_warn_duracion) >= 5.0:
+                                            ultimo_warn_duracion = ahora_w
+                                            self.stderr.write(
+                                                f"[TRADING] duration inválida para Deriv: DERIV_DURACION_TICKS={dur} "
+                                                f"(máximo configurado={dur_max}). Ajusta .env o el mercado. No se enviará proposal."
+                                            )
+                                        continue
                                     self.stderr.write(
                                         f"[TRADING] señal={resultado.decision} s={float(resultado.valor):+.4f} stake={float(stake):.2f} "
-                                        f"dur={int(settings.DERIV_DURACION_TICKS)} contract_type={contract_type}"
+                                        f"dur={dur} contract_type={contract_type}"
                                     )
                                     await cliente.enviar(
                                         {
@@ -557,7 +569,7 @@ class Command(BaseCommand):
                                             "basis": "stake",
                                             "contract_type": contract_type,
                                             "currency": (balance_moneda or "USD"),
-                                            "duration": int(settings.DERIV_DURACION_TICKS),
+                                            "duration": dur,
                                             "duration_unit": "t",
                                             "symbol": symbol,
                                         }
