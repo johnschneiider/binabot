@@ -16,6 +16,7 @@ from gestion_riesgo.models import Cuenta, Operacion, OperacionDeriv
 from quant_deriv_bot.infra.deriv_ws import ClienteDerivWS, dormir_segundos
 from vector_pesos.gestor_pesos import GestorPesos
 from vector_pesos.senal import evaluar_senal
+from vector_pesos.adaptativo import AdaptadorUmbralOnline
 from vector_variables.constructor_vector import ConstructorVectorMercado, Tick
 from vector_variables.normalizacion import NormalizadorOnlinePorVariable
 
@@ -125,6 +126,17 @@ class Command(BaseCommand):
             min_std=float(settings.NORMALIZACION_MIN_STD),
             clip=float(settings.NORMALIZACION_CLIP),
         )
+
+        adaptativo: AdaptadorUmbralOnline | None = None
+        if bool(getattr(settings, "ADAPTATIVO_HABILITADO", False)):
+            adaptativo = AdaptadorUmbralOnline(
+                thresholds=list(getattr(settings, "ADAPTATIVO_UMBRALES", [])),
+                payout_win=float(getattr(settings, "CALIBRADOR_PAYOUT_WIN", 0.95)),
+                costo_por_trade=float(getattr(settings, "CALIBRADOR_COSTO_POR_TRADE", 0.0)),
+                min_trades=int(getattr(settings, "ADAPTATIVO_MIN_TRADES", 60)),
+                edge_margin=float(getattr(settings, "ADAPTATIVO_EDGE_MARGIN", 0.02)),
+                archivo_estado=str(getattr(settings, "ADAPTATIVO_ARCHIVO", "vector_pesos/umbral_online.json")),
+            )
 
         posicion: PosicionPaper | None = None
         operacion_abierta: Operacion | None = None
@@ -311,6 +323,25 @@ class Command(BaseCommand):
                                 await self._procesar_open_contract(cuenta_id=int(cuenta.id), simbolo=symbol, contrato=contrato)
                                 ultimo_open_contract = time.monotonic()
                                 watchdog_open_contract_intentos = 0
+
+                                # ===== APRENDIZAJE ONLINE (AL CERRAR CONTRATO) =====
+                                if adaptativo is not None and int(contrato.get("is_sold", 0)) == 1:
+                                    cid = contrato.get("contract_id")
+                                    profit = contrato.get("profit")
+                                    if cid is not None and profit is not None:
+                                        def _leer_senal_valor() -> float | None:
+                                            fila = OperacionDeriv.objects.filter(contract_id=int(cid)).values("senal_valor").first()
+                                            if not fila:
+                                                return None
+                                            v = fila.get("senal_valor")
+                                            return float(v) if v is not None else None
+
+                                        s0 = await sync_to_async(_leer_senal_valor, thread_sensitive=True)()
+                                        if s0 is not None:
+                                            adaptativo.registrar_trade_cerrado(
+                                                score_entrada=float(s0),
+                                                gano=(float(profit) > 0.0),
+                                            )
                                 # SI SE CIERRA, LIBERAR PARA PERMITIR NUEVA OPERACIÓN.
                                 if int(contrato.get("is_sold", 0)) == 1:
                                     contrato_abierto_id = None
@@ -330,7 +361,7 @@ class Command(BaseCommand):
                             if proposal_id:
                                 self.stderr.write(f"[TRADING] proposal OK id={proposal_id} ask={ask:.4f} -> enviando buy")
                                 await cliente.enviar({"buy": proposal_id, "price": ask})
-                                esperando = {"tipo": "buy"}
+                                esperando["tipo"] = "buy"
                                 esperando_desde = time.monotonic()
                             continue
                         if ev.get("tipo") == "buy" and esperando and esperando.get("tipo") == "buy":
@@ -352,6 +383,10 @@ class Command(BaseCommand):
                                     transaction_id=int(trans_id) if trans_id is not None else None,
                                     buy_price=buy_price,
                                     moneda=balance_moneda,
+                                    senal_valor=float(esperando.get("senal_valor")) if esperando.get("senal_valor") is not None else None,
+                                    umbral_usado=float(esperando.get("umbral_usado")) if esperando.get("umbral_usado") is not None else None,
+                                    pesos_usados=esperando.get("pesos_usados"),
+                                    senal_top_contribuciones=esperando.get("senal_top_contribuciones"),
                                 )
                             esperando = None
                             continue
@@ -415,11 +450,24 @@ class Command(BaseCommand):
                         # PESOS ACTUALES (HOY FIJOS; MAÑANA IA)
                         w = gestor_pesos.obtener_pesos_desde_ia(x)
 
+                        # ===== UMBRAL DINÁMICO (ONLINE) OPCIONAL =====
+                        umbral_compra = float(settings.UMBRAL_COMPRA)
+                        umbral_venta = float(settings.UMBRAL_VENTA)
+                        if adaptativo is not None:
+                            u = float(adaptativo.umbral_actual())
+                            if u != float("inf") and u > 0.0:
+                                umbral_compra = float(u)
+                                umbral_venta = -float(u)
+                            else:
+                                # Sin evidencia suficiente => no operar.
+                                umbral_compra = float("inf")
+                                umbral_venta = -float("inf")
+
                         resultado = evaluar_senal(
                             vector_mercado=x_eval,
                             vector_pesos=w,
-                            umbral_compra=settings.UMBRAL_COMPRA,
-                            umbral_venta=settings.UMBRAL_VENTA,
+                            umbral_compra=umbral_compra,
+                            umbral_venta=umbral_venta,
                             devolver_contribuciones=True,
                             top_n=int(settings.SENAL_TOP_N),
                         )
@@ -499,7 +547,14 @@ class Command(BaseCommand):
                                             "symbol": symbol,
                                         }
                                     )
-                                    esperando = {"tipo": "proposal", "stake": float(stake)}
+                                    esperando = {
+                                        "tipo": "proposal",
+                                        "stake": float(stake),
+                                        "senal_valor": float(resultado.valor),
+                                        "umbral_usado": float(abs(umbral_compra)) if umbral_compra != float("inf") else None,
+                                        "pesos_usados": dict(w),
+                                        "senal_top_contribuciones": top_contrib,
+                                    }
                                     esperando_desde = time.monotonic()
 
                         # ===== LOG DE ALTA SEÑAL (SIEMPRE, INCLUSO EN MODO REAL) =====
@@ -733,6 +788,10 @@ class Command(BaseCommand):
         transaction_id: int | None,
         buy_price: float,
         moneda: str,
+        senal_valor: float | None = None,
+        umbral_usado: float | None = None,
+        pesos_usados: dict | None = None,
+        senal_top_contribuciones: list | None = None,
     ) -> None:
         OperacionDeriv.objects.update_or_create(
             contract_id=int(contract_id),
@@ -744,6 +803,10 @@ class Command(BaseCommand):
                 "creada_por_bot": True,
                 "buy_price": float(buy_price) if buy_price else None,
                 "moneda": str(moneda or ""),
+                "senal_valor": float(senal_valor) if senal_valor is not None else None,
+                "umbral_usado": float(umbral_usado) if umbral_usado is not None else None,
+                "pesos_usados": pesos_usados,
+                "senal_top_contribuciones": senal_top_contribuciones,
             },
         )
 

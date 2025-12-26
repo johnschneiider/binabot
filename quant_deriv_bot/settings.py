@@ -115,6 +115,20 @@ SENAL_TOP_N = int(os.getenv("SENAL_TOP_N", "5"))
 # ARCHIVO JSON QUE EL BOT PUEDE RECARGAR EN CALIENTE PARA ACTUALIZAR w SIN REDEPLOY.
 PESOS_ARCHIVO = os.getenv("PESOS_ARCHIVO", str(BASE_DIR / "vector_pesos" / "pesos_calibrados.json")).strip()
 
+# ===== ADAPTADOR ONLINE (AUTO-UMBRAL) =====
+ADAPTATIVO_HABILITADO = (os.getenv("ADAPTATIVO_HABILITADO", "False").strip().lower() in {"1", "true", "yes", "y"})
+ADAPTATIVO_ARCHIVO = os.getenv(
+    "ADAPTATIVO_ARCHIVO", str(BASE_DIR / "vector_pesos" / "umbral_online.json")
+).strip()
+ADAPTATIVO_UMBRALES = [
+    float(x.strip())
+    for x in os.getenv("ADAPTATIVO_UMBRALES", "0.05,0.07,0.09,0.11,0.13,0.15").split(",")
+    if x.strip()
+]
+# Guardrails del adaptador (conservadores por defecto)
+ADAPTATIVO_MIN_TRADES = int(os.getenv("ADAPTATIVO_MIN_TRADES", "60"))
+ADAPTATIVO_EDGE_MARGIN = float(os.getenv("ADAPTATIVO_EDGE_MARGIN", "0.02"))
+
 # ===== CALIBRADOR WALK-FORWARD =====
 CALIBRADOR_TICKS_COUNT = int(os.getenv("CALIBRADOR_TICKS_COUNT", "5000"))
 CALIBRADOR_TRAIN_TICKS = int(os.getenv("CALIBRADOR_TRAIN_TICKS", "2000"))

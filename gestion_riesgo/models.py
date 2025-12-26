@@ -118,6 +118,16 @@ class OperacionDeriv(models.Model):
     payout = models.FloatField(null=True, blank=True)
     profit = models.FloatField(null=True, blank=True)
 
+    # ===== TELEMETRÍA DE ENTRADA (PARA APRENDIZAJE ONLINE / AUDITORÍA) =====
+    # Score s = w^T x en el instante de entrada (antes de enviar proposal/buy).
+    senal_valor = models.FloatField(null=True, blank=True)
+    # Umbral usado al momento de entrar (positivo; la venta usa el negativo).
+    umbral_usado = models.FloatField(null=True, blank=True)
+    # Snapshot (parcial) de pesos usados en la entrada (para trazabilidad).
+    pesos_usados = models.JSONField(null=True, blank=True)
+    # Top contribuciones en la entrada (para explicabilidad).
+    senal_top_contribuciones = models.JSONField(null=True, blank=True)
+
     opened_epoch = models.BigIntegerField(null=True, blank=True)
     closed_epoch = models.BigIntegerField(null=True, blank=True)
 
