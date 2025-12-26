@@ -262,7 +262,11 @@ class Command(BaseCommand):
                                 async def _actualizar_balance_real() -> None:
                                     prev = await sync_to_async(
                                         lambda: Cuenta.objects.filter(id=cuenta.id).values(
-                                            "max_balance_deriv_historico", "bloqueado"
+                                            "max_balance_deriv_historico",
+                                            "bloqueado",
+                                            "ciclo_balance_inicio",
+                                            "ciclo_inicio_epoch",
+                                            "ciclo_pausa_hasta_epoch",
                                         ).first(),
                                         thread_sensitive=True,
                                     )()
@@ -276,28 +280,94 @@ class Command(BaseCommand):
                                     dd_hyst = max(0.0, min(dd_hyst, dd_max))  # clamp defensivo
                                     dd_unblock = max(0.0, dd_max - dd_hyst)
 
+                                    # ===== CICLOS (OPCIONAL) =====
+                                    ahora_epoch = int(time.time())
+                                    ciclo_habil = bool(getattr(settings, "CICLO_HABILITADO", False))
+                                    ciclo_tp = float(getattr(settings, "CICLO_TAKE_PROFIT_PCT", 0.015))
+                                    ciclo_sl = float(getattr(settings, "CICLO_STOPLOSS_PCT", 0.010))
+                                    pausa_tp = int(getattr(settings, "CICLO_PAUSA_TP_SEG", 86400))
+                                    pausa_sl = int(getattr(settings, "CICLO_PAUSA_SL_SEG", 3600))
+
+                                    ciclo_balance_inicio = float(prev.get("ciclo_balance_inicio")) if (prev and prev.get("ciclo_balance_inicio") is not None) else None
+                                    ciclo_pausa_hasta = int(prev.get("ciclo_pausa_hasta_epoch")) if (prev and prev.get("ciclo_pausa_hasta_epoch") is not None) else None
+
+                                    riesgo_motivo = ""
+                                    ciclo_evento = ""
+                                    ciclo_bloqueado = False
+                                    nuevo_ciclo_balance_inicio = ciclo_balance_inicio
+                                    nuevo_ciclo_inicio_epoch = int(prev.get("ciclo_inicio_epoch")) if (prev and prev.get("ciclo_inicio_epoch") is not None) else None
+                                    nuevo_ciclo_pausa_hasta = ciclo_pausa_hasta
+
+                                    if ciclo_habil:
+                                        # Si estamos en pausa, bloquear.
+                                        if ciclo_pausa_hasta is not None and ahora_epoch < ciclo_pausa_hasta:
+                                            ciclo_bloqueado = True
+                                            riesgo_motivo = f"PAUSA_CICLO_HASTA_{ciclo_pausa_hasta}"
+                                            ciclo_evento = "PAUSA"
+                                        else:
+                                            # Si terminó la pausa, limpiar y arrancar ciclo con baseline fresco.
+                                            if ciclo_pausa_hasta is not None and ahora_epoch >= ciclo_pausa_hasta:
+                                                nuevo_ciclo_pausa_hasta = None
+                                                nuevo_ciclo_balance_inicio = None
+                                                nuevo_ciclo_inicio_epoch = None
+
+                                            if nuevo_ciclo_balance_inicio is None:
+                                                nuevo_ciclo_balance_inicio = float(balance_val)
+                                                nuevo_ciclo_inicio_epoch = int(ahora_epoch)
+                                                ciclo_evento = "CICLO_INICIADO"
+
+                                            # Evaluar PnL % del ciclo
+                                            if nuevo_ciclo_balance_inicio and nuevo_ciclo_balance_inicio > 0:
+                                                pnl_pct = (float(balance_val) / float(nuevo_ciclo_balance_inicio)) - 1.0
+                                                if pnl_pct >= float(ciclo_tp):
+                                                    nuevo_ciclo_pausa_hasta = int(ahora_epoch + max(0, pausa_tp))
+                                                    nuevo_ciclo_balance_inicio = None
+                                                    nuevo_ciclo_inicio_epoch = None
+                                                    ciclo_bloqueado = True
+                                                    riesgo_motivo = f"TAKE_PROFIT_{float(ciclo_tp):.4f}_PAUSA_{int(pausa_tp)}s"
+                                                    ciclo_evento = "TAKE_PROFIT"
+                                                elif pnl_pct <= -float(ciclo_sl):
+                                                    nuevo_ciclo_pausa_hasta = int(ahora_epoch + max(0, pausa_sl))
+                                                    nuevo_ciclo_balance_inicio = None
+                                                    nuevo_ciclo_inicio_epoch = None
+                                                    ciclo_bloqueado = True
+                                                    riesgo_motivo = f"STOPLOSS_{float(ciclo_sl):.4f}_PAUSA_{int(pausa_sl)}s"
+                                                    ciclo_evento = "STOPLOSS"
+                                                else:
+                                                    riesgo_motivo = "CICLO_ACTIVO"
+                                                    if not ciclo_evento:
+                                                        ciclo_evento = "EN_CURSO"
+
+                                    # ===== DRAWDOWN GLOBAL (OPCIONAL) =====
+                                    dd_habil = bool(getattr(settings, "DRAWDOWN_GLOBAL_HABILITADO", True))
+
                                     # Histéresis: si ya está bloqueado, requerimos recuperación adicional para desbloquear.
-                                    if prev_bloqueado:
-                                        bloqueado_real = not (drawdown <= dd_unblock)
+                                    if dd_habil:
+                                        if prev_bloqueado:
+                                            bloqueado_dd = not (drawdown <= dd_unblock)
+                                        else:
+                                            bloqueado_dd = bool(drawdown >= dd_max)
                                     else:
-                                        bloqueado_real = bool(drawdown >= dd_max)
+                                        bloqueado_dd = False
+
+                                    bloqueado_real = bool(ciclo_bloqueado or bloqueado_dd)
+                                    if not riesgo_motivo:
+                                        riesgo_motivo = "DRAWDOWN" if bloqueado_dd else "OK"
 
                                     # Log sólo cuando cambia el estado (evita spam).
                                     if (not prev_bloqueado) and bloqueado_real:
-                                        bal_req = (nuevo_max * (1.0 - dd_unblock)) if nuevo_max > 0 else None
-                                        self.stderr.write(
-                                            "[RISK] BLOQUEO_POR_DRAWDOWN "
-                                            f"drawdown={drawdown:.6f} umbral={dd_max:.6f} "
-                                            f"balance={balance_val:.2f} max={nuevo_max:.2f} "
-                                            + (f"balance_desbloqueo>={bal_req:.3f} (histeresis={dd_hyst:.6f})" if bal_req is not None else "")
-                                        )
+                                        if ciclo_bloqueado and ciclo_evento in {"TAKE_PROFIT", "STOPLOSS", "PAUSA"}:
+                                            self.stderr.write(f"[RISK] BLOQUEO_POR_CICLO motivo={riesgo_motivo} balance={balance_val:.2f}")
+                                        elif bloqueado_dd:
+                                            bal_req = (nuevo_max * (1.0 - dd_unblock)) if nuevo_max > 0 else None
+                                            self.stderr.write(
+                                                "[RISK] BLOQUEO_POR_DRAWDOWN "
+                                                f"drawdown={drawdown:.6f} umbral={dd_max:.6f} "
+                                                f"balance={balance_val:.2f} max={nuevo_max:.2f} "
+                                                + (f"balance_desbloqueo>={bal_req:.3f} (histeresis={dd_hyst:.6f})" if bal_req is not None else "")
+                                            )
                                     if prev_bloqueado and (not bloqueado_real):
-                                        self.stderr.write(
-                                            "[RISK] DESBLOQUEO_POR_RECUPERACION "
-                                            f"drawdown={drawdown:.6f} umbral_desbloqueo={dd_unblock:.6f} "
-                                            f"balance={balance_val:.2f} max={nuevo_max:.2f} "
-                                            f"(histeresis={dd_hyst:.6f})"
-                                        )
+                                        self.stderr.write(f"[RISK] DESBLOQUEO motivo={riesgo_motivo} balance={balance_val:.2f}")
 
                                     await sync_to_async(
                                         lambda: Cuenta.objects.filter(id=cuenta.id).update(
@@ -305,6 +375,11 @@ class Command(BaseCommand):
                                             moneda_deriv=currency,
                                             max_balance_deriv_historico=nuevo_max,
                                             bloqueado=bloqueado_real,
+                                            riesgo_motivo=riesgo_motivo,
+                                            ciclo_balance_inicio=nuevo_ciclo_balance_inicio,
+                                            ciclo_inicio_epoch=nuevo_ciclo_inicio_epoch,
+                                            ciclo_pausa_hasta_epoch=nuevo_ciclo_pausa_hasta,
+                                            ciclo_ultimo_evento=ciclo_evento,
                                         ),
                                         thread_sensitive=True,
                                     )()

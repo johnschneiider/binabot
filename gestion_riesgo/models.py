@@ -23,6 +23,18 @@ class Cuenta(models.Model):
     capital_actual = models.FloatField(default=100.0)
     max_capital_historico = models.FloatField(default=100.0)
     bloqueado = models.BooleanField(default=False)
+    # Motivo del bloqueo/estado de riesgo (solo telemetría/UI; la lógica se aplica en el bot).
+    riesgo_motivo = models.CharField(max_length=64, blank=True, default="")
+
+    # ===== CICLOS (MODO REAL) =====
+    # Permite gobernanza por ciclos sobre el balance real (Deriv):
+    # - Arranca ciclo con balance_inicio (baseline)
+    # - Si llega a take profit => pausa 24h y reinicia ciclo al reanudar
+    # - Si llega a stoploss => pausa 1h y reinicia ciclo al reanudar
+    ciclo_balance_inicio = models.FloatField(null=True, blank=True)
+    ciclo_inicio_epoch = models.BigIntegerField(null=True, blank=True)
+    ciclo_pausa_hasta_epoch = models.BigIntegerField(null=True, blank=True)
+    ciclo_ultimo_evento = models.CharField(max_length=64, blank=True, default="")
 
     ultimo_tick_epoch = models.BigIntegerField(default=0)
     ultimo_precio = models.FloatField(default=0.0)
@@ -38,7 +50,7 @@ class Cuenta(models.Model):
 
     def __str__(self) -> str:
         b = self.balance_deriv if self.balance_deriv is not None else self.capital_actual
-        return f"Cuenta({self.simbolo}) balance={b:.2f} bloqueado={self.bloqueado}"
+        return f"Cuenta({self.simbolo}) balance={b:.2f} bloqueado={self.bloqueado} motivo={self.riesgo_motivo}"
 
 
 class Operacion(models.Model):

@@ -167,5 +167,18 @@ MAX_DRAWDOWN = float(os.getenv("MAX_DRAWDOWN", "0.20"))
 # - Desbloquea cuando drawdown <= (MAX_DRAWDOWN - MAX_DRAWDOWN_HISTERESIS)
 # Si es 0.0, se comporta como antes.
 MAX_DRAWDOWN_HISTERESIS = float(os.getenv("MAX_DRAWDOWN_HISTERESIS", "0.0"))
+# Si estás usando “modo ciclos”, normalmente conviene desactivar el drawdown global histórico.
+DRAWDOWN_GLOBAL_HABILITADO = (os.getenv("DRAWDOWN_GLOBAL_HABILITADO", "True").strip().lower() in {"1", "true", "yes", "y"})
+
+# ===== CICLOS (MODO REAL) =====
+# Gobernanza simple por ciclos:
+# - baseline = balance al iniciar ciclo
+# - take profit => pausa 24h y reinicia ciclo al reanudar
+# - stoploss => pausa 1h y reinicia ciclo al reanudar
+CICLO_HABILITADO = (os.getenv("CICLO_HABILITADO", "False").strip().lower() in {"1", "true", "yes", "y"})
+CICLO_TAKE_PROFIT_PCT = float(os.getenv("CICLO_TAKE_PROFIT_PCT", "0.015"))
+CICLO_STOPLOSS_PCT = float(os.getenv("CICLO_STOPLOSS_PCT", "0.010"))
+CICLO_PAUSA_TP_SEG = int(os.getenv("CICLO_PAUSA_TP_SEG", "86400"))
+CICLO_PAUSA_SL_SEG = int(os.getenv("CICLO_PAUSA_SL_SEG", "3600"))
 
 
