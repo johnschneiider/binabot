@@ -261,15 +261,43 @@ class Command(BaseCommand):
 
                                 async def _actualizar_balance_real() -> None:
                                     prev = await sync_to_async(
-                                        lambda: Cuenta.objects.filter(id=cuenta.id).values_list(
-                                            "max_balance_deriv_historico", flat=True
+                                        lambda: Cuenta.objects.filter(id=cuenta.id).values(
+                                            "max_balance_deriv_historico", "bloqueado"
                                         ).first(),
                                         thread_sensitive=True,
                                     )()
-                                    prev_max = float(prev) if prev is not None else balance_val
+                                    prev_max = float(prev["max_balance_deriv_historico"]) if prev and prev.get("max_balance_deriv_historico") is not None else balance_val
+                                    prev_bloqueado = bool(prev.get("bloqueado")) if prev else False
                                     nuevo_max = max(prev_max, balance_val)
                                     drawdown = 0.0 if nuevo_max <= 0 else (1.0 - (balance_val / nuevo_max))
-                                    bloqueado_real = bool(drawdown >= float(settings.MAX_DRAWDOWN))
+
+                                    dd_max = float(settings.MAX_DRAWDOWN)
+                                    dd_hyst = float(getattr(settings, "MAX_DRAWDOWN_HISTERESIS", 0.0))
+                                    dd_hyst = max(0.0, min(dd_hyst, dd_max))  # clamp defensivo
+                                    dd_unblock = max(0.0, dd_max - dd_hyst)
+
+                                    # Histéresis: si ya está bloqueado, requerimos recuperación adicional para desbloquear.
+                                    if prev_bloqueado:
+                                        bloqueado_real = not (drawdown <= dd_unblock)
+                                    else:
+                                        bloqueado_real = bool(drawdown >= dd_max)
+
+                                    # Log sólo cuando cambia el estado (evita spam).
+                                    if (not prev_bloqueado) and bloqueado_real:
+                                        bal_req = (nuevo_max * (1.0 - dd_unblock)) if nuevo_max > 0 else None
+                                        self.stderr.write(
+                                            "[RISK] BLOQUEO_POR_DRAWDOWN "
+                                            f"drawdown={drawdown:.6f} umbral={dd_max:.6f} "
+                                            f"balance={balance_val:.2f} max={nuevo_max:.2f} "
+                                            + (f"balance_desbloqueo>={bal_req:.3f} (histeresis={dd_hyst:.6f})" if bal_req is not None else "")
+                                        )
+                                    if prev_bloqueado and (not bloqueado_real):
+                                        self.stderr.write(
+                                            "[RISK] DESBLOQUEO_POR_RECUPERACION "
+                                            f"drawdown={drawdown:.6f} umbral_desbloqueo={dd_unblock:.6f} "
+                                            f"balance={balance_val:.2f} max={nuevo_max:.2f} "
+                                            f"(histeresis={dd_hyst:.6f})"
+                                        )
 
                                     await sync_to_async(
                                         lambda: Cuenta.objects.filter(id=cuenta.id).update(

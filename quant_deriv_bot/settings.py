@@ -162,5 +162,10 @@ CALIBRADOR_MIN_EDGE_WINRATE = float(os.getenv("CALIBRADOR_MIN_EDGE_WINRATE", "0.
 CAPITAL_INICIAL = float(os.getenv("CAPITAL_INICIAL", "100.0"))
 MAX_RIESGO_POR_OPERACION = float(os.getenv("MAX_RIESGO_POR_OPERACION", "0.01"))
 MAX_DRAWDOWN = float(os.getenv("MAX_DRAWDOWN", "0.20"))
+# Histéresis para evitar “flip-flop” cerca del umbral:
+# - Bloquea cuando drawdown >= MAX_DRAWDOWN
+# - Desbloquea cuando drawdown <= (MAX_DRAWDOWN - MAX_DRAWDOWN_HISTERESIS)
+# Si es 0.0, se comporta como antes.
+MAX_DRAWDOWN_HISTERESIS = float(os.getenv("MAX_DRAWDOWN_HISTERESIS", "0.0"))
 
 
