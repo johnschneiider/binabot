@@ -132,6 +132,7 @@ class Command(BaseCommand):
         esperando: dict | None = None
         esperando_desde: float = 0.0
         ultimo_open_contract: float = 0.0
+        watchdog_open_contract_intentos: int = 0
 
         # ===== PERSISTENCIA: CUENTA =====
         cuenta = await sync_to_async(self._obtener_o_crear_cuenta, thread_sensitive=True)(
@@ -170,16 +171,15 @@ class Command(BaseCommand):
             except Exception:
                 pesos_info = f"PESOS_ARCHIVO={pesos_archivo} (error al inspeccionar archivo)"
 
+        # Nota: stdout sin style para que quede grepeable en `journalctl | grep`.
         self.stdout.write(
-            self.style.SUCCESS(
-                "[CFG] "
-                f"modo_real={modo_real} symbol={symbol} "
-                f"dur_ticks={int(settings.DERIV_DURACION_TICKS)} "
-                f"umbral_compra={float(settings.UMBRAL_COMPRA)} umbral_venta={float(settings.UMBRAL_VENTA)} "
-                f"normalizar={bool(settings.NORMALIZAR_VECTOR)} "
-                f"alpha={float(settings.NORMALIZACION_ALPHA)} clip={float(settings.NORMALIZACION_CLIP)} "
-                + pesos_info
-            )
+            "[CFG] "
+            f"modo_real={modo_real} symbol={symbol} "
+            f"dur_ticks={int(settings.DERIV_DURACION_TICKS)} "
+            f"umbral_compra={float(settings.UMBRAL_COMPRA)} umbral_venta={float(settings.UMBRAL_VENTA)} "
+            f"normalizar={bool(settings.NORMALIZAR_VECTOR)} "
+            f"alpha={float(settings.NORMALIZACION_ALPHA)} clip={float(settings.NORMALIZACION_CLIP)} "
+            + pesos_info
         )
 
         def _limite_alcanzado() -> bool:
@@ -222,13 +222,11 @@ class Command(BaseCommand):
                                 {"proposal_open_contract": 1, "contract_id": int(contrato_abierto_id), "subscribe": 1}
                             )
                             self.stderr.write(
-                                self.style.WARNING(
-                                    f"[TRADING] Re-suscripción contrato abierto tras reconexión: contract_id={int(contrato_abierto_id)}"
-                                )
+                                f"[TRADING] Re-suscripción contrato abierto tras reconexión: contract_id={int(contrato_abierto_id)}"
                             )
                             ultimo_open_contract = time.monotonic()
                         except Exception as e:
-                            self.stderr.write(self.style.WARNING(f"[TRADING] Falló re-suscripción open_contract: {e}"))
+                            self.stderr.write(f"[TRADING] Falló re-suscripción open_contract: {e}")
 
                     async for ev in cliente.stream_eventos(symbol, incluir_balance=incluir_balance):
                         if ev.get("tipo") == "balance":
@@ -285,6 +283,26 @@ class Command(BaseCommand):
                         # RESPUESTAS DE TRADING / HISTORIAL
                         if ev.get("tipo") == "profit_table":
                             if modo_real:
+                                # Si el contrato abierto ya aparece como vendido en profit_table,
+                                # liberar `contrato_abierto_id` para no quedar bloqueados por siempre.
+                                try:
+                                    if contrato_abierto_id is not None:
+                                        tabla = (ev.get("raw") or {}).get("profit_table") or {}
+                                        trans = tabla.get("transactions") or []
+                                        for t in trans:
+                                            cid = t.get("contract_id")
+                                            if cid is None:
+                                                continue
+                                            if int(cid) != int(contrato_abierto_id):
+                                                continue
+                                            if t.get("sell_time"):
+                                                self.stderr.write(
+                                                    f"[TRADING] profit_table indica contrato cerrado. Liberando contract_id={int(contrato_abierto_id)}"
+                                                )
+                                                contrato_abierto_id = None
+                                                break
+                                except Exception:
+                                    pass
                                 await self._procesar_profit_table(cuenta_id=int(cuenta.id), raw=ev["raw"])
                             continue
                         if ev.get("tipo") == "proposal_open_contract":
@@ -292,6 +310,7 @@ class Command(BaseCommand):
                                 contrato = ev["raw"].get("proposal_open_contract") or {}
                                 await self._procesar_open_contract(cuenta_id=int(cuenta.id), simbolo=symbol, contrato=contrato)
                                 ultimo_open_contract = time.monotonic()
+                                watchdog_open_contract_intentos = 0
                                 # SI SE CIERRA, LIBERAR PARA PERMITIR NUEVA OPERACIÓN.
                                 if int(contrato.get("is_sold", 0)) == 1:
                                     contrato_abierto_id = None
@@ -309,6 +328,7 @@ class Command(BaseCommand):
                             proposal_id = prop.get("id")
                             ask = float(prop.get("ask_price") or esperando.get("stake") or 0.0)
                             if proposal_id:
+                                self.stderr.write(f"[TRADING] proposal OK id={proposal_id} ask={ask:.4f} -> enviando buy")
                                 await cliente.enviar({"buy": proposal_id, "price": ask})
                                 esperando = {"tipo": "buy"}
                                 esperando_desde = time.monotonic()
@@ -320,6 +340,9 @@ class Command(BaseCommand):
                             buy_price = float(buy.get("buy_price") or 0.0)
                             if contrato_id:
                                 contrato_abierto_id = int(contrato_id)
+                                self.stderr.write(
+                                    f"[TRADING] buy OK contract_id={int(contrato_id)} transaction_id={trans_id} buy_price={buy_price:.4f}"
+                                )
                                 await cliente.enviar({"proposal_open_contract": 1, "contract_id": int(contrato_id), "subscribe": 1})
                                 ultimo_open_contract = time.monotonic()
                                 await sync_to_async(self._db_registrar_compra_deriv, thread_sensitive=True)(
@@ -353,10 +376,7 @@ class Command(BaseCommand):
                         if modo_real and esperando is not None and esperando_desde > 0:
                             if (ahora_wd - esperando_desde) >= float(settings.DERIV_TIMEOUT_PROPUESTA_SEG):
                                 self.stderr.write(
-                                    self.style.WARNING(
-                                        f"[TRADING] Timeout esperando '{esperando.get('tipo')}'. Reset estado. "
-                                        f"contract_abierto_id={contrato_abierto_id}"
-                                    )
+                                    f"[TRADING] Timeout esperando '{esperando.get('tipo')}'. Reset estado. contract_abierto_id={contrato_abierto_id}"
                                 )
                                 esperando = None
                                 esperando_desde = 0.0
@@ -364,11 +384,10 @@ class Command(BaseCommand):
                         if modo_real and contrato_abierto_id is not None and ultimo_open_contract > 0:
                             if (ahora_wd - ultimo_open_contract) >= float(settings.DERIV_TIMEOUT_CONTRATO_SEG):
                                 # No liberamos a ciegas: pedimos profit_table y re-suscribimos 1 vez.
+                                watchdog_open_contract_intentos += 1
                                 self.stderr.write(
-                                    self.style.WARNING(
-                                        f"[TRADING] Timeout sin updates de open_contract. "
-                                        f"Re-suscribiendo + profit_table. contract_id={int(contrato_abierto_id)}"
-                                    )
+                                    f"[TRADING] Timeout sin updates de open_contract. Re-suscribiendo + profit_table. "
+                                    f"contract_id={int(contrato_abierto_id)} intento={watchdog_open_contract_intentos}"
                                 )
                                 try:
                                     await cliente.enviar(
@@ -383,7 +402,15 @@ class Command(BaseCommand):
                                     )
                                     ultimo_open_contract = time.monotonic()
                                 except Exception as e:
-                                    self.stderr.write(self.style.WARNING(f"[TRADING] Falló watchdog open_contract: {e}"))
+                                    self.stderr.write(f"[TRADING] Falló watchdog open_contract: {e}")
+
+                                # Último recurso: si tras varios intentos no hay updates, liberar para no quedar muerto días.
+                                if watchdog_open_contract_intentos >= 3:
+                                    self.stderr.write(
+                                        f"[TRADING] FORZANDO liberación de contrato por falta de updates. contract_id={int(contrato_abierto_id)}"
+                                    )
+                                    contrato_abierto_id = None
+                                    watchdog_open_contract_intentos = 0
 
                         # PESOS ACTUALES (HOY FIJOS; MAÑANA IA)
                         w = gestor_pesos.obtener_pesos_desde_ia(x)
@@ -456,6 +483,10 @@ class Command(BaseCommand):
                                 stake = max(0.0, min(stake, float(gestor_riesgo.capital_actual)))
                                 if stake > 0:
                                     contract_type = "CALL" if resultado.decision == "COMPRA" else "PUT"
+                                    self.stderr.write(
+                                        f"[TRADING] señal={resultado.decision} s={float(resultado.valor):+.4f} stake={float(stake):.2f} "
+                                        f"dur={int(settings.DERIV_DURACION_TICKS)} contract_type={contract_type}"
+                                    )
                                     await cliente.enviar(
                                         {
                                             "proposal": 1,
