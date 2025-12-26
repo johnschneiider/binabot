@@ -192,6 +192,15 @@ class Command(BaseCommand):
             f"normalizar={bool(settings.NORMALIZAR_VECTOR)} "
             f"alpha={float(settings.NORMALIZACION_ALPHA)} clip={float(settings.NORMALIZACION_CLIP)} "
             + pesos_info
+            + f" adaptativo={bool(adaptativo is not None)}"
+            + (
+                f" adapt_modo_sin_evidencia={getattr(settings,'ADAPTATIVO_MODO_SIN_EVIDENCIA','no_operar')}"
+                f" adapt_warmup={float(getattr(settings,'ADAPTATIVO_UMBRAL_WARMUP',0.09))}"
+                f" adapt_min_trades={int(getattr(settings,'ADAPTATIVO_MIN_TRADES',60))}"
+                f" adapt_edge_margin={float(getattr(settings,'ADAPTATIVO_EDGE_MARGIN',0.02))}"
+                if adaptativo is not None
+                else ""
+            )
         )
 
         def _limite_alcanzado() -> bool:
@@ -459,9 +468,15 @@ class Command(BaseCommand):
                                 umbral_compra = float(u)
                                 umbral_venta = -float(u)
                             else:
-                                # Sin evidencia suficiente => no operar.
-                                umbral_compra = float("inf")
-                                umbral_venta = -float("inf")
+                                modo = str(getattr(settings, "ADAPTATIVO_MODO_SIN_EVIDENCIA", "no_operar")).strip().lower()
+                                if modo == "warmup":
+                                    uw = float(getattr(settings, "ADAPTATIVO_UMBRAL_WARMUP", 0.09))
+                                    umbral_compra = float(abs(uw))
+                                    umbral_venta = -float(abs(uw))
+                                else:
+                                    # Sin evidencia suficiente => no operar.
+                                    umbral_compra = float("inf")
+                                    umbral_venta = -float("inf")
 
                         resultado = evaluar_senal(
                             vector_mercado=x_eval,

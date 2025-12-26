@@ -128,6 +128,11 @@ ADAPTATIVO_UMBRALES = [
 # Guardrails del adaptador (conservadores por defecto)
 ADAPTATIVO_MIN_TRADES = int(os.getenv("ADAPTATIVO_MIN_TRADES", "60"))
 ADAPTATIVO_EDGE_MARGIN = float(os.getenv("ADAPTATIVO_EDGE_MARGIN", "0.02"))
+# Mientras el adaptador no tenga evidencia suficiente, puede:
+# - "no_operar" (seguro) o
+# - "warmup" (operar con un umbral inicial fijo para recolectar datos)
+ADAPTATIVO_MODO_SIN_EVIDENCIA = os.getenv("ADAPTATIVO_MODO_SIN_EVIDENCIA", "no_operar").strip().lower()
+ADAPTATIVO_UMBRAL_WARMUP = float(os.getenv("ADAPTATIVO_UMBRAL_WARMUP", "0.09"))
 
 # ===== CALIBRADOR WALK-FORWARD =====
 CALIBRADOR_TICKS_COUNT = int(os.getenv("CALIBRADOR_TICKS_COUNT", "5000"))
