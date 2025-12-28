@@ -67,15 +67,41 @@
         {% else %}
           <div class="badge ok" id="bloqueado">OK</div>
         {% endif %}
-        <div class="muted" style="margin-top: 8px;">
-          Motivo: <span class="mono" id="riesgo_motivo">{% if cuenta and cuenta.riesgo_motivo %}{{ cuenta.riesgo_motivo }}{% else %}—{% endif %}</span>
+        <div style="margin-top: 10px;">
+          <div class="muted" style="font-size: 11px; margin-bottom: 4px;">Motivo:</div>
+          <div class="mono" id="riesgo_motivo" style="font-size: 13px; font-weight: 500;">{% if cuenta and cuenta.riesgo_motivo %}{{ cuenta.riesgo_motivo }}{% else %}—{% endif %}</div>
         </div>
-        <div class="muted" style="margin-top: 6px;">
-          Ciclo: inicio=<span class="mono" id="ciclo_inicio">{% if cuenta and cuenta.ciclo_inicio_epoch %}{{ cuenta.ciclo_inicio_epoch }}{% else %}—{% endif %}</span>
-          · base=<span class="mono" id="ciclo_balance_inicio">{% if cuenta and cuenta.ciclo_balance_inicio != None %}{{ cuenta.ciclo_balance_inicio }}{% else %}—{% endif %}</span>
-          · pausa=<span class="mono" id="ciclo_pausa">—</span>
+        <div id="ciclo_pausa_info" style="margin-top: 10px; display: none;">
+          <div class="muted" style="font-size: 11px; margin-bottom: 4px;">Pausa hasta:</div>
+          <div class="mono" id="ciclo_pausa_fecha" style="font-size: 13px; color: #dc2626;"></div>
+          <div class="mono" id="ciclo_pausa_countdown" style="font-size: 12px; color: #dc2626; margin-top: 2px;"></div>
         </div>
-        <div class="muted" style="margin-top: 8px;">Último tick: <span class="mono" id="ultimo_tick">{{ cuenta.ultimo_tick_epoch|default:"—" }}</span> · Precio: <span class="mono" id="ultimo_precio">{{ cuenta.ultimo_precio|default:"—" }}</span></div>
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+          <div class="muted" style="font-size: 11px; margin-bottom: 6px;">Ciclo de trading</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+            <div>
+              <div class="muted" style="font-size: 10px;">Balance inicial:</div>
+              <div class="mono" id="ciclo_balance_inicio" style="font-weight: 500;">{% if cuenta and cuenta.ciclo_balance_inicio != None %}{{ cuenta.ciclo_balance_inicio|floatformat:2 }}{% else %}—{% endif %}</div>
+            </div>
+            <div>
+              <div class="muted" style="font-size: 10px;">Inicio:</div>
+              <div class="mono" id="ciclo_inicio" style="font-size: 11px;">—</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+          <div class="muted" style="font-size: 11px; margin-bottom: 6px;">Último tick del mercado</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+            <div>
+              <div class="muted" style="font-size: 10px;">Hora:</div>
+              <div class="mono" id="ultimo_tick" style="font-size: 11px;">—</div>
+            </div>
+            <div>
+              <div class="muted" style="font-size: 10px;">Precio:</div>
+              <div class="mono" id="ultimo_precio" style="font-weight: 500;">{{ cuenta.ultimo_precio|default:"—" }}</div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="card">
         <div class="muted">Señal (wᵀx) · Top contribuciones</div>
@@ -203,6 +229,20 @@
 
       function setRiesgoMotivo(m) {
         setText("riesgo_motivo", (m && String(m).trim()) ? String(m) : "—");
+      }
+
+      function actualizarPausaInfo(c) {
+        const elInfo = document.getElementById("ciclo_pausa_info");
+        if (!elInfo) return;
+        const tienePausa = c && c.ciclo_pausa_hasta_local && c.ciclo_pausa_restante_seg !== null && c.ciclo_pausa_restante_seg !== undefined;
+        if (tienePausa && c.ciclo_pausa_restante_seg > 0) {
+          elInfo.style.display = "block";
+          setText("ciclo_pausa_fecha", c.ciclo_pausa_hasta_local || "—");
+          const countdown = c.ciclo_pausa_restante_hhmmss || "00:00:00";
+          setText("ciclo_pausa_countdown", `(faltan ${countdown})`);
+        } else {
+          elInfo.style.display = "none";
+        }
       }
 
       function formatPausa(pausaLocal, restanteHHMMSS) {
@@ -353,13 +393,15 @@
             setText("balance_deriv", (c.balance_deriv === null || c.balance_deriv === undefined) ? "—" : fmt2(c.balance_deriv));
             setText("moneda_deriv", c.moneda_deriv || "—");
             setText("capital_actual", fmt2(c.capital_actual));
-            setText("ultimo_tick", String(c.ultimo_tick_epoch));
-            setText("ultimo_precio", String(c.ultimo_precio));
             setBloqueado(Boolean(c.bloqueado));
-            setRiesgoMotivo(c.riesgo_motivo_ui || c.riesgo_motivo);
-            setText("ciclo_inicio", (c.ciclo_inicio_epoch === null || c.ciclo_inicio_epoch === undefined) ? "—" : String(c.ciclo_inicio_epoch));
+            setRiesgoMotivo(c.riesgo_motivo_ui || c.riesgo_motivo || "—");
+            actualizarPausaInfo(c);
+            // Ciclo: balance inicial y fecha de inicio legible
             setText("ciclo_balance_inicio", (c.ciclo_balance_inicio === null || c.ciclo_balance_inicio === undefined) ? "—" : fmt2(c.ciclo_balance_inicio));
-            setText("ciclo_pausa", formatPausa(c.ciclo_pausa_hasta_local, c.ciclo_pausa_restante_hhmmss));
+            setText("ciclo_inicio", c.ciclo_inicio_local || "—");
+            // Último tick: fecha legible y precio
+            setText("ultimo_tick", c.ultimo_tick_local ? c.ultimo_tick_local.slice(11, 19) : "—");
+            setText("ultimo_precio", (c.ultimo_precio === null || c.ultimo_precio === undefined) ? "—" : fmt2(c.ultimo_precio));
             setText("senal_valor", (c.senal_valor === null || c.senal_valor === undefined) ? "—" : fmt2(c.senal_valor));
             setSenalDecision(c.senal_decision);
             renderContribuciones(c.senal_top_contribuciones);

@@ -143,6 +143,10 @@ def estado_json(request):
             dt_pausa_local = _fecha_hora_colombia_desde_epoch(pausa_hasta_epoch)
             pausa_restante_seg = max(0, int(pausa_hasta_epoch - now_epoch))
 
+        # Fechas legibles para ciclo y último tick
+        dt_ciclo_inicio = _fecha_hora_colombia_desde_epoch(cuenta.ciclo_inicio_epoch) if cuenta.ciclo_inicio_epoch else None
+        dt_ultimo_tick = _fecha_hora_colombia_desde_epoch(cuenta.ultimo_tick_epoch) if cuenta.ultimo_tick_epoch else None
+
         cuenta_dict = {
             "id": cuenta.id,
             "simbolo": cuenta.simbolo,
@@ -157,12 +161,14 @@ def estado_json(request):
             "riesgo_motivo_ui": riesgo_ui.get("label") or cuenta.riesgo_motivo,
             "ciclo_balance_inicio": cuenta.ciclo_balance_inicio,
             "ciclo_inicio_epoch": cuenta.ciclo_inicio_epoch,
+            "ciclo_inicio_local": dt_ciclo_inicio.strftime("%Y-%m-%d %H:%M:%S") if dt_ciclo_inicio else None,
             "ciclo_pausa_hasta_epoch": cuenta.ciclo_pausa_hasta_epoch,
             "ciclo_pausa_hasta_local": dt_pausa_local.strftime("%Y-%m-%d %H:%M:%S") if dt_pausa_local else None,
             "ciclo_pausa_restante_seg": pausa_restante_seg,
             "ciclo_pausa_restante_hhmmss": _fmt_hhmmss(pausa_restante_seg) if pausa_restante_seg is not None else None,
             "ciclo_ultimo_evento": cuenta.ciclo_ultimo_evento,
             "ultimo_tick_epoch": cuenta.ultimo_tick_epoch,
+            "ultimo_tick_local": dt_ultimo_tick.strftime("%Y-%m-%d %H:%M:%S") if dt_ultimo_tick else None,
             "ultimo_precio": cuenta.ultimo_precio,
             "senal_valor": cuenta.senal_valor,
             "senal_decision": cuenta.senal_decision,
