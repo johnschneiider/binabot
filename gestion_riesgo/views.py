@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone as dt_timezone
+import re
 
 from django.utils import timezone
 from django.http import JsonResponse
@@ -23,6 +24,56 @@ def _fecha_hora_colombia_desde_epoch(epoch: int | None) -> datetime | None:
         return None
     dt_utc = datetime.fromtimestamp(int(epoch), tz=dt_timezone.utc)
     return timezone.localtime(dt_utc)
+
+
+def _fmt_hhmmss(total_seg: int) -> str:
+    total = max(0, int(total_seg))
+    h = total // 3600
+    m = (total % 3600) // 60
+    s = total % 60
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def _riesgo_motivo_ui(riesgo_motivo: str | None) -> dict:
+    """
+    Traduce el motivo "técnico" a algo legible para el dashboard.
+
+    Retorna:
+      - label: string humano
+      - pausa_hasta_epoch: int|None (si aplica)
+    """
+    rm = (riesgo_motivo or "").strip()
+    if not rm:
+        return {"label": "—", "pausa_hasta_epoch": None}
+
+    # PAUSA_CICLO_HASTA_<epoch>
+    m = re.match(r"^PAUSA_CICLO_HASTA_(\d+)$", rm)
+    if m:
+        return {"label": "PAUSA (ciclo)", "pausa_hasta_epoch": int(m.group(1))}
+
+    # TAKE_PROFIT_<tp>_PAUSA_<secs>s
+    m = re.match(r"^TAKE_PROFIT_([0-9.]+)_PAUSA_(\d+)s$", rm)
+    if m:
+        tp = float(m.group(1))
+        pausa_s = int(m.group(2))
+        return {"label": f"TAKE PROFIT (meta {tp*100:.2f}% · pausa {pausa_s//60}m)", "pausa_hasta_epoch": None}
+
+    # STOPLOSS_<sl>_PAUSA_<secs>s
+    m = re.match(r"^STOPLOSS_([0-9.]+)_PAUSA_(\d+)s$", rm)
+    if m:
+        sl = float(m.group(1))
+        pausa_s = int(m.group(2))
+        return {"label": f"STOP LOSS ({sl*100:.2f}% · pausa {pausa_s//60}m)", "pausa_hasta_epoch": None}
+
+    if rm == "CICLO_ACTIVO":
+        return {"label": "CICLO ACTIVO", "pausa_hasta_epoch": None}
+    if rm == "DRAWDOWN":
+        return {"label": "DRAWDOWN (protección)", "pausa_hasta_epoch": None}
+    if rm == "OK":
+        return {"label": "OK", "pausa_hasta_epoch": None}
+
+    # Fallback: no romper UI, pero no mostrar el prefijo técnico si viene vacío.
+    return {"label": rm, "pausa_hasta_epoch": None}
 
 
 @require_http_methods(["GET", "HEAD"])
@@ -79,6 +130,19 @@ def estado_json(request):
         op["fecha_hora"] = dt_local.strftime("%Y-%m-%d %H:%M:%S") if dt_local else None
     cuenta_dict = None
     if cuenta is not None:
+        now_epoch = int(timezone.now().timestamp())
+        pausa_hasta_epoch = int(cuenta.ciclo_pausa_hasta_epoch) if cuenta.ciclo_pausa_hasta_epoch is not None else None
+        dt_pausa_local = _fecha_hora_colombia_desde_epoch(pausa_hasta_epoch) if pausa_hasta_epoch else None
+        pausa_restante_seg = max(0, int(pausa_hasta_epoch - now_epoch)) if pausa_hasta_epoch else None
+
+        riesgo_ui = _riesgo_motivo_ui(cuenta.riesgo_motivo)
+        # Si el motivo trae epoch incrustado, preferimos ese.
+        pausa_epoch_from_motivo = riesgo_ui.get("pausa_hasta_epoch")
+        if pausa_epoch_from_motivo:
+            pausa_hasta_epoch = int(pausa_epoch_from_motivo)
+            dt_pausa_local = _fecha_hora_colombia_desde_epoch(pausa_hasta_epoch)
+            pausa_restante_seg = max(0, int(pausa_hasta_epoch - now_epoch))
+
         cuenta_dict = {
             "id": cuenta.id,
             "simbolo": cuenta.simbolo,
@@ -90,9 +154,13 @@ def estado_json(request):
             "max_capital_historico": cuenta.max_capital_historico,
             "bloqueado": cuenta.bloqueado,
             "riesgo_motivo": cuenta.riesgo_motivo,
+            "riesgo_motivo_ui": riesgo_ui.get("label") or cuenta.riesgo_motivo,
             "ciclo_balance_inicio": cuenta.ciclo_balance_inicio,
             "ciclo_inicio_epoch": cuenta.ciclo_inicio_epoch,
             "ciclo_pausa_hasta_epoch": cuenta.ciclo_pausa_hasta_epoch,
+            "ciclo_pausa_hasta_local": dt_pausa_local.strftime("%Y-%m-%d %H:%M:%S") if dt_pausa_local else None,
+            "ciclo_pausa_restante_seg": pausa_restante_seg,
+            "ciclo_pausa_restante_hhmmss": _fmt_hhmmss(pausa_restante_seg) if pausa_restante_seg is not None else None,
             "ciclo_ultimo_evento": cuenta.ciclo_ultimo_evento,
             "ultimo_tick_epoch": cuenta.ultimo_tick_epoch,
             "ultimo_precio": cuenta.ultimo_precio,

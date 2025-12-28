@@ -73,7 +73,7 @@
         <div class="muted" style="margin-top: 6px;">
           Ciclo: inicio=<span class="mono" id="ciclo_inicio">{% if cuenta and cuenta.ciclo_inicio_epoch %}{{ cuenta.ciclo_inicio_epoch }}{% else %}—{% endif %}</span>
           · base=<span class="mono" id="ciclo_balance_inicio">{% if cuenta and cuenta.ciclo_balance_inicio != None %}{{ cuenta.ciclo_balance_inicio }}{% else %}—{% endif %}</span>
-          · pausa_hasta=<span class="mono" id="ciclo_pausa">{% if cuenta and cuenta.ciclo_pausa_hasta_epoch %}{{ cuenta.ciclo_pausa_hasta_epoch }}{% else %}—{% endif %}</span>
+          · pausa=<span class="mono" id="ciclo_pausa">—</span>
         </div>
         <div class="muted" style="margin-top: 8px;">Último tick: <span class="mono" id="ultimo_tick">{{ cuenta.ultimo_tick_epoch|default:"—" }}</span> · Precio: <span class="mono" id="ultimo_precio">{{ cuenta.ultimo_precio|default:"—" }}</span></div>
       </div>
@@ -203,6 +203,13 @@
 
       function setRiesgoMotivo(m) {
         setText("riesgo_motivo", (m && String(m).trim()) ? String(m) : "—");
+      }
+
+      function formatPausa(pausaLocal, restanteHHMMSS) {
+        if (!pausaLocal && !restanteHHMMSS) return "—";
+        if (pausaLocal && restanteHHMMSS) return `hasta ${pausaLocal} (faltan ${restanteHHMMSS})`;
+        if (pausaLocal) return `hasta ${pausaLocal}`;
+        return `faltan ${restanteHHMMSS}`;
       }
 
       function setSenalDecision(dec) {
@@ -349,10 +356,10 @@
             setText("ultimo_tick", String(c.ultimo_tick_epoch));
             setText("ultimo_precio", String(c.ultimo_precio));
             setBloqueado(Boolean(c.bloqueado));
-            setRiesgoMotivo(c.riesgo_motivo);
+            setRiesgoMotivo(c.riesgo_motivo_ui || c.riesgo_motivo);
             setText("ciclo_inicio", (c.ciclo_inicio_epoch === null || c.ciclo_inicio_epoch === undefined) ? "—" : String(c.ciclo_inicio_epoch));
             setText("ciclo_balance_inicio", (c.ciclo_balance_inicio === null || c.ciclo_balance_inicio === undefined) ? "—" : fmt2(c.ciclo_balance_inicio));
-            setText("ciclo_pausa", (c.ciclo_pausa_hasta_epoch === null || c.ciclo_pausa_hasta_epoch === undefined) ? "—" : String(c.ciclo_pausa_hasta_epoch));
+            setText("ciclo_pausa", formatPausa(c.ciclo_pausa_hasta_local, c.ciclo_pausa_restante_hhmmss));
             setText("senal_valor", (c.senal_valor === null || c.senal_valor === undefined) ? "—" : fmt2(c.senal_valor));
             setSenalDecision(c.senal_decision);
             renderContribuciones(c.senal_top_contribuciones);
