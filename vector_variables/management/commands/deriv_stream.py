@@ -160,7 +160,9 @@ class Command(BaseCommand):
         ultimo_historial = 0.0
         ultimo_log = 0.0
         ultimo_balance_snapshot = 0.0
+        ultimo_balance_poll = 0.0
         balance_moneda = ""
+        balance_poll_cada_seg = float(getattr(settings, "DERIV_BALANCE_POLL_CADA_SEG", 60.0))
 
         # MODO REAL: DOBLE BLOQUEO (FLAG + ENV CONFIRMACIÓN).
         modo_real = bool(ejecutar_real) and bool(settings.DERIV_MODO_REAL) and (settings.DERIV_CONFIRMAR_REAL == "SI")
@@ -193,6 +195,7 @@ class Command(BaseCommand):
             f"umbral_compra={float(settings.UMBRAL_COMPRA)} umbral_venta={float(settings.UMBRAL_VENTA)} "
             f"normalizar={bool(settings.NORMALIZAR_VECTOR)} "
             f"alpha={float(settings.NORMALIZACION_ALPHA)} clip={float(settings.NORMALIZACION_CLIP)} "
+            f"balance_poll_cada_seg={balance_poll_cada_seg:.0f} "
             + pesos_info
             + f" adaptativo={bool(adaptativo is not None)}"
             + (
@@ -238,6 +241,10 @@ class Command(BaseCommand):
                         self.stderr.write(self.style.WARNING("[WS] Sin DERIV_API_TOKEN: no se puede suscribir a balance."))
                         self.stdout.write(self.style.SUCCESS("[WS] Suscrito (solo ticks). Esperando ticks..."))
 
+                    # Forzar refresh de balance (one-shot) para evitar quedarse bloqueado por pausas vencidas
+                    # cuando Deriv no emite updates de balance por stream.
+                    ultimo_balance_poll = time.monotonic()
+
                     # Si veníamos con un contrato abierto de una conexión previa, re-suscribir.
                     if modo_real and contrato_abierto_id is not None:
                         try:
@@ -252,6 +259,16 @@ class Command(BaseCommand):
                             self.stderr.write(f"[TRADING] Falló re-suscripción open_contract: {e}")
 
                     async for ev in cliente.stream_eventos(symbol, incluir_balance=incluir_balance):
+                        # Balance poll periódico (one-shot). Esto garantiza recalcular ciclos/drawdown aunque
+                        # Deriv no envíe mensajes `balance` cuando el monto no cambia.
+                        if incluir_balance and balance_poll_cada_seg > 0:
+                            now_m = time.monotonic()
+                            if (now_m - ultimo_balance_poll) >= float(balance_poll_cada_seg):
+                                try:
+                                    await cliente.enviar({"balance": 1})
+                                finally:
+                                    ultimo_balance_poll = now_m
+
                         if ev.get("tipo") == "balance":
                             bal = ev["balance"]
                             # EN MODO REAL: BLOQUEO/DRAWDOWN DEBE BASARSE SOLO EN BALANCE REAL DERIV.

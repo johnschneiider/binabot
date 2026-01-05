@@ -93,6 +93,9 @@ DERIV_MIN_STAKE = float(os.getenv("DERIV_MIN_STAKE", "1.0"))
 DERIV_HISTORIAL_LIMIT = int(os.getenv("DERIV_HISTORIAL_LIMIT", "50"))
 DERIV_HISTORIAL_CADA_SEGUNDOS = int(os.getenv("DERIV_HISTORIAL_CADA_SEGUNDOS", "10"))
 BALANCE_SNAPSHOT_CADA_SEG = int(os.getenv("BALANCE_SNAPSHOT_CADA_SEG", "60"))
+# Cada cuántos segundos forzar un request "balance" (one-shot) para evitar que el bot
+# quede pegado bloqueado cuando Deriv no emite updates de balance (p. ej. pausa de ciclo ya vencida).
+DERIV_BALANCE_POLL_CADA_SEG = float(os.getenv("DERIV_BALANCE_POLL_CADA_SEG", "60"))
 
 # ===== ROBUSTEZ TRADING REAL =====
 # Si Deriv/WS no responde a proposal/buy o se pierde un mensaje, el bot puede quedar "pegado" en estado esperando.
