@@ -316,6 +316,23 @@
       let balanceChart = null;
       let rangoActivo = "hour";
 
+      function labelFullFromT(t) {
+        // Esperamos algo como "YYYY-MM-DD HH:MM:SS" o ISO "YYYY-MM-DDTHH:MM:SS...".
+        let s = String(t || "");
+        if (s.includes("T")) s = s.replace("T", " ");
+        // Preferimos "MM-DD HH:MM" (suficiente para tooltip) pero toleramos formatos cortos.
+        if (s.length >= 16) return s.slice(5, 16); // MM-DD HH:MM (asumiendo YYYY-...)
+        return s;
+      }
+
+      function dayDDFromLabel(label) {
+        const s = String(label || "");
+        const datePart = s.split(" ")[0] || s; // "MM-DD" o "YYYY-MM-DD"
+        const parts = datePart.split("-");
+        const dd = parts[parts.length - 1] || "";
+        return dd;
+      }
+
       function setTabsActive(range) {
         document.querySelectorAll(".tab").forEach(el => {
           el.classList.toggle("active", el.getAttribute("data-range") === range);
@@ -336,9 +353,12 @@
               borderColor: "#4f46e5",
               backgroundColor: "rgba(79,70,229,0.12)",
               fill: true,
-              tension: 0.25,
+              tension: 0.4,
+              cubicInterpolationMode: "monotone",
               pointRadius: 0,
               borderWidth: 2,
+              borderCapStyle: "round",
+              borderJoinStyle: "round",
             }],
           },
           options: {
@@ -352,7 +372,15 @@
             interaction: { mode: "index", intersect: false },
             scales: {
               x: {
-                ticks: { maxTicksLimit: 10, autoSkip: true },
+                ticks: {
+                  maxTicksLimit: 10,
+                  autoSkip: true,
+                  callback: function(value) {
+                    // En escala categórica, "value" es el índice; obtenemos el label real.
+                    const lbl = this.getLabelForValue(value);
+                    return dayDDFromLabel(lbl);
+                  },
+                },
                 grid: { display: false },
               },
               y: {
@@ -371,10 +399,8 @@
           if (!res.ok) return;
           const data = await res.json();
           const pts = Array.isArray(data.points) ? data.points : [];
-          const labels = pts.map(p => String(p.t).slice(11, 16)); // HH:MM
-          // En semana/mes, mostramos fecha+hora para evitar ambigüedad
-          const labelsWide = pts.map(p => String(p.t).slice(5, 16).replace(" ", " ")); // MM-DD HH:MM
-          balanceChart.data.labels = (range === "week" || range === "month") ? labelsWide : labels;
+          // Conservamos fecha+hora en labels para tooltip, pero el eje X solo renderiza DD via ticks.callback.
+          balanceChart.data.labels = pts.map(p => labelFullFromT(p.t)); // MM-DD HH:MM (si es posible)
           balanceChart.data.datasets[0].data = pts.map(p => Number(p.balance));
           balanceChart.update();
         } catch (e) {
