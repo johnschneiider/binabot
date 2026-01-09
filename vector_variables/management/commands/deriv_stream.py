@@ -4,6 +4,7 @@ import asyncio
 import os
 import sys
 import time
+from datetime import datetime
 from dataclasses import dataclass
 
 from asgiref.sync import sync_to_async
@@ -36,6 +37,45 @@ class PosicionPaper:
 
 class Command(BaseCommand):
     help = "Consume ticks de Deriv, construye vector x, evalúa w^T x y aplica gestión de riesgo (single process)."
+
+    @staticmethod
+    def _parse_horas_bloqueadas(spec: str) -> set[int]:
+        """
+        spec: "2-3,22" (rangos inclusivos). Espacios permitidos.
+        Retorna horas [0..23]. Entradas inválidas se ignoran.
+        """
+        raw = (spec or "").strip()
+        if not raw:
+            return set()
+        out: set[int] = set()
+        for part in raw.replace(";", ",").replace(" ", ",").split(","):
+            tok = part.strip()
+            if not tok:
+                continue
+            if "-" in tok:
+                a_s, b_s = tok.split("-", 1)
+                try:
+                    a = int(a_s.strip())
+                    b = int(b_s.strip())
+                except Exception:
+                    continue
+                lo, hi = (a, b) if a <= b else (b, a)
+                for h in range(lo, hi + 1):
+                    if 0 <= h <= 23:
+                        out.add(h)
+            else:
+                try:
+                    h = int(tok)
+                except Exception:
+                    continue
+                if 0 <= h <= 23:
+                    out.add(h)
+        return out
+
+    @staticmethod
+    def _hora_local(epoch: int) -> int:
+        tz = getattr(settings, "TIME_ZONE", "UTC") or "UTC"
+        return datetime.fromtimestamp(int(epoch), tz=ZoneInfo(tz)).hour
 
     def add_arguments(self, parser) -> None:  # noqa: ANN001
         parser.add_argument("--symbol", type=str, default=None, help="Símbolo Deriv (ej: R_100).")
@@ -163,6 +203,10 @@ class Command(BaseCommand):
         ultimo_balance_poll = 0.0
         balance_moneda = ""
         balance_poll_cada_seg = float(getattr(settings, "DERIV_BALANCE_POLL_CADA_SEG", 60.0))
+        contract_types_permitidos = {str(x).strip().upper() for x in getattr(settings, "DERIV_CONTRACT_TYPES_PERMITIDOS", []) if str(x).strip()}
+        if not contract_types_permitidos:
+            contract_types_permitidos = {"PUT", "CALL"}
+        horas_bloqueadas = self._parse_horas_bloqueadas(str(getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""))
 
         # MODO REAL: DOBLE BLOQUEO (FLAG + ENV CONFIRMACIÓN).
         modo_real = bool(ejecutar_real) and bool(settings.DERIV_MODO_REAL) and (settings.DERIV_CONFIRMAR_REAL == "SI")
@@ -196,6 +240,8 @@ class Command(BaseCommand):
             f"normalizar={bool(settings.NORMALIZAR_VECTOR)} "
             f"alpha={float(settings.NORMALIZACION_ALPHA)} clip={float(settings.NORMALIZACION_CLIP)} "
             f"balance_poll_cada_seg={balance_poll_cada_seg:.0f} "
+            f"contract_types={','.join(sorted(contract_types_permitidos))} "
+            f"horas_bloqueadas={','.join(str(h) for h in sorted(horas_bloqueadas)) if horas_bloqueadas else '-'} "
             + pesos_info
             + f" adaptativo={bool(adaptativo is not None)}"
             + (
@@ -689,6 +735,27 @@ class Command(BaseCommand):
                                 stake = max(0.0, min(stake, float(gestor_riesgo.capital_actual)))
                                 if stake > 0:
                                     contract_type = "CALL" if resultado.decision == "COMPRA" else "PUT"
+
+                                    # ===== GATING POR HORARIO (LOCAL) =====
+                                    # Evita operar en ventanas malas pero permite que el proceso corra continuo 24/7.
+                                    try:
+                                        hora_local = self._hora_local(int(tick.epoch))
+                                    except Exception:
+                                        hora_local = None
+                                    if hora_local is not None and hora_local in horas_bloqueadas:
+                                        self.stderr.write(
+                                            f"[TRADING] SKIP horario_bloqueado hora={int(hora_local):02d} decision={resultado.decision} contract_type={contract_type}"
+                                        )
+                                        continue
+
+                                    # ===== GATING POR CONTRACT TYPE =====
+                                    # Permite apagar CALL o restringir tipos desde .env sin cambiar lógica.
+                                    if contract_type not in contract_types_permitidos:
+                                        self.stderr.write(
+                                            f"[TRADING] SKIP contract_type_no_permitido decision={resultado.decision} contract_type={contract_type}"
+                                        )
+                                        continue
+
                                     dur = int(settings.DERIV_DURACION_TICKS)
                                     dur_max = int(getattr(settings, "DERIV_MAX_DURACION_TICKS", 10))
                                     if dur_max > 0 and dur > dur_max:

@@ -93,6 +93,15 @@ DERIV_MIN_STAKE = float(os.getenv("DERIV_MIN_STAKE", "1.0"))
 DERIV_HISTORIAL_LIMIT = int(os.getenv("DERIV_HISTORIAL_LIMIT", "50"))
 DERIV_HISTORIAL_CADA_SEGUNDOS = int(os.getenv("DERIV_HISTORIAL_CADA_SEGUNDOS", "10"))
 BALANCE_SNAPSHOT_CADA_SEG = int(os.getenv("BALANCE_SNAPSHOT_CADA_SEG", "60"))
+# Restringir qué tipos de contrato puede ejecutar el bot (ej: "PUT" para desactivar CALL).
+DERIV_CONTRACT_TYPES_PERMITIDOS = [
+    x.strip().upper()
+    for x in os.getenv("DERIV_CONTRACT_TYPES_PERMITIDOS", "PUT,CALL").split(",")
+    if x.strip()
+]
+# Bloqueo horario (hora local del proyecto) para evitar ventanas malas.
+# Formato: "2-3,22" (rangos inclusivos). Vacío => no bloquea por horario.
+DERIV_BLOQUEO_HORAS_LOCAL = os.getenv("DERIV_BLOQUEO_HORAS_LOCAL", "").strip()
 # Cada cuántos segundos forzar un request "balance" (one-shot) para evitar que el bot
 # quede pegado bloqueado cuando Deriv no emite updates de balance (p. ej. pausa de ciclo ya vencida).
 DERIV_BALANCE_POLL_CADA_SEG = float(os.getenv("DERIV_BALANCE_POLL_CADA_SEG", "60"))
