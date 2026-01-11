@@ -639,7 +639,7 @@ class Command(BaseCommand):
                         # Guardar tick para gráfico en tiempo real (mantener solo últimos 50)
                         try:
                             # Crear nuevo tick
-                            tick_saved = await sync_to_async(
+                            await sync_to_async(
                                 lambda: TickDerivSnapshot.objects.create(
                                     cuenta_id=int(cuenta.id),
                                     precio=float(tick.precio),
@@ -668,7 +668,10 @@ class Command(BaseCommand):
                         except Exception as e:
                             # Log del error pero no romper el bot
                             import traceback
-                            self.stderr.write(f"[TICKS] Error guardando tick: {e}\n{traceback.format_exc()}")
+                            error_msg = f"[TICKS] Error guardando tick #{ticks_procesados} precio={tick.precio:.5f} epoch={tick.epoch}: {e}\n{traceback.format_exc()}"
+                            self.stderr.write(error_msg)
+                            # También escribir a stdout para que aparezca en logs
+                            self.stdout.write(self.style.ERROR(error_msg))
                         
                         x = constructor.actualizar_con_tick(tick)
                         x_eval = (
