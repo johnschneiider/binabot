@@ -668,7 +668,8 @@ class Command(BaseCommand):
                                 )()
                         except Exception as e:
                             # Log del error pero no romper el bot
-                            self.stderr.write(f"[TICKS] Error guardando tick: {e}")
+                            import traceback
+                            self.stderr.write(f"[TICKS] Error guardando tick: {e}\n{traceback.format_exc()}")
                         
                         x = constructor.actualizar_con_tick(tick)
                         x_eval = (
