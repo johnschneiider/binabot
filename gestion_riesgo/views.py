@@ -12,6 +12,28 @@ from django.db.models import F
 from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv
 
 
+def _winrate_ultimas_deriv(*, n: int = 15) -> dict:
+    """
+    Winrate simple para el dashboard.
+    - Solo operaciones reales del bot (creada_por_bot=True)
+    - Solo cerradas con profit disponible
+    - Win = profit > 0
+    """
+    n = max(1, int(n))
+    qs = (
+        OperacionDeriv.objects.filter(creada_por_bot=True, estado=OperacionDeriv.Estado.CERRADA, profit__isnull=False)
+        .order_by("-updated_at")
+        .values_list("profit", flat=True)[:n]
+    )
+    profits = list(qs)
+    if not profits:
+        return {"n": 0, "wins": 0, "losses": 0, "winrate": None}
+    wins = sum(1 for p in profits if float(p) > 0.0)
+    losses = len(profits) - wins
+    winrate = (wins / len(profits)) * 100.0
+    return {"n": len(profits), "wins": wins, "losses": losses, "winrate": winrate}
+
+
 def _fecha_hora_colombia_desde_epoch(epoch: int | None) -> datetime | None:
     """
     CONVIERTE EPOCH (UTC) A FECHA/HORA EN HUSO HORARIO DEL PROYECTO (America/Bogota).
@@ -102,7 +124,7 @@ def dashboard(request):
     return render(
         request,
         "gestion_riesgo/dashboard.html",
-        {"cuenta": cuenta, "operaciones_deriv": operaciones_deriv},
+        {"cuenta": cuenta, "operaciones_deriv": operaciones_deriv, "winrate_ult15": _winrate_ultimas_deriv(n=15)},
     )
 
 
@@ -123,6 +145,7 @@ def estado_json(request):
             "estado",
             "moneda",
             "profit",
+            "umbral_usado",
             "opened_epoch",
             "closed_epoch",
             "duracion_segundos",
@@ -180,6 +203,7 @@ def estado_json(request):
             "senal_decision": cuenta.senal_decision,
             "senal_top_contribuciones": cuenta.senal_top_contribuciones,
             "updated_at": cuenta.updated_at,
+            "winrate_ult15": _winrate_ultimas_deriv(n=15),
         }
     return JsonResponse({"cuenta": cuenta_dict, "operaciones_deriv": ops_deriv})
 

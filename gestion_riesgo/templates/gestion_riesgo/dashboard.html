@@ -53,6 +53,9 @@
       <div class="card">
         <div class="muted">Símbolo</div>
         <div class="big mono" id="simbolo">{{ cuenta.simbolo|default:"—" }}</div>
+        <div class="muted" style="margin-top: 6px;">
+          Winrate (últimas 15): <span class="mono" id="winrate_ult15">{% if winrate_ult15 and winrate_ult15.winrate != None %}{{ winrate_ult15.winrate|floatformat:1 }}% ({{ winrate_ult15.wins }}/{{ winrate_ult15.n }}){% else %}—{% endif %}</span>
+        </div>
       </div>
       <div class="card">
         <div class="muted">Balance Deriv (API)</div>
@@ -183,6 +186,7 @@
               <th>Contract</th>
               <th>Estado</th>
               <th>Profit</th>
+              <th>Umbral</th>
               <th>Moneda</th>
               <th>Duración</th>
               <th>Fecha/Hora (Colombia)</th>
@@ -194,6 +198,7 @@
                 <td class="mono">{{ op.contract_id }}</td>
                 <td>{{ op.estado }}</td>
                 <td class="mono">{{ op.profit|default:"—" }}</td>
+                <td class="mono">{% if op.umbral_usado != None %}{{ op.umbral_usado|floatformat:3 }}{% else %}—{% endif %}</td>
                 <td class="mono">{{ op.moneda|default:"—" }}</td>
                 <td class="mono">
                   {% if op.duracion_segundos != None %}
@@ -311,7 +316,7 @@
         const tbody = document.getElementById("tabla_operaciones_deriv");
         if (!tbody) return;
         if (!ops || ops.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="muted">Aún no hay operaciones Deriv.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="muted">Aún no hay operaciones Deriv.</td></tr>';
           return;
         }
         tbody.innerHTML = ops.map(op => {
@@ -319,11 +324,13 @@
             ? `${Number(op.duracion_segundos)}s`
             : ((op.opened_epoch && op.closed_epoch) ? `${Number(op.closed_epoch) - Number(op.opened_epoch)}s` : "—");
           const fh = op.fecha_hora ? String(op.fecha_hora) : "—";
+          const umbral = (op.umbral_usado === null || op.umbral_usado === undefined) ? "—" : Number(op.umbral_usado).toFixed(3);
           return `
             <tr>
               <td class="mono">${op.contract_id}</td>
               <td>${op.estado}</td>
               <td class="mono">${(op.profit === null || op.profit === undefined) ? "—" : fmt2(op.profit)}</td>
+              <td class="mono">${umbral}</td>
               <td class="mono">${op.moneda || "—"}</td>
               <td class="mono">${dur}</td>
               <td class="mono">${fh}</td>
@@ -436,6 +443,12 @@
           const c = data.cuenta;
           if (c) {
             setText("simbolo", c.simbolo);
+            const wr = c.winrate_ult15;
+            if (wr && wr.winrate !== null && wr.winrate !== undefined) {
+              setText("winrate_ult15", `${Number(wr.winrate).toFixed(1)}% (${wr.wins}/${wr.n})`);
+            } else {
+              setText("winrate_ult15", "—");
+            }
             setText("balance_deriv", (c.balance_deriv === null || c.balance_deriv === undefined) ? "—" : fmt2(c.balance_deriv));
             setText("moneda_deriv", c.moneda_deriv || "—");
             setText("capital_actual", fmt2(c.capital_actual));
