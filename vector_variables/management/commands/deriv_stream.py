@@ -737,19 +737,31 @@ class Command(BaseCommand):
                                 # - Por defecto: stake por riesgo (max_riesgo_por_operacion * capital_actual)
                                 # - Opcional: DERIV_STAKE_FIJO para forzar un monto (p.ej. 0.5 USD)
                                 stake_fijo = getattr(settings, "DERIV_STAKE_FIJO", None)
+                                riesgo_cap = min(float(gestor_riesgo.riesgo_disponible()), float(gestor_riesgo.capital_actual))
+                                min_stake = float(getattr(settings, "DERIV_MIN_STAKE", 1.0))
+
+                                if riesgo_cap <= 0.0:
+                                    continue
+
+                                # Si el riesgo disponible no alcanza el mínimo, NO operamos (evita violar el riesgo).
+                                if riesgo_cap + 1e-12 < min_stake:
+                                    self.stderr.write(
+                                        f"[TRADING] SKIP stake_minimo_sobre_riesgo riesgo_cap={riesgo_cap:.4f} min_stake={min_stake:.4f}"
+                                    )
+                                    continue
+
+                                # Base stake: fijo (si existe) o riesgo_cap.
                                 if stake_fijo is not None:
                                     try:
                                         stake = float(stake_fijo)
                                     except Exception:
-                                        stake = float(gestor_riesgo.riesgo_disponible())
+                                        stake = float(riesgo_cap)
                                 else:
-                                    stake = float(gestor_riesgo.riesgo_disponible())
+                                    stake = float(riesgo_cap)
 
-                                # Nunca exceder límites de riesgo/capital.
-                                stake = min(float(stake), float(gestor_riesgo.riesgo_disponible()), float(gestor_riesgo.capital_actual))
-                                # Nunca ir por debajo del mínimo configurado.
-                                stake = max(float(getattr(settings, "DERIV_MIN_STAKE", 1.0)), float(stake))
-                                stake = max(0.0, float(stake))
+                                # Respetar límites de riesgo/capital y mínimo.
+                                stake = min(float(stake), float(riesgo_cap))
+                                stake = max(float(stake), float(min_stake))
                                 if stake > 0:
                                     contract_type = "CALL" if resultado.decision == "COMPRA" else "PUT"
 
