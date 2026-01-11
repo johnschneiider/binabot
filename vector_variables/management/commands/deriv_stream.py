@@ -811,7 +811,8 @@ class Command(BaseCommand):
                         if (ahora - ultimo_persist) >= 1.0:
                             ultimo_persist = ahora
                             try:
-                                await sync_to_async(
+                                # Actualizar cuenta en BD
+                                resultado_update = await sync_to_async(
                                     lambda: Cuenta.objects.filter(id=cuenta.id).update(
                                         ultimo_tick_epoch=int(tick.epoch),
                                         ultimo_precio=float(tick.precio),
@@ -821,6 +822,9 @@ class Command(BaseCommand):
                                     ),
                                     thread_sensitive=True,
                                 )()
+                                # Verificar que se actualizó (resultado_update es el número de filas afectadas)
+                                if resultado_update == 0:
+                                    self.stderr.write(f"[UPDATE] ADVERTENCIA: update() afectó 0 filas (cuenta.id={cuenta.id} puede no existir)")
                             except Exception as e:
                                 # Log del error pero no romper el bot
                                 import traceback
