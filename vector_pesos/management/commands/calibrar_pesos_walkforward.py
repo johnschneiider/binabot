@@ -253,6 +253,8 @@ class Command(BaseCommand):
                 max_trade_rate=max_trade_rate,
                 min_edge_winrate=min_edge_winrate,
                 forzar_escritura=forzar_escritura,
+                permitir_call=permitir_call,
+                permitir_put=permitir_put,
             )
         )
 
@@ -275,6 +277,8 @@ class Command(BaseCommand):
         max_trade_rate: float = 0.20,
         min_edge_winrate: float = 0.02,
         forzar_escritura: bool = False,
+        permitir_call: bool = True,
+        permitir_put: bool = True,
     ) -> None:
         self.stdout.write(self.style.SUCCESS(f"[WF] Descargando ticks_history: symbol={symbol} count={count}"))
         async with ClienteDerivWS(token="") as cliente:
