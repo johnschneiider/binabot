@@ -808,7 +808,8 @@ class Command(BaseCommand):
                         # ACTUALIZACIÓN "SUAVE" PARA DASHBOARD (NO ESCRIBIR EN CADA TICK).
                         # INCLUYE: ÚLTIMO TICK + TELEMETRÍA DE SEÑAL (w^T x).
                         ahora = time.monotonic()
-                        if (ahora - ultimo_persist) >= 1.0:
+                        tiempo_desde_ultimo_persist = ahora - ultimo_persist
+                        if tiempo_desde_ultimo_persist >= 1.0:
                             ultimo_persist = ahora
                             try:
                                 # Actualizar cuenta en BD
@@ -827,7 +828,7 @@ class Command(BaseCommand):
                                     self.stderr.write(f"[UPDATE] ADVERTENCIA: update() afectó 0 filas (cuenta.id={cuenta.id} puede no existir)")
                                 # Log cada 10 actualizaciones para verificar que funciona (sin saturar logs)
                                 if ticks_procesados % 10 == 0:
-                                    self.stdout.write(f"[UPDATE] BD actualizada: tick={tick.epoch} precio={tick.precio:.5f} señal={resultado.valor:.4f}")
+                                    self.stdout.write(f"[UPDATE] BD actualizada: tick={tick.epoch} precio={tick.precio:.5f} señal={resultado.valor:.4f} cuenta_id={cuenta.id}")
                             except Exception as e:
                                 # Log del error pero no romper el bot
                                 import traceback
