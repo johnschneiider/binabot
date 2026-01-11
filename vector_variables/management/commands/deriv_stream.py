@@ -192,6 +192,14 @@ class Command(BaseCommand):
             simbolo=symbol, gestor_riesgo=gestor_riesgo
         )
 
+        # ===== MEMORIA LOCAL (ANTI "PAUSA EXPIRADA") =====
+        # Guardamos el último estado conocido para poder corregir bloqueos temporales
+        # incluso si Deriv no emite eventos de balance por un tiempo.
+        ciclo_pausa_hasta_epoch_mem: int | None = int(cuenta.ciclo_pausa_hasta_epoch) if getattr(cuenta, "ciclo_pausa_hasta_epoch", None) else None
+        balance_deriv_mem: float = float(getattr(cuenta, "balance_deriv", 0.0) or 0.0)
+        max_balance_deriv_mem: float = float(getattr(cuenta, "max_balance_deriv_historico", 0.0) or 0.0)
+        riesgo_motivo_mem: str = str(getattr(cuenta, "riesgo_motivo", "") or "")
+
         # REINTENTOS CONTROLADOS PARA PRODUCCIÓN (REDES/PROXIES/FIREWALLS/TEMPORALES).
         intentos = 0
         ticks_procesados = 0
@@ -327,6 +335,10 @@ class Command(BaseCommand):
                                 currency = str(bal.currency or "")
 
                                 async def _actualizar_balance_real() -> None:
+                                    nonlocal ciclo_pausa_hasta_epoch_mem
+                                    nonlocal balance_deriv_mem
+                                    nonlocal max_balance_deriv_mem
+                                    nonlocal riesgo_motivo_mem
                                     prev = await sync_to_async(
                                         lambda: Cuenta.objects.filter(id=cuenta.id).values(
                                             "max_balance_deriv_historico",
@@ -365,6 +377,13 @@ class Command(BaseCommand):
                                     nuevo_ciclo_inicio_epoch = int(prev.get("ciclo_inicio_epoch")) if (prev and prev.get("ciclo_inicio_epoch") is not None) else None
                                     nuevo_ciclo_pausa_hasta = ciclo_pausa_hasta
 
+                                    # Si ciclos están deshabilitados, limpiamos cualquier pausa previa para evitar
+                                    # quedar bloqueados por estado viejo en BD.
+                                    if not ciclo_habil:
+                                        nuevo_ciclo_pausa_hasta = None
+                                        nuevo_ciclo_balance_inicio = None
+                                        nuevo_ciclo_inicio_epoch = None
+
                                     if ciclo_habil:
                                         # Si estamos en pausa, bloquear.
                                         if ciclo_pausa_hasta is not None and ahora_epoch < ciclo_pausa_hasta:
@@ -396,12 +415,21 @@ class Command(BaseCommand):
                                                     riesgo_motivo = f"TAKE_PROFIT_{float(ciclo_tp):.4f}_SIN_PAUSA"
                                                     ciclo_evento = "TAKE_PROFIT_CONTINUAR"
                                                 elif pnl_pct <= -float(ciclo_sl):
-                                                    nuevo_ciclo_pausa_hasta = int(ahora_epoch + max(0, pausa_sl))
-                                                    nuevo_ciclo_balance_inicio = None
-                                                    nuevo_ciclo_inicio_epoch = None
-                                                    ciclo_bloqueado = True
-                                                    riesgo_motivo = f"STOPLOSS_{float(ciclo_sl):.4f}_PAUSA_{int(pausa_sl)}s"
-                                                    ciclo_evento = "STOPLOSS"
+                                                    # Si pausa_sl <= 0 => stoploss informativo SIN pausar (operación continua).
+                                                    if int(pausa_sl) <= 0:
+                                                        nuevo_ciclo_pausa_hasta = None
+                                                        nuevo_ciclo_balance_inicio = float(balance_val)
+                                                        nuevo_ciclo_inicio_epoch = int(ahora_epoch)
+                                                        ciclo_bloqueado = False
+                                                        riesgo_motivo = f"STOPLOSS_{float(ciclo_sl):.4f}_SIN_PAUSA"
+                                                        ciclo_evento = "STOPLOSS_CONTINUAR"
+                                                    else:
+                                                        nuevo_ciclo_pausa_hasta = int(ahora_epoch + max(0, pausa_sl))
+                                                        nuevo_ciclo_balance_inicio = None
+                                                        nuevo_ciclo_inicio_epoch = None
+                                                        ciclo_bloqueado = True
+                                                        riesgo_motivo = f"STOPLOSS_{float(ciclo_sl):.4f}_PAUSA_{int(pausa_sl)}s"
+                                                        ciclo_evento = "STOPLOSS"
                                                 else:
                                                     riesgo_motivo = "CICLO_ACTIVO"
                                                     if not ciclo_evento:
@@ -456,6 +484,12 @@ class Command(BaseCommand):
                                     gestor_riesgo.capital_actual = balance_val
                                     gestor_riesgo.max_capital_historico = nuevo_max
                                     gestor_riesgo.bloqueado = bloqueado_real
+
+                                    # Memoria local para auto-correcciones (ticks) si faltan eventos de balance.
+                                    balance_deriv_mem = float(balance_val)
+                                    max_balance_deriv_mem = float(nuevo_max)
+                                    ciclo_pausa_hasta_epoch_mem = int(nuevo_ciclo_pausa_hasta) if nuevo_ciclo_pausa_hasta is not None else None
+                                    riesgo_motivo_mem = str(riesgo_motivo or "")
 
                                 await _actualizar_balance_real()
 
@@ -649,6 +683,36 @@ class Command(BaseCommand):
                                     )
                                     contrato_abierto_id = None
                                     watchdog_open_contract_intentos = 0
+
+                        # ===== AUTO-CORRECCIÓN: PAUSA DE CICLO EXPIRADA =====
+                        # Si la pausa ya venció, limpiamos el estado aunque aún no llegue un evento `balance`.
+                        # Esto evita "bugs temporales" de bloqueo cuando quieres operar continuo.
+                        if modo_real and ciclo_pausa_hasta_epoch_mem is not None:
+                            ahora_epoch_tick = int(time.time())
+                            if ahora_epoch_tick >= int(ciclo_pausa_hasta_epoch_mem):
+                                ciclo_pausa_hasta_epoch_mem = None
+                                dd_habil = bool(getattr(settings, "DRAWDOWN_GLOBAL_HABILITADO", True))
+                                bloqueado_dd = False
+                                if dd_habil and max_balance_deriv_mem and max_balance_deriv_mem > 0:
+                                    dd_max = float(getattr(settings, "MAX_DRAWDOWN", 0.0))
+                                    dd_hyst = float(getattr(settings, "MAX_DRAWDOWN_HISTERESIS", 0.0))
+                                    dd_hyst = max(0.0, min(dd_hyst, dd_max))
+                                    dd_unblock = max(0.0, dd_max - dd_hyst)
+                                    drawdown = 1.0 - (float(balance_deriv_mem) / float(max_balance_deriv_mem))
+                                    prev_dd = (riesgo_motivo_mem or "").strip() == "DRAWDOWN"
+                                    bloqueado_dd = (not (drawdown <= dd_unblock)) if prev_dd else bool(drawdown >= dd_max)
+
+                                gestor_riesgo.bloqueado = bool(bloqueado_dd)
+                                riesgo_motivo_mem = "DRAWDOWN" if bloqueado_dd else "OK"
+                                await sync_to_async(
+                                    lambda: Cuenta.objects.filter(id=cuenta.id).update(
+                                        bloqueado=bool(bloqueado_dd),
+                                        riesgo_motivo=("DRAWDOWN" if bloqueado_dd else "OK"),
+                                        ciclo_pausa_hasta_epoch=None,
+                                        ciclo_ultimo_evento="PAUSA_EXPIRADA_AUTO_CLEAR",
+                                    ),
+                                    thread_sensitive=True,
+                                )()
 
                         # PESOS ACTUALES (HOY FIJOS; MAÑANA IA)
                         w = gestor_pesos.obtener_pesos_desde_ia(x)
