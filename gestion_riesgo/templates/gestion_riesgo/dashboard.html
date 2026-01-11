@@ -524,7 +524,10 @@
       async function refrescar() {
         try {
           const res = await fetch("/api/estado/", { cache: "no-store" });
-          if (!res.ok) return;
+          if (!res.ok) {
+            console.warn("[REFRESCAR] Error en respuesta:", res.status);
+            return;
+          }
           const data = await res.json();
           const c = data.cuenta;
           if (c) {
@@ -547,17 +550,34 @@
             // Último tick: fecha legible y precio
             setText("ultimo_tick", c.ultimo_tick_local ? c.ultimo_tick_local.slice(11, 19) : "—");
             setText("ultimo_precio", (c.ultimo_precio === null || c.ultimo_precio === undefined) ? "—" : fmt2(c.ultimo_precio));
-            setText("senal_valor", (c.senal_valor === null || c.senal_valor === undefined) ? "—" : fmt2(c.senal_valor));
+            
+            // Actualizar señal
+            const nuevoValor = (c.senal_valor === null || c.senal_valor === undefined) ? null : Number(c.senal_valor);
+            if (nuevoValor !== null) {
+              setText("senal_valor", fmt2(nuevoValor));
+            } else {
+              setText("senal_valor", "—");
+            }
             setSenalDecision(c.senal_decision);
-            renderContribuciones(c.senal_top_contribuciones);
+            
+            // Actualizar contribuciones (forzar actualización siempre)
+            if (c.senal_top_contribuciones && Array.isArray(c.senal_top_contribuciones) && c.senal_top_contribuciones.length > 0) {
+              renderContribuciones(c.senal_top_contribuciones);
+            } else {
+              const el = document.getElementById("senal_contribuciones");
+              if (el) el.textContent = "—";
+            }
+            
             setText("ultima_actualizacion", "Actualizado: " + new Date().toLocaleTimeString());
+          } else {
+            console.warn("[REFRESCAR] No hay datos de cuenta");
           }
           renderOpsDeriv(data.operaciones_deriv || []);
           
           // Actualizar gráfico de ticks junto con la señal (mismo endpoint)
           actualizarGraficoTicks(data.ticks || []);
         } catch (e) {
-          // SILENCIOSO: SI EL BOT/SERVIDOR NO ESTÁN DISPONIBLES, NO ROMPE LA UI.
+          console.error("[REFRESCAR] Error:", e);
         }
       }
       
