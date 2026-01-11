@@ -60,6 +60,8 @@ def _simular_binaria_por_ticks(
     horizon: int,
     umbral_compra: float,
     umbral_venta: float,
+    permitir_call: bool,
+    permitir_put: bool,
     payout_win: float,
     costo_por_trade: float,
 ) -> dict[str, float]:
@@ -91,9 +93,9 @@ def _simular_binaria_por_ticks(
     while i + horizon < n:
         s = float(scores[i])
         direccion = 0
-        if s >= float(umbral_compra):
+        if permitir_call and s >= float(umbral_compra):
             direccion = 1
-        elif s <= float(umbral_venta):
+        elif permitir_put and s <= float(umbral_venta):
             direccion = -1
 
         if direccion == 0:
@@ -186,6 +188,16 @@ class Command(BaseCommand):
             action="store_true",
             help="Permite escribir el JSON incluso si NO pasó guardrails o si el PnL OOS es <= 0 (NO recomendado).",
         )
+        parser.add_argument(
+            "--solo-put",
+            action="store_true",
+            help="Evalúa/optimiza solo entradas PUT (equivalente a deshabilitar CALL en la simulación).",
+        )
+        parser.add_argument(
+            "--solo-call",
+            action="store_true",
+            help="Evalúa/optimiza solo entradas CALL (equivalente a deshabilitar PUT en la simulación).",
+        )
 
     def handle(self, *args, **options) -> None:  # noqa: ANN001
         symbol = (options.get("symbol") or settings.DERIV_SYMBOL).strip()
@@ -206,6 +218,15 @@ class Command(BaseCommand):
             options.get("min_edge_winrate") or getattr(settings, "CALIBRADOR_MIN_EDGE_WINRATE", 0.02)
         )
         forzar_escritura = bool(options.get("forzar_escritura"))
+        solo_put = bool(options.get("solo_put"))
+        solo_call = bool(options.get("solo_call"))
+
+        if solo_put and solo_call:
+            raise CommandError("No puedes usar --solo-put y --solo-call al mismo tiempo.")
+        permitir_call = not solo_put
+        permitir_put = not solo_call
+        if not permitir_call and not permitir_put:
+            raise CommandError("Configuración inválida: no permitir CALL ni PUT.")
 
         if count <= 200:
             raise CommandError("ticks-count muy bajo. Usa al menos ~1000 para algo mínimamente estable.")
@@ -352,7 +373,10 @@ class Command(BaseCommand):
             idx += test_n
 
         # ===== BUSCAR UMBRALES (CONSTRAINTS) SOBRE OOS =====
-        # Estrategia conservadora: umbrales simétricos (thr y -thr) elegidos por grid de cuantiles.
+        # Estrategia conservadora:
+        # - Modo mixto: umbrales simétricos (thr y -thr) elegidos por grid de cuantiles.
+        # - Solo PUT: umbral_compra=+inf (deshabilita CALL) y umbral_venta=-thr.
+        # - Solo CALL: umbral_compra=+thr y umbral_venta=-inf (deshabilita PUT).
         scores_all = np.concatenate(oos_scores, axis=0) if oos_scores else np.asarray([], dtype=float)
         if scores_all.size < 50:
             raise CommandError("Muy pocos puntos OOS para seleccionar umbrales. Sube ticks-count o ajusta train/test.")
@@ -388,6 +412,15 @@ class Command(BaseCommand):
 
         # Evaluación OOS por ventana (promediamos PnL y sumamos trades).
         for thr in candidatos:
+            umbral_compra_eval = float(thr)
+            umbral_venta_eval = float(-thr)
+            if not permitir_call and permitir_put:
+                umbral_compra_eval = float("inf")
+                umbral_venta_eval = float(-thr)
+            if permitir_call and not permitir_put:
+                umbral_compra_eval = float(thr)
+                umbral_venta_eval = float("-inf")
+
             pnl_total = 0.0
             trades_total = 0.0
             wins_total = 0.0
@@ -397,8 +430,10 @@ class Command(BaseCommand):
                     scores=sc,
                     precios=pr,
                     horizon=horizon,
-                    umbral_compra=thr,
-                    umbral_venta=-thr,
+                    umbral_compra=umbral_compra_eval,
+                    umbral_venta=umbral_venta_eval,
+                    permitir_call=permitir_call,
+                    permitir_put=permitir_put,
                     payout_win=payout_win,
                     costo_por_trade=costo_por_trade,
                 )
@@ -439,6 +474,15 @@ class Command(BaseCommand):
         if float(mejor["pnl_total"]) == float("-inf"):
             mejor_relajado = dict(mejor)
             for thr in candidatos:
+                umbral_compra_eval = float(thr)
+                umbral_venta_eval = float(-thr)
+                if not permitir_call and permitir_put:
+                    umbral_compra_eval = float("inf")
+                    umbral_venta_eval = float(-thr)
+                if permitir_call and not permitir_put:
+                    umbral_compra_eval = float(thr)
+                    umbral_venta_eval = float("-inf")
+
                 pnl_total = 0.0
                 trades_total = 0.0
                 wins_total = 0.0
@@ -448,8 +492,10 @@ class Command(BaseCommand):
                         scores=sc,
                         precios=pr,
                         horizon=horizon,
-                        umbral_compra=thr,
-                        umbral_venta=-thr,
+                        umbral_compra=umbral_compra_eval,
+                        umbral_venta=umbral_venta_eval,
+                        permitir_call=permitir_call,
+                        permitir_put=permitir_put,
                         payout_win=payout_win,
                         costo_por_trade=costo_por_trade,
                     )
