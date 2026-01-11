@@ -825,6 +825,9 @@ class Command(BaseCommand):
                                 # Verificar que se actualizó (resultado_update es el número de filas afectadas)
                                 if resultado_update == 0:
                                     self.stderr.write(f"[UPDATE] ADVERTENCIA: update() afectó 0 filas (cuenta.id={cuenta.id} puede no existir)")
+                                # Log cada 10 actualizaciones para verificar que funciona (sin saturar logs)
+                                if ticks_procesados % 10 == 0:
+                                    self.stdout.write(f"[UPDATE] BD actualizada: tick={tick.epoch} precio={tick.precio:.5f} señal={resultado.valor:.4f}")
                             except Exception as e:
                                 # Log del error pero no romper el bot
                                 import traceback
