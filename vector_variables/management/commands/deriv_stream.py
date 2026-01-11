@@ -232,6 +232,7 @@ class Command(BaseCommand):
                 pesos_info = f"PESOS_ARCHIVO={pesos_archivo} (error al inspeccionar archivo)"
 
         # Nota: stdout sin style para que quede grepeable en `journalctl | grep`.
+        stake_fijo_cfg = getattr(settings, "DERIV_STAKE_FIJO", None)
         self.stdout.write(
             "[CFG] "
             f"modo_real={modo_real} symbol={symbol} "
@@ -240,6 +241,8 @@ class Command(BaseCommand):
             f"normalizar={bool(settings.NORMALIZAR_VECTOR)} "
             f"alpha={float(settings.NORMALIZACION_ALPHA)} clip={float(settings.NORMALIZACION_CLIP)} "
             f"balance_poll_cada_seg={balance_poll_cada_seg:.0f} "
+            f"min_stake={float(getattr(settings,'DERIV_MIN_STAKE',1.0))} "
+            f"stake_fijo={float(stake_fijo_cfg) if stake_fijo_cfg is not None else '-'} "
             f"contract_types={','.join(sorted(contract_types_permitidos))} "
             f"horas_bloqueadas={','.join(str(h) for h in sorted(horas_bloqueadas)) if horas_bloqueadas else '-'} "
             + pesos_info
@@ -730,9 +733,23 @@ class Command(BaseCommand):
                         # ===== EJECUCIÓN REAL (DERIV) =====
                         if modo_real and esperando is None and contrato_abierto_id is None:
                             if resultado.decision in {"COMPRA", "VENTA"} and not gestor_riesgo.bloqueado:
-                                # STAKE POR RIESGO (1% DEL BALANCE REAL).
-                                stake = max(float(settings.DERIV_MIN_STAKE), float(gestor_riesgo.riesgo_disponible()))
-                                stake = max(0.0, min(stake, float(gestor_riesgo.capital_actual)))
+                                # STAKE:
+                                # - Por defecto: stake por riesgo (max_riesgo_por_operacion * capital_actual)
+                                # - Opcional: DERIV_STAKE_FIJO para forzar un monto (p.ej. 0.5 USD)
+                                stake_fijo = getattr(settings, "DERIV_STAKE_FIJO", None)
+                                if stake_fijo is not None:
+                                    try:
+                                        stake = float(stake_fijo)
+                                    except Exception:
+                                        stake = float(gestor_riesgo.riesgo_disponible())
+                                else:
+                                    stake = float(gestor_riesgo.riesgo_disponible())
+
+                                # Nunca exceder límites de riesgo/capital.
+                                stake = min(float(stake), float(gestor_riesgo.riesgo_disponible()), float(gestor_riesgo.capital_actual))
+                                # Nunca ir por debajo del mínimo configurado.
+                                stake = max(float(getattr(settings, "DERIV_MIN_STAKE", 1.0)), float(stake))
+                                stake = max(0.0, float(stake))
                                 if stake > 0:
                                     contract_type = "CALL" if resultado.decision == "COMPRA" else "PUT"
 

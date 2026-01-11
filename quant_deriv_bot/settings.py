@@ -90,6 +90,10 @@ DERIV_DURACION_TICKS = int(os.getenv("DERIV_DURACION_TICKS", "5"))
 # Esto evita que el bot intente enviar propuestas imposibles y quede en loop de reconexión.
 DERIV_MAX_DURACION_TICKS = int(os.getenv("DERIV_MAX_DURACION_TICKS", "10"))
 DERIV_MIN_STAKE = float(os.getenv("DERIV_MIN_STAKE", "1.0"))
+# Si está seteado (ej: 0.5), el bot intentará usar ese stake (USD) por operación en modo real,
+# respetando los límites de riesgo (no exceder riesgo_disponible ni capital_actual) y DERIV_MIN_STAKE.
+_stake_fijo_raw = os.getenv("DERIV_STAKE_FIJO", "").strip()
+DERIV_STAKE_FIJO = float(_stake_fijo_raw) if _stake_fijo_raw else None
 DERIV_HISTORIAL_LIMIT = int(os.getenv("DERIV_HISTORIAL_LIMIT", "50"))
 DERIV_HISTORIAL_CADA_SEGUNDOS = int(os.getenv("DERIV_HISTORIAL_CADA_SEGUNDOS", "10"))
 BALANCE_SNAPSHOT_CADA_SEG = int(os.getenv("BALANCE_SNAPSHOT_CADA_SEG", "60"))
