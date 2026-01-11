@@ -205,7 +205,26 @@ def estado_json(request):
             "updated_at": cuenta.updated_at,
             "winrate_ult15": _winrate_ultimas_deriv(n=15),
         }
-    return JsonResponse({"cuenta": cuenta_dict, "operaciones_deriv": ops_deriv})
+    
+    # Incluir últimos ticks para el gráfico en tiempo real
+    ticks_list = []
+    if cuenta:
+        ticks_qs = (
+            TickDerivSnapshot.objects.filter(cuenta=cuenta)
+            .order_by("-epoch")[:50]
+        )
+        for tick_obj in ticks_qs:
+            ticks_list.append({
+                "precio": float(tick_obj.precio),
+                "epoch": int(tick_obj.epoch),
+            })
+        ticks_list.sort(key=lambda x: x["epoch"])  # Ordenar ascendente
+    
+    return JsonResponse({
+        "cuenta": cuenta_dict, 
+        "operaciones_deriv": ops_deriv,
+        "ticks": ticks_list,
+    })
 
 
 @require_http_methods(["GET", "HEAD"])

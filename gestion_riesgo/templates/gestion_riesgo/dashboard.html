@@ -521,48 +521,6 @@
         });
       }
 
-      async function cargarTicks() {
-        try {
-          ensureTicksChart();
-          if (!ticksChart) return;
-          const res = await fetch("/api/ticks/", { cache: "no-store" });
-          if (!res.ok) {
-            console.warn("[TICKS] Error en respuesta:", res.status);
-            return;
-          }
-          const data = await res.json();
-          const ticks = Array.isArray(data.ticks) ? data.ticks : [];
-          
-          if (ticks.length > 0) {
-            // Actualizar contador y precio actual
-            setText("ticks_count", `${ticks.length} ticks`);
-            const ultimoPrecio = ticks[ticks.length - 1].precio;
-            
-            // Calcular cambio desde el primero
-            const primerPrecio = ticks[0].precio;
-            const cambio = ultimoPrecio - primerPrecio;
-            const cambioStr = cambio >= 0 ? `+${cambio.toFixed(5)}` : cambio.toFixed(5);
-            setText("ticks_current_price", `${ultimoPrecio.toFixed(5)} (${cambioStr})`);
-            
-            // Actualizar gráfico - usar solo los valores Y (precios)
-            ticksChart.data.labels = ticks.map((t, i) => i + 1);
-            ticksChart.data.datasets[0].data = ticks.map(t => Number(t.precio));
-            ticksChart.update('none'); // 'none' para animación más rápida
-          } else {
-            setText("ticks_count", "0 ticks");
-            setText("ticks_current_price", "—");
-            // Limpiar gráfico si no hay datos
-            if (ticksChart) {
-              ticksChart.data.labels = [];
-              ticksChart.data.datasets[0].data = [];
-              ticksChart.update();
-            }
-          }
-        } catch (e) {
-          console.error("[TICKS] Error cargando ticks:", e);
-        }
-      }
-
       async function refrescar() {
         try {
           const res = await fetch("/api/estado/", { cache: "no-store" });
@@ -595,17 +553,51 @@
             setText("ultima_actualizacion", "Actualizado: " + new Date().toLocaleTimeString());
           }
           renderOpsDeriv(data.operaciones_deriv || []);
+          
+          // Actualizar gráfico de ticks junto con la señal (mismo endpoint)
+          actualizarGraficoTicks(data.ticks || []);
         } catch (e) {
           // SILENCIOSO: SI EL BOT/SERVIDOR NO ESTÁN DISPONIBLES, NO ROMPE LA UI.
         }
       }
+      
+      function actualizarGraficoTicks(ticks) {
+        try {
+          ensureTicksChart();
+          if (!ticksChart) return;
+          
+          if (ticks.length > 0) {
+            // Actualizar contador y precio actual
+            setText("ticks_count", `${ticks.length} ticks`);
+            const ultimoPrecio = ticks[ticks.length - 1].precio;
+            
+            // Calcular cambio desde el primero
+            const primerPrecio = ticks[0].precio;
+            const cambio = ultimoPrecio - primerPrecio;
+            const cambioStr = cambio >= 0 ? `+${cambio.toFixed(5)}` : cambio.toFixed(5);
+            setText("ticks_current_price", `${ultimoPrecio.toFixed(5)} (${cambioStr})`);
+            
+            // Actualizar gráfico - usar solo los valores Y (precios)
+            ticksChart.data.labels = ticks.map((t, i) => i + 1);
+            ticksChart.data.datasets[0].data = ticks.map(t => Number(t.precio));
+            ticksChart.update('none'); // 'none' para animación más rápida
+          } else {
+            setText("ticks_count", "0 ticks");
+            setText("ticks_current_price", "—");
+            // Limpiar gráfico si no hay datos
+            if (ticksChart) {
+              ticksChart.data.labels = [];
+              ticksChart.data.datasets[0].data = [];
+              ticksChart.update('none');
+            }
+          }
+        } catch (e) {
+          console.error("[TICKS] Error actualizando gráfico:", e);
+        }
+      }
 
       refrescar();
-      setInterval(refrescar, 1000);
-
-      // Cargar ticks
-      cargarTicks();
-      setInterval(cargarTicks, 2000); // Actualizar cada 2 segundos
+      setInterval(refrescar, 1000); // Actualiza señal Y ticks cada 1 segundo
 
       // Tabs + refresh balance
       document.querySelectorAll(".tab").forEach(el => {
