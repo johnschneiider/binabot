@@ -387,12 +387,14 @@ class Command(BaseCommand):
                                             if nuevo_ciclo_balance_inicio and nuevo_ciclo_balance_inicio > 0:
                                                 pnl_pct = (float(balance_val) / float(nuevo_ciclo_balance_inicio)) - 1.0
                                                 if pnl_pct >= float(ciclo_tp):
-                                                    nuevo_ciclo_pausa_hasta = int(ahora_epoch + max(0, pausa_tp))
-                                                    nuevo_ciclo_balance_inicio = None
-                                                    nuevo_ciclo_inicio_epoch = None
-                                                    ciclo_bloqueado = True
-                                                    riesgo_motivo = f"TAKE_PROFIT_{float(ciclo_tp):.4f}_PAUSA_{int(pausa_tp)}s"
-                                                    ciclo_evento = "TAKE_PROFIT"
+                                                    # REQUERIMIENTO: al llegar a la meta, NO pausar.
+                                                    # En su lugar reiniciamos el ciclo (baseline fresco) y seguimos operando.
+                                                    nuevo_ciclo_pausa_hasta = None
+                                                    nuevo_ciclo_balance_inicio = float(balance_val)
+                                                    nuevo_ciclo_inicio_epoch = int(ahora_epoch)
+                                                    ciclo_bloqueado = False
+                                                    riesgo_motivo = f"TAKE_PROFIT_{float(ciclo_tp):.4f}_SIN_PAUSA"
+                                                    ciclo_evento = "TAKE_PROFIT_CONTINUAR"
                                                 elif pnl_pct <= -float(ciclo_sl):
                                                     nuevo_ciclo_pausa_hasta = int(ahora_epoch + max(0, pausa_sl))
                                                     nuevo_ciclo_balance_inicio = None

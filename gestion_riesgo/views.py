@@ -58,6 +58,12 @@ def _riesgo_motivo_ui(riesgo_motivo: str | None) -> dict:
         pausa_s = int(m.group(2))
         return {"label": f"TAKE PROFIT (meta {tp*100:.2f}% · pausa {pausa_s//60}m)", "pausa_hasta_epoch": None}
 
+    # TAKE_PROFIT_<tp>_SIN_PAUSA
+    m = re.match(r"^TAKE_PROFIT_([0-9.]+)_SIN_PAUSA$", rm)
+    if m:
+        tp = float(m.group(1))
+        return {"label": f"TAKE PROFIT (meta {tp*100:.2f}% · sin pausa)", "pausa_hasta_epoch": None}
+
     # STOPLOSS_<sl>_PAUSA_<secs>s
     m = re.match(r"^STOPLOSS_([0-9.]+)_PAUSA_(\d+)s$", rm)
     if m:
