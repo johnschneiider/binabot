@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from gestion_riesgo.models import OperacionDeriv
+from gestion_riesgo.models import BalanceDerivSnapshot, Cuenta, OperacionDeriv
 
 
 def _dt_from_epoch(epoch: int | None, tz: ZoneInfo) -> str:
@@ -26,14 +27,16 @@ class Command(BaseCommand):
     def add_arguments(self, parser) -> None:  # noqa: ANN001
         parser.add_argument("--horas", type=int, default=24, help="Horas hacia atrás para analizar (default: 24)")
         parser.add_argument("--dias", type=int, default=None, help="Días hacia atrás para analizar (sobrescribe --horas)")
-        parser.add_argument("--top", type=int, default=50, help="Máximo de operaciones a mostrar (default: 50)")
+        parser.add_argument("--top", type=int, default=100, help="Máximo de operaciones a mostrar (default: 100)")
         parser.add_argument("--consistencia", action="store_true", help="Analiza consistencia de patrones horarios por día")
+        parser.add_argument("--completo", action="store_true", help="Análisis completo: incluye balance histórico, umbrales, rachas, etc.")
 
     def handle(self, *args, **opts) -> None:  # noqa: ANN001
         dias = opts.get("dias")
         horas = int(opts.get("horas") or 24)
-        top = int(opts.get("top") or 50)
+        top = int(opts.get("top") or 100)
         analizar_consistencia = bool(opts.get("consistencia"))
+        completo = bool(opts.get("completo"))
 
         tz = ZoneInfo("America/Bogota")
         if dias:
@@ -42,17 +45,21 @@ class Command(BaseCommand):
             desde_dt = timezone.now() - timedelta(hours=horas)
         desde_epoch = int(desde_dt.timestamp())
 
-        ops = (
+        # Obtener TODAS las operaciones (sin límite top para estadísticas)
+        ops_all = list(
             OperacionDeriv.objects.filter(creada_por_bot=True, opened_epoch__gte=desde_epoch)
             .order_by("-opened_epoch")
-            .select_related("cuenta")[:top]
+            .select_related("cuenta")
         )
+        
+        # Para mostrar en tabla, limitar a top
+        ops = ops_all[:top] if len(ops_all) > top else ops_all
 
-        if not ops:
-            self.stdout.write(f"No hay operaciones en las últimas {horas} horas.")
+        if not ops_all:
+            self.stdout.write(f"No hay operaciones en las últimas {horas}h o {dias}d.")
             return
 
-        cerradas = [op for op in ops if op.estado == "CERRADA" and op.profit is not None]
+        cerradas = [op for op in ops_all if op.estado == "CERRADA" and op.profit is not None]
         ganadas = [op for op in cerradas if op.profit > 0]
         perdidas = [op for op in cerradas if op.profit < 0]
 
@@ -300,6 +307,178 @@ class Command(BaseCommand):
             if tipos_malos:
                 self.stdout.write(f"Tipos de contrato con pérdidas consistentes: {tipos_malos}")
                 self.stdout.write(f"  → Considerar filtrar con DERIV_CONTRACT_TYPES_PERMITIDOS")
+
+        # ===== ANÁLISIS POR UMBRAL USADO =====
+        if completo and any(hasattr(op, "umbral_usado") and op.umbral_usado is not None for op in cerradas):
+            self.stdout.write(f"\n{'='*100}")
+            self.stdout.write("ANÁLISIS POR UMBRAL USADO")
+            self.stdout.write(f"{'='*100}\n")
+
+            por_umbral: dict[float, list] = defaultdict(list)
+            for op in cerradas:
+                if hasattr(op, "umbral_usado") and op.umbral_usado is not None:
+                    # Redondear a 3 decimales para agrupar
+                    umbral_redondeado = round(float(op.umbral_usado), 3)
+                    por_umbral[umbral_redondeado].append(op)
+
+            if por_umbral:
+                fmt_umbral = "{:<12} {:<8} {:<8} {:<10} {:<12} {:<10} {:<12}"
+                self.stdout.write(fmt_umbral.format("Umbral", "Total", "Ganadas", "Perdidas", "Profit Total", "Winrate %", "Profit Prom"))
+                self.stdout.write("-" * 80)
+                for umb in sorted(por_umbral.keys(), reverse=True):
+                    ops_u = por_umbral[umb]
+                    gan_u = [op for op in ops_u if op.profit > 0]
+                    perd_u = [op for op in ops_u if op.profit < 0]
+                    profit_u = sum(op.profit for op in ops_u)
+                    wr_u = len(gan_u) * 100 / len(ops_u) if ops_u else 0
+                    profit_prom_u = profit_u / len(ops_u) if ops_u else 0
+                    self.stdout.write(
+                        fmt_umbral.format(
+                            f"{umb:.3f}",
+                            len(ops_u),
+                            len(gan_u),
+                            len(perd_u),
+                            f"{profit_u:.2f}",
+                            f"{wr_u:.1f}",
+                            f"{profit_prom_u:.2f}",
+                        )
+                    )
+
+        # ===== ANÁLISIS DE SEÑALES VS UMBRALES =====
+        if completo and any(hasattr(op, "senal_valor") and op.senal_valor is not None for op in cerradas):
+            self.stdout.write(f"\n{'='*100}")
+            self.stdout.write("ANÁLISIS DE SEÑALES VS UMBRALES")
+            self.stdout.write(f"{'='*100}\n")
+
+            ops_con_senal_umbral = [
+                op for op in cerradas
+                if hasattr(op, "senal_valor") and op.senal_valor is not None
+                and hasattr(op, "umbral_usado") and op.umbral_usado is not None
+            ]
+
+            if ops_con_senal_umbral:
+                # Señal absoluta vs umbral
+                senales_ganadas = [abs(op.senal_valor) for op in ops_con_senal_umbral if op.profit > 0]
+                senales_perdidas = [abs(op.senal_valor) for op in ops_con_senal_umbral if op.profit < 0]
+                umbrales_ganadas = [op.umbral_usado for op in ops_con_senal_umbral if op.profit > 0]
+                umbrales_perdidas = [op.umbral_usado for op in ops_con_senal_umbral if op.profit < 0]
+
+                if senales_ganadas:
+                    self.stdout.write(f"Señal promedio (ganadas): {sum(senales_ganadas)/len(senales_ganadas):.4f}")
+                    self.stdout.write(f"Señal mínima (ganadas): {min(senales_ganadas):.4f}")
+                    self.stdout.write(f"Señal máxima (ganadas): {max(senales_ganadas):.4f}")
+                    self.stdout.write(f"Umbral promedio (ganadas): {sum(umbrales_ganadas)/len(umbrales_ganadas):.4f}")
+
+                if senales_perdidas:
+                    self.stdout.write(f"\nSeñal promedio (perdidas): {sum(senales_perdidas)/len(senales_perdidas):.4f}")
+                    self.stdout.write(f"Señal mínima (perdidas): {min(senales_perdidas):.4f}")
+                    self.stdout.write(f"Señal máxima (perdidas): {max(senales_perdidas):.4f}")
+                    self.stdout.write(f"Umbral promedio (perdidas): {sum(umbrales_perdidas)/len(umbrales_perdidas):.4f}")
+
+                # Ratio señal/umbral
+                ratios_ganadas = [abs(op.senal_valor) / op.umbral_usado for op in ops_con_senal_umbral if op.profit > 0 and op.umbral_usado > 0]
+                ratios_perdidas = [abs(op.senal_valor) / op.umbral_usado for op in ops_con_senal_umbral if op.profit < 0 and op.umbral_usado > 0]
+                
+                if ratios_ganadas:
+                    self.stdout.write(f"\nRatio señal/umbral promedio (ganadas): {sum(ratios_ganadas)/len(ratios_ganadas):.2f}x")
+                if ratios_perdidas:
+                    self.stdout.write(f"Ratio señal/umbral promedio (perdidas): {sum(ratios_perdidas)/len(ratios_perdidas):.2f}x")
+
+        # ===== ANÁLISIS DE RACHAS =====
+        if completo and cerradas:
+            self.stdout.write(f"\n{'='*100}")
+            self.stdout.write("ANÁLISIS DE RACHAS")
+            self.stdout.write(f"{'='*100}\n")
+
+            # Ordenar por fecha de cierre
+            cerradas_ordenadas = sorted(cerradas, key=lambda op: op.closed_epoch or op.opened_epoch or 0)
+            
+            racha_ganadora_actual = 0
+            racha_perdedora_actual = 0
+            racha_ganadora_max = 0
+            racha_perdedora_max = 0
+            rachas_ganadoras = []
+            rachas_perdedoras = []
+
+            for op in cerradas_ordenadas:
+                if op.profit > 0:
+                    racha_ganadora_actual += 1
+                    racha_perdedora_actual = 0
+                    if racha_ganadora_actual > racha_ganadora_max:
+                        racha_ganadora_max = racha_ganadora_actual
+                elif op.profit < 0:
+                    racha_perdedora_actual += 1
+                    racha_ganadora_actual = 0
+                    if racha_perdedora_actual > racha_perdedora_max:
+                        racha_perdedora_max = racha_perdedora_actual
+
+            self.stdout.write(f"Racha ganadora máxima: {racha_ganadora_max}")
+            self.stdout.write(f"Racha perdedora máxima: {racha_perdedora_max}")
+            self.stdout.write(f"Racha actual: {'Ganadora' if racha_ganadora_actual > 0 else 'Perdedora' if racha_perdedora_actual > 0 else 'N/A'} ({max(racha_ganadora_actual, racha_perdedora_actual)})")
+
+        # ===== ANÁLISIS DE BALANCE HISTÓRICO =====
+        if completo:
+            self.stdout.write(f"\n{'='*100}")
+            self.stdout.write("ANÁLISIS DE BALANCE HISTÓRICO")
+            self.stdout.write(f"{'='*100}\n")
+
+            cuenta = Cuenta.objects.first()
+            if cuenta:
+                self.stdout.write(f"Balance actual: {cuenta.balance_deriv:.2f} {cuenta.moneda_deriv}")
+                self.stdout.write(f"Balance máximo histórico: {cuenta.max_balance_deriv_historico:.2f} {cuenta.moneda_deriv}")
+                if cuenta.max_balance_deriv_historico and cuenta.balance_deriv:
+                    drawdown = ((cuenta.max_balance_deriv_historico - cuenta.balance_deriv) / cuenta.max_balance_deriv_historico) * 100
+                    self.stdout.write(f"Drawdown actual: {drawdown:.2f}%")
+
+            # Snapshots recientes
+            snapshots = BalanceDerivSnapshot.objects.filter(
+                cuenta=cuenta,
+                created_at__gte=desde_dt
+            ).order_by("-created_at")[:100] if cuenta else []
+
+            if snapshots:
+                balances = [s.balance for s in snapshots]
+                balance_min = min(balances)
+                balance_max = max(balances)
+                balance_prom = sum(balances) / len(balances)
+                self.stdout.write(f"\nBalance mínimo (período): {balance_min:.2f}")
+                self.stdout.write(f"Balance máximo (período): {balance_max:.2f}")
+                self.stdout.write(f"Balance promedio (período): {balance_prom:.2f}")
+                self.stdout.write(f"Variación total: {balance_max - balance_min:.2f} ({((balance_max - balance_min) / balance_min * 100) if balance_min > 0 else 0:.2f}%)")
+
+        # ===== ANÁLISIS DE DÍAS =====
+        if completo and cerradas:
+            self.stdout.write(f"\n{'='*100}")
+            self.stdout.write("ANÁLISIS POR DÍA")
+            self.stdout.write(f"{'='*100}\n")
+
+            por_dia: dict[str, list] = defaultdict(list)
+            for op in cerradas:
+                if op.opened_epoch:
+                    dt = datetime.fromtimestamp(op.opened_epoch, tz=tz)
+                    dia_str = dt.strftime("%Y-%m-%d")
+                    por_dia[dia_str].append(op)
+
+            if por_dia:
+                fmt_dia = "{:<12} {:<8} {:<8} {:<10} {:<12} {:<10}"
+                self.stdout.write(fmt_dia.format("Día", "Total", "Ganadas", "Perdidas", "Profit Total", "Winrate %"))
+                self.stdout.write("-" * 70)
+                for dia in sorted(por_dia.keys(), reverse=True):
+                    ops_d = por_dia[dia]
+                    gan_d = [op for op in ops_d if op.profit > 0]
+                    perd_d = [op for op in ops_d if op.profit < 0]
+                    profit_d = sum(op.profit for op in ops_d)
+                    wr_d = len(gan_d) * 100 / len(ops_d) if ops_d else 0
+                    self.stdout.write(
+                        fmt_dia.format(
+                            dia,
+                            len(ops_d),
+                            len(gan_d),
+                            len(perd_d),
+                            f"{profit_d:.2f}",
+                            f"{wr_d:.1f}",
+                        )
+                    )
 
         if winrate < 50:
             self.stdout.write(f"\n⚠️  Winrate bajo ({winrate:.1f}%). Considerar:")
