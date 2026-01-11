@@ -878,11 +878,22 @@ class Command(BaseCommand):
                                             "symbol": symbol,
                                         }
                                     )
+                                    # Guardar el umbral real usado para esta decisión (para auditoría en dashboard).
+                                    # - COMPRA (CALL) usa umbral_compra
+                                    # - VENTA (PUT)  usa umbral_venta
+                                    umbral_guardar = None
+                                    try:
+                                        if resultado.decision == "COMPRA":
+                                            umbral_guardar = float(abs(umbral_compra)) if float(umbral_compra) != float("inf") else None
+                                        elif resultado.decision == "VENTA":
+                                            umbral_guardar = float(abs(umbral_venta)) if float(umbral_venta) != float("inf") else None
+                                    except Exception:
+                                        umbral_guardar = None
                                     esperando = {
                                         "tipo": "proposal",
                                         "stake": float(stake),
                                         "senal_valor": float(resultado.valor),
-                                        "umbral_usado": float(abs(umbral_compra)) if umbral_compra != float("inf") else None,
+                                        "umbral_usado": umbral_guardar,
                                         "pesos_usados": dict(w),
                                         "senal_top_contribuciones": top_contrib,
                                     }
