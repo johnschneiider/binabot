@@ -61,44 +61,64 @@
         <div class="muted">Equity interna (paper): <span class="mono" id="capital_actual">{{ cuenta.capital_actual|default:"—" }}</span></div>
       </div>
       <div class="card">
-        <div class="muted">Estado de riesgo</div>
-        {% if cuenta and cuenta.bloqueado %}
-          <div class="badge bad" id="bloqueado">BLOQUEADO</div>
-        {% else %}
-          <div class="badge ok" id="bloqueado">OK</div>
-        {% endif %}
-        <div style="margin-top: 10px;">
-          <div class="muted" style="font-size: 11px; margin-bottom: 4px;">Motivo:</div>
-          <div class="mono" id="riesgo_motivo" style="font-size: 13px; font-weight: 500;">{% if cuenta and cuenta.riesgo_motivo %}{{ cuenta.riesgo_motivo }}{% else %}—{% endif %}</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <div class="muted" style="font-size: 13px; font-weight: 600;">Estado del Bot</div>
+          {% if cuenta and cuenta.bloqueado %}
+            <div class="badge bad" id="bloqueado" style="font-size: 13px; padding: 6px 12px;">BLOQUEADO</div>
+          {% else %}
+            <div class="badge ok" id="bloqueado" style="font-size: 13px; padding: 6px 12px;">OPERANDO</div>
+          {% endif %}
         </div>
-        <div id="ciclo_pausa_info" style="margin-top: 10px; display: none;">
-          <div class="muted" style="font-size: 11px; margin-bottom: 4px;">Pausa hasta:</div>
-          <div class="mono" id="ciclo_pausa_fecha" style="font-size: 13px; color: #dc2626;"></div>
-          <div class="mono" id="ciclo_pausa_countdown" style="font-size: 12px; color: #dc2626; margin-top: 2px;"></div>
+        
+        <div style="padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 12px;">
+          <div class="muted" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Razón del estado</div>
+          <div id="riesgo_motivo" style="font-size: 14px; font-weight: 500; color: #111; line-height: 1.4;">
+            {% if cuenta and cuenta.riesgo_motivo_ui %}
+              {{ cuenta.riesgo_motivo_ui }}
+            {% elif cuenta and cuenta.riesgo_motivo %}
+              {{ cuenta.riesgo_motivo }}
+            {% else %}
+              Operando normalmente
+            {% endif %}
+          </div>
         </div>
-        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
-          <div class="muted" style="font-size: 11px; margin-bottom: 6px;">Ciclo de trading</div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
-            <div>
-              <div class="muted" style="font-size: 10px;">Balance inicial:</div>
-              <div class="mono" id="ciclo_balance_inicio" style="font-weight: 500;">{% if cuenta and cuenta.ciclo_balance_inicio != None %}{{ cuenta.ciclo_balance_inicio|floatformat:2 }}{% else %}—{% endif %}</div>
+
+        <div id="ciclo_pausa_info" style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 12px; display: none;">
+          <div class="muted" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; color: #991b1b;">Pausa activa</div>
+          <div class="mono" id="ciclo_pausa_fecha" style="font-size: 14px; font-weight: 600; color: #dc2626; margin-bottom: 4px;"></div>
+          <div class="mono" id="ciclo_pausa_countdown" style="font-size: 13px; color: #b91c1c;"></div>
+        </div>
+
+        <div style="margin-top: 14px; padding-top: 14px; border-top: 2px solid #e5e7eb;">
+          <div class="muted" style="font-size: 12px; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Ciclo de Trading</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+            <div style="padding: 8px; background: #f9fafb; border-radius: 6px;">
+              <div class="muted" style="font-size: 10px; margin-bottom: 4px;">Balance inicial</div>
+              <div class="mono" id="ciclo_balance_inicio" style="font-weight: 600; font-size: 15px; color: #111;">
+                {% if cuenta and cuenta.ciclo_balance_inicio != None %}
+                  ${{ cuenta.ciclo_balance_inicio|floatformat:2 }}
+                {% else %}
+                  —
+                {% endif %}
+              </div>
             </div>
-            <div>
-              <div class="muted" style="font-size: 10px;">Inicio:</div>
-              <div class="mono" id="ciclo_inicio" style="font-size: 11px;">—</div>
+            <div style="padding: 8px; background: #f9fafb; border-radius: 6px;">
+              <div class="muted" style="font-size: 10px; margin-bottom: 4px;">Inició</div>
+              <div class="mono" id="ciclo_inicio" style="font-size: 13px; color: #374151;">—</div>
             </div>
           </div>
         </div>
-        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
-          <div class="muted" style="font-size: 11px; margin-bottom: 6px;">Último tick del mercado</div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
-            <div>
-              <div class="muted" style="font-size: 10px;">Hora:</div>
-              <div class="mono" id="ultimo_tick" style="font-size: 11px;">—</div>
+
+        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #e5e7eb;">
+          <div class="muted" style="font-size: 12px; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Mercado</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+            <div style="padding: 8px; background: #f9fafb; border-radius: 6px;">
+              <div class="muted" style="font-size: 10px; margin-bottom: 4px;">Hora (local)</div>
+              <div class="mono" id="ultimo_tick" style="font-size: 13px; color: #374151;">—</div>
             </div>
-            <div>
-              <div class="muted" style="font-size: 10px;">Precio:</div>
-              <div class="mono" id="ultimo_precio" style="font-weight: 500;">{{ cuenta.ultimo_precio|default:"—" }}</div>
+            <div style="padding: 8px; background: #f9fafb; border-radius: 6px;">
+              <div class="muted" style="font-size: 10px; margin-bottom: 4px;">Precio actual</div>
+              <div class="mono" id="ultimo_precio" style="font-weight: 600; font-size: 15px; color: #111;">{{ cuenta.ultimo_precio|default:"—" }}</div>
             </div>
           </div>
         </div>
