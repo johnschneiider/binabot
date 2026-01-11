@@ -25,14 +25,21 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser) -> None:  # noqa: ANN001
         parser.add_argument("--horas", type=int, default=24, help="Horas hacia atrás para analizar (default: 24)")
+        parser.add_argument("--dias", type=int, default=None, help="Días hacia atrás para analizar (sobrescribe --horas)")
         parser.add_argument("--top", type=int, default=50, help="Máximo de operaciones a mostrar (default: 50)")
+        parser.add_argument("--consistencia", action="store_true", help="Analiza consistencia de patrones horarios por día")
 
     def handle(self, *args, **opts) -> None:  # noqa: ANN001
+        dias = opts.get("dias")
         horas = int(opts.get("horas") or 24)
         top = int(opts.get("top") or 50)
+        analizar_consistencia = bool(opts.get("consistencia"))
 
         tz = ZoneInfo("America/Bogota")
-        desde_dt = timezone.now() - timedelta(hours=horas)
+        if dias:
+            desde_dt = timezone.now() - timedelta(days=dias)
+        else:
+            desde_dt = timezone.now() - timedelta(hours=horas)
         desde_epoch = int(desde_dt.timestamp())
 
         ops = (
@@ -133,6 +140,86 @@ class Command(BaseCommand):
                     )
                 )
 
+        # ===== ANÁLISIS DE CONSISTENCIA POR HORA Y DÍA =====
+        if analizar_consistencia and cerradas:
+            self.stdout.write(f"\n{'='*100}")
+            self.stdout.write("ANÁLISIS DE CONSISTENCIA POR HORA Y DÍA")
+            self.stdout.write(f"{'='*100}\n")
+            self.stdout.write("(Para verificar si los patrones horarios se repiten consistentemente)\n")
+
+            # Agrupar por hora Y día
+            por_hora_dia: dict[tuple[int, str], list] = {}
+            for op in cerradas:
+                if op.opened_epoch:
+                    dt = datetime.fromtimestamp(op.opened_epoch, tz=tz)
+                    hora = dt.hour
+                    dia = dt.strftime("%Y-%m-%d")
+                    key = (hora, dia)
+                    if key not in por_hora_dia:
+                        por_hora_dia[key] = []
+                    por_hora_dia[key].append(op)
+
+            # Para cada hora, ver cuántos días tienen datos y cómo se comporta cada día
+            horas_analizadas = sorted(set(h for h, _ in por_hora_dia.keys()))
+            if horas_analizadas:
+                fmt_cons = "{:<5} {:<8} {:<15} {:<15} {:<15} {:<15}"
+                self.stdout.write(fmt_cons.format("Hora", "Días", "Días Ganadores", "Días Perdedores", "Días Neutros", "Consistencia"))
+                self.stdout.write("-" * 75)
+
+                for h in horas_analizadas:
+                    dias_hora = [dia for hora, dia in por_hora_dia.keys() if hora == h]
+                    dias_unicos = sorted(set(dias_hora))
+                    
+                    dias_ganadores = 0
+                    dias_perdedores = 0
+                    dias_neutros = 0
+                    
+                    for dia in dias_unicos:
+                        ops_dia = por_hora_dia[(h, dia)]
+                        profit_dia = sum(op.profit for op in ops_dia)
+                        if profit_dia > 0:
+                            dias_ganadores += 1
+                        elif profit_dia < 0:
+                            dias_perdedores += 1
+                        else:
+                            dias_neutros += 1
+
+                    total_dias = len(dias_unicos)
+                    if total_dias > 0:
+                        # Consistencia: % de días que siguen el patrón dominante
+                        if dias_ganadores >= dias_perdedores:
+                            consistencia = (dias_ganadores / total_dias) * 100
+                            patrón = "GANADORA"
+                        else:
+                            consistencia = (dias_perdedores / total_dias) * 100
+                            patrón = "PERDEDORA"
+                        
+                        consistencia_str = f"{consistencia:.0f}% {patrón}"
+                    else:
+                        consistencia_str = "N/A"
+
+                    self.stdout.write(
+                        fmt_cons.format(
+                            f"{h:02d}:00",
+                            total_dias,
+                            dias_ganadores,
+                            dias_perdedores,
+                            dias_neutros,
+                            consistencia_str,
+                        )
+                    )
+
+                # Resumen de confianza estadística
+                horas_con_muchos_dias = []
+                for h in horas_analizadas:
+                    dias_para_hora = {dia for hora, dia in por_hora_dia.keys() if hora == h}
+                    if len(dias_para_hora) >= 3:
+                        horas_con_muchos_dias.append(h)
+                self.stdout.write(f"\n⚠️  Confianza estadística:")
+                self.stdout.write(f"  - Horas con ≥3 días de datos: {sorted(horas_con_muchos_dias)}")
+                self.stdout.write(f"  - Horas con <3 días de datos: {sorted(set(horas_analizadas) - set(horas_con_muchos_dias))}")
+                self.stdout.write(f"  - Recomendación: Analizar mínimo 5-7 días para tener confianza en los patrones")
+
         # ===== ANÁLISIS POR TIPO DE CONTRATO =====
         self.stdout.write(f"\n{'='*100}")
         self.stdout.write("ANÁLISIS POR TIPO DE CONTRATO")
@@ -201,6 +288,12 @@ class Command(BaseCommand):
             if horas_malas:
                 self.stdout.write(f"Horas con mal desempeño (winrate < 50% y pérdidas): {sorted(horas_malas)}")
                 self.stdout.write(f"  → Considerar bloquear estas horas con DERIV_BLOQUEO_HORAS_LOCAL")
+            
+            # Advertencia si hay pocos datos
+            horas_con_pocos_datos = [h for h, ops_h in por_hora.items() if len(ops_h) < 3]
+            if horas_con_pocos_datos and not dias:
+                self.stdout.write(f"\n⚠️  Horas con pocos datos (<3 operaciones): {sorted(horas_con_pocos_datos)}")
+                self.stdout.write(f"  → Usa --dias 7 o más para tener más confianza en los patrones")
 
         if por_tipo:
             tipos_malos = [tipo for tipo, ops_t in por_tipo.items() if sum(op.profit for op in ops_t) < 0 and len(ops_t) >= 3]
