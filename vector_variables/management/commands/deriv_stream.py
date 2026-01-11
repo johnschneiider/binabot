@@ -810,16 +810,23 @@ class Command(BaseCommand):
                         ahora = time.monotonic()
                         if (ahora - ultimo_persist) >= 1.0:
                             ultimo_persist = ahora
-                            await sync_to_async(
-                                lambda: Cuenta.objects.filter(id=cuenta.id).update(
-                                    ultimo_tick_epoch=int(tick.epoch),
-                                    ultimo_precio=float(tick.precio),
-                                    senal_valor=float(resultado.valor),
-                                    senal_decision=str(resultado.decision),
-                                    senal_top_contribuciones=top_contrib,
-                                ),
-                                thread_sensitive=True,
-                            )()
+                            try:
+                                await sync_to_async(
+                                    lambda: Cuenta.objects.filter(id=cuenta.id).update(
+                                        ultimo_tick_epoch=int(tick.epoch),
+                                        ultimo_precio=float(tick.precio),
+                                        senal_valor=float(resultado.valor),
+                                        senal_decision=str(resultado.decision),
+                                        senal_top_contribuciones=top_contrib,
+                                    ),
+                                    thread_sensitive=True,
+                                )()
+                            except Exception as e:
+                                # Log del error pero no romper el bot
+                                import traceback
+                                error_msg = f"[UPDATE] Error actualizando cuenta: {e}\n{traceback.format_exc()}"
+                                self.stderr.write(error_msg)
+                                self.stdout.write(self.style.ERROR(error_msg))
 
                         # HISTORIAL REAL (DERIV): PEDIR PROFIT_TABLE CADA N SEGUNDOS.
                         if modo_real:
