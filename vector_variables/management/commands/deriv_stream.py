@@ -809,6 +809,9 @@ class Command(BaseCommand):
                         # INCLUYE: ÚLTIMO TICK + TELEMETRÍA DE SEÑAL (w^T x).
                         ahora = time.monotonic()
                         tiempo_desde_ultimo_persist = ahora - ultimo_persist
+                        # Log de diagnóstico cada 50 ticks para verificar que el código se ejecuta
+                        if ticks_procesados % 50 == 0:
+                            self.stdout.write(f"[DIAG] Tick #{ticks_procesados} tiempo_desde_persist={tiempo_desde_ultimo_persist:.2f}s señal={resultado.valor:.4f}")
                         if tiempo_desde_ultimo_persist >= 1.0:
                             ultimo_persist = ahora
                             try:
