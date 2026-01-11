@@ -56,12 +56,12 @@ class Command(BaseCommand):
         # Extraer datos de cada operación
         datos_ops = []
         for op in ops:
-            if not op.pesos_usados_json or not op.senal_top_contribuciones_json:
+            if not op.pesos_usados or not op.senal_top_contribuciones:
                 continue
 
             try:
-                pesos = json.loads(op.pesos_usados_json) if isinstance(op.pesos_usados_json, str) else op.pesos_usados_json
-                contribuciones = json.loads(op.senal_top_contribuciones_json) if isinstance(op.senal_top_contribuciones_json, str) else op.senal_top_contribuciones_json
+                pesos = json.loads(op.pesos_usados) if isinstance(op.pesos_usados, str) else op.pesos_usados
+                contribuciones = json.loads(op.senal_top_contribuciones) if isinstance(op.senal_top_contribuciones, str) else op.senal_top_contribuciones
 
                 datos_ops.append({
                     "profit": float(op.profit or 0),
