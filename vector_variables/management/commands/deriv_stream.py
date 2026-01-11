@@ -637,39 +637,41 @@ class Command(BaseCommand):
                         tick = Tick(precio=tick_deriv.precio, epoch=tick_deriv.epoch)
                         
                         # Guardar tick para gráfico en tiempo real (mantener solo últimos 50)
-                        try:
-                            # Crear nuevo tick
-                            await sync_to_async(
-                                lambda: TickDerivSnapshot.objects.create(
-                                    cuenta_id=int(cuenta.id),
-                                    precio=float(tick.precio),
-                                    epoch=int(tick.epoch),
-                                ),
-                                thread_sensitive=True,
-                            )()
-                            
-                            # Limpiar ticks antiguos (mantener solo últimos 50)
-                            # Obtener todos los ticks ordenados por epoch descendente
-                            todos_ids = await sync_to_async(
-                                lambda: list(
-                                    TickDerivSnapshot.objects.filter(cuenta_id=cuenta.id)
-                                    .order_by("-epoch")
-                                    .values_list("id", flat=True)
-                                ),
-                                thread_sensitive=True,
-                            )()
-                            
-                            # Si hay más de 50, eliminar los excedentes
-                            if len(todos_ids) > 50:
-                                ids_a_eliminar = todos_ids[50:]
+                        # Solo guardar cada N ticks para no saturar la BD (cada 5 ticks = ~cada 10 segundos)
+                        if ticks_procesados % 5 == 0:
+                            try:
+                                # Crear nuevo tick
                                 await sync_to_async(
-                                    lambda: TickDerivSnapshot.objects.filter(id__in=ids_a_eliminar).delete(),
+                                    lambda: TickDerivSnapshot.objects.create(
+                                        cuenta_id=int(cuenta.id),
+                                        precio=float(tick.precio),
+                                        epoch=int(tick.epoch),
+                                    ),
                                     thread_sensitive=True,
                                 )()
-                        except Exception as e:
-                            # Log del error pero no romper el bot
-                            import traceback
-                            self.stderr.write(f"[TICKS] Error guardando tick: {e}\n{traceback.format_exc()}")
+                                
+                                # Limpiar ticks antiguos (mantener solo últimos 50)
+                                # Obtener todos los ticks ordenados por epoch descendente
+                                todos_ids = await sync_to_async(
+                                    lambda: list(
+                                        TickDerivSnapshot.objects.filter(cuenta_id=cuenta.id)
+                                        .order_by("-epoch")
+                                        .values_list("id", flat=True)
+                                    ),
+                                    thread_sensitive=True,
+                                )()
+                                
+                                # Si hay más de 50, eliminar los excedentes
+                                if len(todos_ids) > 50:
+                                    ids_a_eliminar = todos_ids[50:]
+                                    await sync_to_async(
+                                        lambda: TickDerivSnapshot.objects.filter(id__in=ids_a_eliminar).delete(),
+                                        thread_sensitive=True,
+                                    )()
+                            except Exception as e:
+                                # Log del error pero no romper el bot
+                                import traceback
+                                self.stderr.write(f"[TICKS] Error guardando tick: {e}\n{traceback.format_exc()}")
                         
                         x = constructor.actualizar_con_tick(tick)
                         x_eval = (
