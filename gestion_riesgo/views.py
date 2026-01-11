@@ -266,14 +266,22 @@ def ticks_json(request):
     if not cuenta:
         return JsonResponse({"cuenta_id": None, "ticks": []})
     
-    ticks = (
+    # Obtener todos los ticks ordenados por epoch descendente, luego tomar los últimos 50
+    ticks_qs = (
         TickDerivSnapshot.objects.filter(cuenta=cuenta)
         .order_by("-epoch")[:50]
-        .values("precio", "epoch")
     )
     
-    # Ordenar por epoch ascendente para el gráfico
-    ticks_list = sorted([{"precio": float(t["precio"]), "epoch": int(t["epoch"])} for t in ticks], key=lambda x: x["epoch"])
+    # Convertir a lista y ordenar por epoch ascendente para el gráfico
+    ticks_list = []
+    for tick_obj in ticks_qs:
+        ticks_list.append({
+            "precio": float(tick_obj.precio),
+            "epoch": int(tick_obj.epoch),
+        })
+    
+    # Ordenar por epoch ascendente (más antiguo primero)
+    ticks_list.sort(key=lambda x: x["epoch"])
     
     return JsonResponse({"cuenta_id": cuenta.id, "ticks": ticks_list})
 

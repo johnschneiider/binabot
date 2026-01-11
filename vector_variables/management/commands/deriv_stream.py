@@ -638,6 +638,7 @@ class Command(BaseCommand):
                         
                         # Guardar tick para gráfico en tiempo real (mantener solo últimos 50)
                         try:
+                            # Crear nuevo tick
                             await sync_to_async(
                                 lambda: TickDerivSnapshot.objects.create(
                                     cuenta_id=int(cuenta.id),
@@ -646,22 +647,28 @@ class Command(BaseCommand):
                                 ),
                                 thread_sensitive=True,
                             )()
+                            
                             # Limpiar ticks antiguos (mantener solo últimos 50)
-                            excedentes_ids = await sync_to_async(
+                            # Obtener todos los ticks ordenados por epoch descendente
+                            todos_ids = await sync_to_async(
                                 lambda: list(
                                     TickDerivSnapshot.objects.filter(cuenta_id=cuenta.id)
                                     .order_by("-epoch")
-                                    .values_list("id", flat=True)[50:]
+                                    .values_list("id", flat=True)
                                 ),
                                 thread_sensitive=True,
                             )()
-                            if excedentes_ids:
+                            
+                            # Si hay más de 50, eliminar los excedentes
+                            if len(todos_ids) > 50:
+                                ids_a_eliminar = todos_ids[50:]
                                 await sync_to_async(
-                                    lambda: TickDerivSnapshot.objects.filter(id__in=excedentes_ids).delete(),
+                                    lambda: TickDerivSnapshot.objects.filter(id__in=ids_a_eliminar).delete(),
                                     thread_sensitive=True,
                                 )()
-                        except Exception:
-                            pass  # No romper el bot si falla guardar ticks
+                        except Exception as e:
+                            # Log del error pero no romper el bot
+                            self.stderr.write(f"[TICKS] Error guardando tick: {e}")
                         
                         x = constructor.actualizar_con_tick(tick)
                         x_eval = (
