@@ -9,7 +9,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from django.db.models import F
 
-from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv
+from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, TickDerivSnapshot
 
 
 def _winrate_ultimas_deriv(*, n: int = 15) -> dict:
@@ -255,4 +255,25 @@ def balance_json(request):
             }
         )
     return JsonResponse({"cuenta_id": cuenta.id, "range": rango, "points": points})
+
+
+@require_http_methods(["GET", "HEAD"])
+def ticks_json(request):
+    """
+    Devuelve los últimos 50 ticks para el gráfico en tiempo real.
+    """
+    cuenta = Cuenta.objects.order_by("-updated_at").first()
+    if not cuenta:
+        return JsonResponse({"cuenta_id": None, "ticks": []})
+    
+    ticks = (
+        TickDerivSnapshot.objects.filter(cuenta=cuenta)
+        .order_by("-epoch")[:50]
+        .values("precio", "epoch")
+    )
+    
+    # Ordenar por epoch ascendente para el gráfico
+    ticks_list = sorted([{"precio": float(t["precio"]), "epoch": int(t["epoch"])} for t in ticks], key=lambda x: x["epoch"])
+    
+    return JsonResponse({"cuenta_id": cuenta.id, "ticks": ticks_list})
 

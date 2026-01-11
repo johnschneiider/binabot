@@ -111,11 +111,17 @@ class ConstructorVectorMercado:
 
         retornos_lista = list(self._retornos)
 
+        # MACD: diferencia entre EMA rápida y lenta (momentum directo)
+        ema_r = float(self._ema_rapida or tick.precio)
+        ema_l = float(self._ema_lenta or tick.precio)
+        macd = ema_r - ema_l
+
         vector: dict[str, float] = {
             # VARIABLES OBLIGATORIAS
             "retorno_instantaneo": float(r_inst),
-            "ema_rapida": float(self._ema_rapida or tick.precio),
-            "ema_lenta": float(self._ema_lenta or tick.precio),
+            "ema_rapida": ema_r,
+            "ema_lenta": ema_l,
+            "macd": macd,  # Nueva variable: momentum directo
             "rsi_ticks": float(rsi),
             "volatilidad_local": float(volatilidad_local(retornos_lista)),
             "skewness": float(skewness(retornos_lista)),

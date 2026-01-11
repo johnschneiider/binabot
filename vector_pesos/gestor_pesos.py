@@ -34,6 +34,7 @@ class GestorPesos:
                 "retorno_instantaneo": 0.10,
                 "ema_rapida": 0.05,
                 "ema_lenta": -0.05,
+                "macd": 0.15,  # Nueva variable: momentum directo (EMA rápida - EMA lenta)
                 "rsi_ticks": 0.02,
                 "volatilidad_local": -0.20,
                 "skewness": 0.05,

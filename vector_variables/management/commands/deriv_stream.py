@@ -13,7 +13,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from gestion_riesgo.gestor_riesgo import GestorRiesgo
-from gestion_riesgo.models import BalanceDerivSnapshot, Cuenta, Operacion, OperacionDeriv
+from gestion_riesgo.models import BalanceDerivSnapshot, Cuenta, Operacion, OperacionDeriv, TickDerivSnapshot
 from quant_deriv_bot.infra.deriv_ws import ClienteDerivWS, dormir_segundos
 from vector_pesos.gestor_pesos import GestorPesos
 from vector_pesos.senal import evaluar_senal
@@ -635,6 +635,34 @@ class Command(BaseCommand):
                             return
 
                         tick = Tick(precio=tick_deriv.precio, epoch=tick_deriv.epoch)
+                        
+                        # Guardar tick para gráfico en tiempo real (mantener solo últimos 50)
+                        try:
+                            await sync_to_async(
+                                lambda: TickDerivSnapshot.objects.create(
+                                    cuenta_id=int(cuenta.id),
+                                    precio=float(tick.precio),
+                                    epoch=int(tick.epoch),
+                                ),
+                                thread_sensitive=True,
+                            )()
+                            # Limpiar ticks antiguos (mantener solo últimos 50)
+                            excedentes_ids = await sync_to_async(
+                                lambda: list(
+                                    TickDerivSnapshot.objects.filter(cuenta_id=cuenta.id)
+                                    .order_by("-epoch")
+                                    .values_list("id", flat=True)[50:]
+                                ),
+                                thread_sensitive=True,
+                            )()
+                            if excedentes_ids:
+                                await sync_to_async(
+                                    lambda: TickDerivSnapshot.objects.filter(id__in=excedentes_ids).delete(),
+                                    thread_sensitive=True,
+                                )()
+                        except Exception:
+                            pass  # No romper el bot si falla guardar ticks
+                        
                         x = constructor.actualizar_con_tick(tick)
                         x_eval = (
                             normalizador.actualizar_y_normalizar(x)

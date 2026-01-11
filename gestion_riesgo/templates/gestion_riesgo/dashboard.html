@@ -174,6 +174,23 @@
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
+          <div class="big">Precio en Tiempo Real (últimos 50 ticks)</div>
+          <div class="muted">Eje X: ticks · Eje Y: precio</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="muted" style="font-size: 11px;" id="ticks_count">0 ticks</div>
+          <div class="muted mono" style="font-size: 13px; font-weight: 600;" id="ticks_current_price">—</div>
+        </div>
+      </div>
+      <div class="chart-wrap" style="margin-top: 10px;">
+        <canvas id="ticks_chart"></canvas>
+      </div>
+      <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos 50 ticks recibidos</div>
+    </div>
+
+    <div class="card" style="margin-top: 14px;">
+      <div class="row">
+        <div>
           <div class="big">Operaciones Deriv (reales, últimas 50)</div>
           <div class="muted">Solo entradas ejecutadas por este bot · Muestra profit y moneda (afecta balance real)</div>
         </div>
@@ -435,6 +452,111 @@
         }
       }
 
+      // ===== GRÁFICA TICKS =====
+      let ticksChart = null;
+
+      function ensureTicksChart() {
+        const ctx = document.getElementById("ticks_chart");
+        if (!ctx) return;
+        if (ticksChart) return;
+        ticksChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [{
+              label: "Precio",
+              data: [],
+              borderColor: "#10b981",
+              backgroundColor: "rgba(16,185,129,0.1)",
+              fill: false,
+              tension: 0.1,
+              pointRadius: 0,
+              borderWidth: 2,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+              duration: 300,
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: "index",
+                intersect: false,
+                callbacks: {
+                  label: function(context) {
+                    const value = context.parsed.y;
+                    const data = context.dataset.data;
+                    const change = data.length > 1 && data[0] && typeof data[0] === 'object' && 'y' in data[0]
+                      ? value - data[0].y 
+                      : 0;
+                    const changeStr = change >= 0 ? `+${change.toFixed(5)}` : change.toFixed(5);
+                    return `Precio: ${value.toFixed(5)} (${changeStr})`;
+                  },
+                },
+              },
+            },
+            interaction: { mode: "index", intersect: false },
+            scales: {
+              x: {
+                ticks: {
+                  maxTicksLimit: 10,
+                  autoSkip: true,
+                },
+                grid: { display: false },
+              },
+              y: {
+                grid: { color: "rgba(0,0,0,0.06)" },
+                ticks: {
+                  callback: function(value) {
+                    return Number(value).toFixed(2);
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      async function cargarTicks() {
+        try {
+          ensureTicksChart();
+          if (!ticksChart) return;
+          const res = await fetch("/api/ticks/", { cache: "no-store" });
+          if (!res.ok) return;
+          const data = await res.json();
+          const ticks = Array.isArray(data.ticks) ? data.ticks : [];
+          
+          if (ticks.length > 0) {
+            // Actualizar contador y precio actual
+            setText("ticks_count", `${ticks.length} ticks`);
+            const ultimoPrecio = ticks[ticks.length - 1].precio;
+            setText("ticks_current_price", ultimoPrecio.toFixed(5));
+            
+            // Calcular cambio desde el primero
+            const primerPrecio = ticks[0].precio;
+            const cambio = ultimoPrecio - primerPrecio;
+            const cambioStr = cambio >= 0 ? `+${cambio.toFixed(5)}` : cambio.toFixed(5);
+            setText("ticks_current_price", `${ultimoPrecio.toFixed(5)} (${cambioStr})`);
+            
+            // Actualizar gráfico
+            ticksChart.data.labels = ticks.map((t, i) => i + 1);
+            ticksChart.data.datasets[0].data = ticks.map((t, i) => ({
+              x: i + 1,
+              y: t.precio,
+            }));
+            ticksChart.update();
+          } else {
+            setText("ticks_count", "0 ticks");
+            setText("ticks_current_price", "—");
+          }
+        } catch (e) {
+          // silencioso
+        }
+      }
+
       async function refrescar() {
         try {
           const res = await fetch("/api/estado/", { cache: "no-store" });
@@ -474,6 +596,10 @@
 
       refrescar();
       setInterval(refrescar, 1000);
+
+      // Cargar ticks
+      cargarTicks();
+      setInterval(cargarTicks, 2000); // Actualizar cada 2 segundos
 
       // Tabs + refresh balance
       document.querySelectorAll(".tab").forEach(el => {

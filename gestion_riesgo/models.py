@@ -77,6 +77,28 @@ class BalanceDerivSnapshot(models.Model):
         return f"BalanceSnapshot(cuenta={self.cuenta_id} balance={self.balance:.2f})"
 
 
+class TickDerivSnapshot(models.Model):
+    """
+    ALMACENA LOS ÚLTIMOS TICKS PARA GRÁFICO EN TIEMPO REAL.
+    
+    Nota: Solo se mantienen los últimos 50 ticks por cuenta (limpieza automática).
+    """
+    cuenta = models.ForeignKey(Cuenta, on_delete=models.CASCADE, related_name="tick_snapshots")
+    precio = models.FloatField()
+    epoch = models.BigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=["cuenta", "-epoch"]),
+            models.Index(fields=["-epoch"]),
+        ]
+        ordering = ["-epoch"]
+    
+    def __str__(self) -> str:
+        return f"TickSnapshot(cuenta={self.cuenta_id} precio={self.precio:.5f} epoch={self.epoch})"
+
+
 class Operacion(models.Model):
     """
     REGISTRO DE OPERACIONES (PAPER) PARA VISUALIZACIÓN.
