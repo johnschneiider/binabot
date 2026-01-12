@@ -1098,8 +1098,7 @@ class Command(BaseCommand):
                                             f"stake={float(stake):.2f} dur={dur} contract_type={contract_type}"
                                         )
                                     else:
-                                    # Log según estrategia (ya está arriba, pero por si acaso)
-                                    if not usar_extremos:
+                                        # Estrategia antigua (vectores)
                                         self.stderr.write(
                                             f"[TRADING] señal={resultado.decision} s={float(resultado.valor):+.4f} stake={float(stake):.2f} "
                                             f"dur={dur} contract_type={contract_type}"
