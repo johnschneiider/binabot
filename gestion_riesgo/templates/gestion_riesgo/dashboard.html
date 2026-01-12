@@ -314,9 +314,14 @@
       }
 
       function renderContribuciones(lista) {
+        console.log("[renderContribuciones] Llamado con:", lista);
         const el = document.getElementById("senal_contribuciones");
-        if (!el) return;
+        if (!el) {
+          console.error("[renderContribuciones] Elemento no encontrado");
+          return;
+        }
         if (!lista || !Array.isArray(lista) || lista.length === 0) {
+          console.warn("[renderContribuciones] Lista vacía o inválida");
           el.textContent = "—";
           return;
         }
@@ -326,7 +331,9 @@
           const c = (it.contribucion === null || it.contribucion === undefined) ? "—" : fmt2(it.contribucion);
           return `${v}: ${c}`;
         });
-        el.textContent = lines.join(" · ");
+        const texto = lines.join(" · ");
+        console.log("[renderContribuciones] Texto generado:", texto);
+        el.textContent = texto;
       }
 
       function renderOpsDeriv(ops) {
@@ -561,9 +568,12 @@
             setSenalDecision(c.senal_decision);
             
             // Actualizar contribuciones (forzar actualización siempre)
+            console.log("[REFRESCAR] senal_top_contribuciones recibido:", c.senal_top_contribuciones);
             if (c.senal_top_contribuciones && Array.isArray(c.senal_top_contribuciones) && c.senal_top_contribuciones.length > 0) {
+              console.log("[REFRESCAR] Renderizando contribuciones:", c.senal_top_contribuciones.length, "items");
               renderContribuciones(c.senal_top_contribuciones);
             } else {
+              console.warn("[REFRESCAR] No hay contribuciones o está vacío");
               const el = document.getElementById("senal_contribuciones");
               if (el) el.textContent = "—";
             }
