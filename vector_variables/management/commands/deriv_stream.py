@@ -603,7 +603,11 @@ class Command(BaseCommand):
                                     if usar_extremos:
                                         estado_actual_ext = constructor_extremos.obtener_estado()
                                         if estado_actual_ext.estado == "EN_OPERACION":
-                                            cooldown_ticks = getattr(settings, "ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", 10)
+                                            cooldown_ticks = getattr(
+                                                settings,
+                                                "EXTREMOS_COOLDOWN_TICKS",
+                                                getattr(settings, "ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", 25),
+                                            )
                                             constructor_extremos.actualizar_estado("COOLDOWN", ticks_cooldown_restantes=cooldown_ticks)
                                             self.stdout.write(f"[EXTREMOS] Operación cerrada, entrando en cooldown ({cooldown_ticks} ticks)")
                                     
@@ -739,14 +743,28 @@ class Command(BaseCommand):
                                 estado_actual=estado_extremos.estado,
                                 tick_actual=ticks_procesados,
                                 tick_entrada=estado_extremos.tick_entrada,
-                                umbral_rango_minimo=getattr(settings, "ESTRATEGIA_EXTREMOS_UMBRAL_RANGO", 0.5),
+                                ref_extremo_tick=estado_extremos.ref_extremo_tick,
+                                ref_extremo_precio=estado_extremos.ref_extremo_precio,
+                                umbral_rango_minimo=getattr(
+                                    settings,
+                                    "EXTREMOS_UMBRAL_RANGO_MINIMO",
+                                    getattr(settings, "ESTRATEGIA_EXTREMOS_UMBRAL_RANGO", 0.5),
+                                ),
                             )
                             
                             # Actualizar estado según resultado
                             if resultado_extremos.decision == "ESPERANDO_VENTA":
-                                constructor_extremos.actualizar_estado("ESPERANDO_CONFIRMACION_VENTA")
+                                constructor_extremos.actualizar_estado(
+                                    "ESPERANDO_CONFIRMACION_VENTA",
+                                    ref_extremo_tick=int(ticks_procesados),
+                                    ref_extremo_precio=float(vector_extremos.get("max_50", precio_actual_dash)),
+                                )
                             elif resultado_extremos.decision == "ESPERANDO_COMPRA":
-                                constructor_extremos.actualizar_estado("ESPERANDO_CONFIRMACION_COMPRA")
+                                constructor_extremos.actualizar_estado(
+                                    "ESPERANDO_CONFIRMACION_COMPRA",
+                                    ref_extremo_tick=int(ticks_procesados),
+                                    ref_extremo_precio=float(vector_extremos.get("min_50", precio_actual_dash)),
+                                )
                             elif resultado_extremos.decision == "IDLE":
                                 constructor_extremos.actualizar_estado("IDLE")
                             elif resultado_extremos.decision == "VENTA":
@@ -769,7 +787,11 @@ class Command(BaseCommand):
                                 # Cerrar operación y entrar en cooldown
                                 # Nota: El cierre real se maneja cuando Deriv notifica el cierre del contrato
                                 # Aquí solo marcamos que debemos cerrar
-                                cooldown_ticks = getattr(settings, "ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", 10)
+                                cooldown_ticks = getattr(
+                                    settings,
+                                    "EXTREMOS_COOLDOWN_TICKS",
+                                    getattr(settings, "ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", 25),
+                                )
                                 constructor_extremos.actualizar_estado("COOLDOWN", ticks_cooldown_restantes=cooldown_ticks)
                                 self.stdout.write(f"[EXTREMOS] Tiempo de operación completado, entrando en cooldown ({cooldown_ticks} ticks)")
                             

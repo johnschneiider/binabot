@@ -22,6 +22,8 @@ def evaluar_senal_extremos(
     estado_actual: str,
     tick_actual: int,
     tick_entrada: Optional[int] = None,
+    ref_extremo_tick: Optional[int] = None,
+    ref_extremo_precio: Optional[float] = None,
     umbral_rango_minimo: float = 0.5,
 ) -> ResultadoSenalExtremos:
     """
@@ -59,26 +61,14 @@ def evaluar_senal_extremos(
         )
 
     # ===== GESTIÓN DE OPERACIÓN ABIERTA =====
+    # En modo real, el contrato de Deriv ya cierra automáticamente por duración (DERIV_DURACION_TICKS).
+    # Aquí solo reportamos estado; el cooldown se activa al recibir el cierre del contrato.
     if estado_actual == "EN_OPERACION":
         if tick_entrada is None:
-            return ResultadoSenalExtremos(
-                decision="NO_OPERAR",
-                razon="En operación pero sin tick_entrada",
-            )
-        
+            return ResultadoSenalExtremos(decision="NO_OPERAR", razon="EN_OPERACION sin tick_entrada")
         ticks_desde_entrada = tick_actual - tick_entrada
-        
-        # Cierre por tiempo (5 ticks)
-        if ticks_desde_entrada >= 5:
-            return ResultadoSenalExtremos(
-                decision="CERRAR",
-                razon=f"Cierre por tiempo: {ticks_desde_entrada} ticks",
-            )
-        
-        return ResultadoSenalExtremos(
-            decision="NO_OPERAR",
-            razon=f"Operación activa: {ticks_desde_entrada} ticks desde entrada",
-        )
+        dur = int(getattr(settings, "DERIV_DURACION_TICKS", 5) or 5)
+        return ResultadoSenalExtremos(decision="NO_OPERAR", razon=f"Operación activa: {ticks_desde_entrada}/{dur} ticks")
 
     # ===== COOLDOWN =====
     if estado_actual == "COOLDOWN":
@@ -113,84 +103,52 @@ def evaluar_senal_extremos(
         conteo_maximos = sum(1 for p in precios if p == max_50)
         conteo_minimos = sum(1 for p in precios if p == min_50)
 
-    # ===== DETECCIÓN DE MÁXIMO OPERATIVO (PARA VENTA) =====
-    if estado_actual == "IDLE" or estado_actual == "ESPERANDO_CONFIRMACION_VENTA":
-        # Condiciones para máximo válido
-        en_maximo = abs(precio_actual - max_50) < 0.0001  # Tolerancia por precisión float
-        maximo_fresco = max_fresco
-        no_consolidado = conteo_maximos <= 2
-        precio_subio = precio_actual > precio_anterior
-
-        if en_maximo and maximo_fresco and no_consolidado and precio_subio:
-            # Máximo válido detectado
-            if estado_actual == "IDLE":
-                # Cambiar a esperando confirmación
-                return ResultadoSenalExtremos(
-                    decision="ESPERANDO_VENTA",
-                    razon=f"Máximo detectado: {max_50:.5f} (posición {pos_max})",
-                )
-            elif estado_actual == "ESPERANDO_CONFIRMACION_VENTA":
-                # Verificar confirmación: precio debe bajar
-                if precio_actual < precio_anterior:
-                    return ResultadoSenalExtremos(
-                        decision="VENTA",
-                        razon=f"Confirmación venta: precio bajó de {precio_anterior:.5f} a {precio_actual:.5f}",
-                        precio_entrada_sugerido=precio_anterior,
-                    )
-                else:
-                    # No se confirmó, volver a IDLE
-                    return ResultadoSenalExtremos(
-                        decision="IDLE",
-                        razon="Confirmación venta fallida: precio no bajó",
-                    )
-
-    # ===== DETECCIÓN DE MÍNIMO OPERATIVO (PARA COMPRA) =====
-    if estado_actual == "IDLE" or estado_actual == "ESPERANDO_CONFIRMACION_COMPRA":
-        # Condiciones para mínimo válido
-        en_minimo = abs(precio_actual - min_50) < 0.0001
-        minimo_fresco = min_fresco
-        no_consolidado = conteo_minimos <= 2
-        precio_bajo = precio_actual < precio_anterior
-
-        if en_minimo and minimo_fresco and no_consolidado and precio_bajo:
-            # Mínimo válido detectado
-            if estado_actual == "IDLE":
-                # Cambiar a esperando confirmación
-                return ResultadoSenalExtremos(
-                    decision="ESPERANDO_COMPRA",
-                    razon=f"Mínimo detectado: {min_50:.5f} (posición {pos_min})",
-                )
-            elif estado_actual == "ESPERANDO_CONFIRMACION_COMPRA":
-                # Verificar confirmación: precio debe subir
-                if precio_actual > precio_anterior:
-                    return ResultadoSenalExtremos(
-                        decision="COMPRA",
-                        razon=f"Confirmación compra: precio subió de {precio_anterior:.5f} a {precio_actual:.5f}",
-                        precio_entrada_sugerido=precio_anterior,
-                    )
-                else:
-                    # No se confirmó, volver a IDLE
-                    return ResultadoSenalExtremos(
-                        decision="IDLE",
-                        razon="Confirmación compra fallida: precio no subió",
-                    )
-
-    # ===== RESET DE ESTADOS DE ESPERA SI NO SE CUMPLEN CONDICIONES =====
-    if estado_actual == "ESPERANDO_CONFIRMACION_VENTA":
-        # Si ya no estamos en el máximo, resetear
-        if not (abs(precio_actual - max_50) < 0.0001):
+    # ===== REGLA NUEVA (PEDIDA): MÁXIMO → (SIGUIENTE TICK < MÁXIMO) ⇒ VENTA =====
+    # Paso 1: detectar "tocó máximo" en IDLE y marcar espera.
+    if estado_actual == "IDLE":
+        en_maximo = abs(precio_actual - max_50) < 0.0001
+        if en_maximo and max_fresco and (conteo_maximos <= 2):
             return ResultadoSenalExtremos(
-                decision="IDLE",
-                razon="Ya no estamos en máximo, resetear espera",
+                decision="ESPERANDO_VENTA",
+                razon=f"Max tocado: {max_50:.3f} (esperando 1 tick de confirmación)",
+            )
+
+    # Paso 2: confirmación en el tick siguiente: precio_actual < ref_extremo_precio
+    if estado_actual == "ESPERANDO_CONFIRMACION_VENTA":
+        if ref_extremo_tick is None or ref_extremo_precio is None:
+            return ResultadoSenalExtremos(decision="IDLE", razon="Falta ref_extremo para confirmar VENTA")
+        # Solo vale el tick inmediatamente siguiente.
+        if tick_actual != int(ref_extremo_tick) + 1:
+            return ResultadoSenalExtremos(decision="IDLE", razon="VENTA: ventana de confirmación vencida")
+        if float(precio_actual) < float(ref_extremo_precio):
+            return ResultadoSenalExtremos(
+                decision="VENTA",
+                razon=f"Confirmación VENTA: {precio_actual:.3f} < max_ref {float(ref_extremo_precio):.3f}",
+                precio_entrada_sugerido=precio_actual,
+            )
+        return ResultadoSenalExtremos(decision="IDLE", razon="Confirmación VENTA fallida (no bajó)")
+
+    # ===== REGLA SIMÉTRICA: MÍNIMO → (SIGUIENTE TICK > MÍNIMO) ⇒ COMPRA =====
+    if estado_actual == "IDLE":
+        en_minimo = abs(precio_actual - min_50) < 0.0001
+        if en_minimo and min_fresco and (conteo_minimos <= 2):
+            return ResultadoSenalExtremos(
+                decision="ESPERANDO_COMPRA",
+                razon=f"Min tocado: {min_50:.3f} (esperando 1 tick de confirmación)",
             )
 
     if estado_actual == "ESPERANDO_CONFIRMACION_COMPRA":
-        # Si ya no estamos en el mínimo, resetear
-        if not (abs(precio_actual - min_50) < 0.0001):
+        if ref_extremo_tick is None or ref_extremo_precio is None:
+            return ResultadoSenalExtremos(decision="IDLE", razon="Falta ref_extremo para confirmar COMPRA")
+        if tick_actual != int(ref_extremo_tick) + 1:
+            return ResultadoSenalExtremos(decision="IDLE", razon="COMPRA: ventana de confirmación vencida")
+        if float(precio_actual) > float(ref_extremo_precio):
             return ResultadoSenalExtremos(
-                decision="IDLE",
-                razon="Ya no estamos en mínimo, resetear espera",
+                decision="COMPRA",
+                razon=f"Confirmación COMPRA: {precio_actual:.3f} > min_ref {float(ref_extremo_precio):.3f}",
+                precio_entrada_sugerido=precio_actual,
             )
+        return ResultadoSenalExtremos(decision="IDLE", razon="Confirmación COMPRA fallida (no subió)")
 
     # ===== NO HAY SEÑAL =====
     return ResultadoSenalExtremos(

@@ -29,6 +29,10 @@ class EstadoExtremos:
     precio_entrada: Optional[float]
     tick_entrada: Optional[int]
     tipo_operacion: Optional[str]  # None, "VENTA", "COMPRA"
+    # Referencia del extremo detectado para confirmación en el tick siguiente.
+    ref_extremo_tipo: Optional[str]  # None, "MAX", "MIN"
+    ref_extremo_precio: Optional[float]
+    ref_extremo_tick: Optional[int]
 
 
 class ConstructorVectorExtremos:
@@ -49,6 +53,9 @@ class ConstructorVectorExtremos:
             precio_entrada=None,
             tick_entrada=None,
             tipo_operacion=None,
+            ref_extremo_tipo=None,
+            ref_extremo_precio=None,
+            ref_extremo_tick=None,
         )
 
     def ticks_procesados(self) -> int:
@@ -147,6 +154,9 @@ class ConstructorVectorExtremos:
                 precio_entrada=None,
                 tick_entrada=None,
                 tipo_operacion=None,
+                ref_extremo_tipo=None,
+                ref_extremo_precio=None,
+                ref_extremo_tick=None,
             )
         elif nuevo_estado == "ESPERANDO_CONFIRMACION_VENTA":
             self._estado = EstadoExtremos(
@@ -156,6 +166,9 @@ class ConstructorVectorExtremos:
                 precio_entrada=None,
                 tick_entrada=None,
                 tipo_operacion=None,
+                ref_extremo_tipo="MAX",
+                ref_extremo_precio=kwargs.get("ref_extremo_precio"),
+                ref_extremo_tick=kwargs.get("ref_extremo_tick"),
             )
         elif nuevo_estado == "ESPERANDO_CONFIRMACION_COMPRA":
             self._estado = EstadoExtremos(
@@ -165,6 +178,9 @@ class ConstructorVectorExtremos:
                 precio_entrada=None,
                 tick_entrada=None,
                 tipo_operacion=None,
+                ref_extremo_tipo="MIN",
+                ref_extremo_precio=kwargs.get("ref_extremo_precio"),
+                ref_extremo_tick=kwargs.get("ref_extremo_tick"),
             )
         elif nuevo_estado == "EN_OPERACION":
             self._estado = EstadoExtremos(
@@ -174,15 +190,21 @@ class ConstructorVectorExtremos:
                 precio_entrada=kwargs.get("precio_entrada"),
                 tick_entrada=kwargs.get("tick_entrada"),
                 tipo_operacion=kwargs.get("tipo_operacion"),
+                ref_extremo_tipo=None,
+                ref_extremo_precio=None,
+                ref_extremo_tick=None,
             )
         elif nuevo_estado == "COOLDOWN":
             self._estado = EstadoExtremos(
                 estado="COOLDOWN",
                 ultimo_extremo_operado=self._estado.ultimo_extremo_operado,
-                ticks_cooldown_restantes=kwargs.get("ticks_cooldown_restantes", 10),
+                ticks_cooldown_restantes=kwargs.get("ticks_cooldown_restantes", 25),
                 precio_entrada=None,
                 tick_entrada=None,
                 tipo_operacion=None,
+                ref_extremo_tipo=None,
+                ref_extremo_precio=None,
+                ref_extremo_tick=None,
             )
 
     def decrementar_cooldown(self) -> None:
