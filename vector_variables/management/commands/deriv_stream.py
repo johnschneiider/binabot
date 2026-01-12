@@ -751,6 +751,25 @@ class Command(BaseCommand):
                                     getattr(settings, "ESTRATEGIA_EXTREMOS_UMBRAL_RANGO", 0.5),
                                 ),
                             )
+
+                            # Debug de por qué entra/no entra (para investigar “debería operar”)
+                            # Log cada ~50 ticks y siempre que haya señal de entrada.
+                            if (ticks_procesados % 50 == 0) or (resultado_extremos.decision in {"VENTA", "COMPRA"}):
+                                try:
+                                    self.stdout.write(
+                                        "[EXTREMOS] "
+                                        f"tick_n={ticks_procesados} estado={estado_extremos.estado} "
+                                        f"dec={resultado_extremos.decision} "
+                                        f"p_prev={float(vector_extremos.get('precio_anterior',0.0)):.3f} "
+                                        f"p={float(vector_extremos.get('precio_actual',0.0)):.3f} "
+                                        f"max={float(vector_extremos.get('max_50',0.0)):.3f} "
+                                        f"min={float(vector_extremos.get('min_50',0.0)):.3f} "
+                                        f"idx_max={int(vector_extremos.get('idx_max',0))} "
+                                        f"idx_min={int(vector_extremos.get('idx_min',0))} "
+                                        f"razon={resultado_extremos.razon}"
+                                    )
+                                except Exception:
+                                    pass
                             
                             # Actualizar estado según resultado
                             if resultado_extremos.decision == "ESPERANDO_VENTA":

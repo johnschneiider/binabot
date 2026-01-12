@@ -113,19 +113,23 @@ def evaluar_senal_extremos(
     # "Se llegó al máximo" en el tick anterior y el tick actual es menor => VENTA.
     # "Se llegó al mínimo" en el tick anterior y el tick actual es mayor => COMPRA.
     if estado_actual == "IDLE":
-        # Venta: tick anterior fue el máximo (del buffer actual) y ahora bajó.
-        if max_fresco and (conteo_maximos <= 2) and (abs(float(precio_anterior) - float(max_50)) < eps) and (float(precio_actual) < float(max_50)):
+        n = len(precios)
+        # Venta: el tick anterior fue el máximo MÁS RECIENTE del buffer, y el tick actual está por debajo.
+        # Usamos idx_max para evitar problemas de precisión float.
+        max_en_tick_anterior = (n >= 2) and (int(idx_max) == (n - 2))
+        if max_fresco and (conteo_maximos <= 2) and max_en_tick_anterior and (float(precio_actual) < float(max_50)):
             return ResultadoSenalExtremos(
                 decision="VENTA",
-                razon=f"Reversión desde MAX: prev={precio_anterior:.3f}==max {max_50:.3f} y ahora {precio_actual:.3f}<max",
+                razon=f"Reversión desde MAX: idx_max={idx_max} prev={precio_anterior:.3f} max={max_50:.3f} ahora={precio_actual:.3f}",
                 precio_entrada_sugerido=float(precio_actual),
             )
 
-        # Compra: tick anterior fue el mínimo (del buffer actual) y ahora subió.
-        if min_fresco and (conteo_minimos <= 2) and (abs(float(precio_anterior) - float(min_50)) < eps) and (float(precio_actual) > float(min_50)):
+        # Compra: el tick anterior fue el mínimo MÁS RECIENTE del buffer, y el tick actual está por encima.
+        min_en_tick_anterior = (n >= 2) and (int(idx_min) == (n - 2))
+        if min_fresco and (conteo_minimos <= 2) and min_en_tick_anterior and (float(precio_actual) > float(min_50)):
             return ResultadoSenalExtremos(
                 decision="COMPRA",
-                razon=f"Reversión desde MIN: prev={precio_anterior:.3f}==min {min_50:.3f} y ahora {precio_actual:.3f}>min",
+                razon=f"Reversión desde MIN: idx_min={idx_min} prev={precio_anterior:.3f} min={min_50:.3f} ahora={precio_actual:.3f}",
                 precio_entrada_sugerido=float(precio_actual),
             )
 
