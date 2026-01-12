@@ -453,7 +453,7 @@
           // Conservamos fecha+hora en labels para tooltip, pero el eje X solo renderiza DD via ticks.callback.
           balanceChart.data.labels = pts.map(p => labelFullFromT(p.t)); // MM-DD HH:MM (si es posible)
           balanceChart.data.datasets[0].data = pts.map(p => Number(p.balance));
-          balanceChart.update();
+          balanceChart.update('none'); // 'none' para actualización más rápida (tiempo real)
         } catch (e) {
           // silencioso
         }
@@ -629,7 +629,7 @@
       refrescar();
       setInterval(refrescar, 1000); // Actualiza señal Y ticks cada 1 segundo
 
-      // Tabs + refresh balance
+      // Tabs + refresh balance (actualizar cada 5 segundos para tiempo real)
       document.querySelectorAll(".tab").forEach(el => {
         el.addEventListener("click", () => {
           const r = el.getAttribute("data-range") || "hour";
@@ -639,7 +639,7 @@
         });
       });
       cargarBalance(rangoActivo);
-      setInterval(() => cargarBalance(rangoActivo), 30000);
+      setInterval(() => cargarBalance(rangoActivo), 5000); // Actualizar balance cada 5 segundos (tiempo real)
     </script>
   </body>
 </html>
