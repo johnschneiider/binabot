@@ -245,13 +245,15 @@ class Command(BaseCommand):
         # ===== CONFIG EFECTIVA (LOG 1 VEZ) =====
         pesos_archivo = getattr(settings, "PESOS_ARCHIVO", "") or ""
         pesos_info = "PESOS_ARCHIVO=<vacío>"
-        if pesos_archivo:
+        if pesos_archivo and not usar_extremos:  # Solo verificar si no es estrategia de extremos
             try:
                 existe = os.path.exists(pesos_archivo)
                 mtime = os.path.getmtime(pesos_archivo) if existe else None
                 pesos_info = f"PESOS_ARCHIVO={pesos_archivo} existe={existe} mtime={mtime}"
             except Exception:
                 pesos_info = f"PESOS_ARCHIVO={pesos_archivo} (error al inspeccionar archivo)"
+        elif usar_extremos:
+            pesos_info = "PESOS_ARCHIVO=<no aplica en estrategia extremos>"
 
         # Nota: stdout sin style para que quede grepeable en `journalctl | grep`.
         stake_fijo_cfg = getattr(settings, "DERIV_STAKE_FIJO", None)
@@ -1007,7 +1009,22 @@ class Command(BaseCommand):
                                 )
 
                         # ===== EJECUCIÓN REAL (DERIV) =====
+                        # Verificar si hay que cerrar operación en estrategia de extremos
+                        if usar_extremos and modo_real and contrato_abierto_id is not None:
+                            estado_actual_ext = constructor_extremos.obtener_estado()
+                            if estado_actual_ext.estado == "EN_OPERACION" and estado_actual_ext.tick_entrada:
+                                ticks_desde_entrada = ticks_procesados - estado_actual_ext.tick_entrada
+                                if ticks_desde_entrada >= 5:
+                                    # Forzar cierre de operación (el contrato se cerrará automáticamente por Deriv)
+                                    self.stdout.write(f"[EXTREMOS] Operación alcanzó 5 ticks, esperando cierre automático")
+                        
                         if modo_real and esperando is None and contrato_abierto_id is None:
+                            # Verificar bloqueo por cooldown en estrategia de extremos
+                            if usar_extremos:
+                                estado_actual_ext = constructor_extremos.obtener_estado()
+                                if estado_actual_ext.estado == "COOLDOWN":
+                                    continue  # No operar durante cooldown
+                            
                             if resultado.decision in {"COMPRA", "VENTA"} and not gestor_riesgo.bloqueado:
                                 # STAKE:
                                 # - Por defecto: stake por riesgo (max_riesgo_por_operacion * capital_actual)
