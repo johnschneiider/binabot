@@ -1211,10 +1211,10 @@ class Command(BaseCommand):
                                         lambda: self._db_cerrar_operacion_y_actualizar_cuenta(
                                             operacion_id=int(operacion_abierta.id),
                                             cuenta_id=int(cuenta.id),
-                                            precio_salida=float(tick.precio),
+                                            precio_salida=float(precio_cierre),
                                             pnl=float(pnl),
                                             motivo=motivo,
-                                            closed_epoch=int(tick.epoch),
+                                            closed_epoch=int(epoch_cierre),
                                             capital_actual=float(gestor_riesgo.capital_actual),
                                             max_capital_historico=float(gestor_riesgo.max_capital_historico),
                                             bloqueado=bool(gestor_riesgo.bloqueado),
