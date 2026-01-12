@@ -127,9 +127,31 @@
         </div>
       </div>
       <div class="card">
-        <div class="muted">Señal (wᵀx) · Top contribuciones</div>
-        <div class="row" style="margin-top: 6px;">
-          <div class="big mono" id="senal_valor">{% if cuenta and cuenta.senal_valor != None %}{{ cuenta.senal_valor }}{% else %}—{% endif %}</div>
+        <div class="muted" id="senal_titulo">Señal / Estrategia</div>
+        <div class="row" style="margin-top: 6px; align-items: flex-start;">
+          <!-- ===== Layout estrategia antigua (wᵀx) ===== -->
+          <div id="senal_valor_wrap">
+            <div class="big mono" id="senal_valor">{% if cuenta and cuenta.senal_valor != None %}{{ cuenta.senal_valor }}{% else %}—{% endif %}</div>
+            <div class="muted" style="margin-top: 4px;">Intensidad de señal (wᵀx)</div>
+          </div>
+
+          <!-- ===== Layout estrategia nueva (extremos) ===== -->
+          <div id="extremos_wrap" style="display:none; width: 100%;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div style="padding: 10px; background: #f9fafb; border-radius: 8px;">
+                <div class="muted" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px;">Máximo (últ 50)</div>
+                <div class="big mono" id="ext_max">—</div>
+              </div>
+              <div style="padding: 10px; background: #f9fafb; border-radius: 8px;">
+                <div class="muted" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px;">Mínimo (últ 50)</div>
+                <div class="big mono" id="ext_min">—</div>
+              </div>
+            </div>
+            <div class="muted" style="margin-top: 8px;">
+              Rango (máx - mín): <span class="mono" id="ext_rango">—</span>
+            </div>
+          </div>
+
           {% if cuenta and cuenta.senal_decision %}
             {% if cuenta.senal_decision == "COMPRA" %}
               <div class="badge ok mono" id="senal_decision_badge">COMPRA</div>
@@ -142,13 +164,7 @@
             <div class="badge neutral mono" id="senal_decision_badge">—</div>
           {% endif %}
         </div>
-        <div class="muted" style="margin-top: 8px;" id="senal_contribuciones">
-          {% if cuenta and cuenta.senal_top_contribuciones %}
-            {{ cuenta.senal_top_contribuciones }}
-          {% else %}
-            —
-          {% endif %}
-        </div>
+        <div class="muted" style="margin-top: 8px;" id="senal_contribuciones">—</div>
       </div>
     </div>
 
@@ -313,15 +329,69 @@
         }
       }
 
+      function _numOrNull(x) {
+        if (x === null || x === undefined) return null;
+        const n = Number(x);
+        return Number.isFinite(n) ? n : null;
+      }
+
+      function _contribMap(lista) {
+        const out = {};
+        if (!lista || !Array.isArray(lista)) return out;
+        for (const it of lista) {
+          const k = (it && it.variable) ? String(it.variable) : "";
+          if (!k) continue;
+          // En extremos usamos "contribucion" como "valor" (max_50/min_50/rango_50).
+          out[k] = _numOrNull(it.contribucion);
+        }
+        return out;
+      }
+
+      function actualizarSenalUI(c) {
+        const wrapSenal = document.getElementById("senal_valor_wrap");
+        const wrapExt = document.getElementById("extremos_wrap");
+        const titulo = document.getElementById("senal_titulo");
+        const contribEl = document.getElementById("senal_contribuciones");
+
+        const lista = c && c.senal_top_contribuciones ? c.senal_top_contribuciones : [];
+        const m = _contribMap(lista);
+        const esExtremos = (m.max_50 !== null && m.max_50 !== undefined) && (m.min_50 !== null && m.min_50 !== undefined);
+
+        if (esExtremos) {
+          if (titulo) titulo.textContent = "Estrategia: Extremos (últimos 50 ticks)";
+          if (wrapSenal) wrapSenal.style.display = "none";
+          if (wrapExt) wrapExt.style.display = "block";
+
+          const maxV = _numOrNull(m.max_50);
+          const minV = _numOrNull(m.min_50);
+          const rangoV = _numOrNull(m.rango_50);
+
+          const elMax = document.getElementById("ext_max");
+          const elMin = document.getElementById("ext_min");
+          const elR = document.getElementById("ext_rango");
+          if (elMax) elMax.textContent = (maxV === null) ? "—" : maxV.toFixed(2);
+          if (elMin) elMin.textContent = (minV === null) ? "—" : minV.toFixed(2);
+          if (elR) elR.textContent = (rangoV === null) ? "—" : rangoV.toFixed(2);
+
+          if (contribEl) {
+            contribEl.textContent = "Interpretación: si el precio acaba de tocar un máximo/mínimo reciente, espera confirmación en el siguiente tick y decide COMPRA/VENTA.";
+          }
+          return;
+        }
+
+        // Estrategia antigua (wᵀx)
+        if (titulo) titulo.textContent = "Señal (wᵀx) · Top contribuciones";
+        if (wrapSenal) wrapSenal.style.display = "block";
+        if (wrapExt) wrapExt.style.display = "none";
+        renderContribuciones(lista);
+      }
+
       function renderContribuciones(lista) {
-        console.log("[renderContribuciones] Llamado con:", lista);
         const el = document.getElementById("senal_contribuciones");
         if (!el) {
-          console.error("[renderContribuciones] Elemento no encontrado");
           return;
         }
         if (!lista || !Array.isArray(lista) || lista.length === 0) {
-          console.warn("[renderContribuciones] Lista vacía o inválida");
           el.textContent = "—";
           return;
         }
@@ -332,7 +402,6 @@
           return `${v}: ${c}`;
         });
         const texto = lines.join(" · ");
-        console.log("[renderContribuciones] Texto generado:", texto);
         el.textContent = texto;
       }
 
@@ -567,16 +636,8 @@
             }
             setSenalDecision(c.senal_decision);
             
-            // Actualizar contribuciones (forzar actualización siempre)
-            console.log("[REFRESCAR] senal_top_contribuciones recibido:", c.senal_top_contribuciones);
-            if (c.senal_top_contribuciones && Array.isArray(c.senal_top_contribuciones) && c.senal_top_contribuciones.length > 0) {
-              console.log("[REFRESCAR] Renderizando contribuciones:", c.senal_top_contribuciones.length, "items");
-              renderContribuciones(c.senal_top_contribuciones);
-            } else {
-              console.warn("[REFRESCAR] No hay contribuciones o está vacío");
-              const el = document.getElementById("senal_contribuciones");
-              if (el) el.textContent = "—";
-            }
+            // Actualizar UI de señal/estrategia (auto-detecta extremos vs wᵀx)
+            actualizarSenalUI(c);
             
             setText("ultima_actualizacion", "Actualizado: " + new Date().toLocaleTimeString());
           } else {
