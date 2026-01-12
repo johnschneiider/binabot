@@ -628,8 +628,16 @@ class Command(BaseCommand):
                             esperando = None
                             continue
 
+                        # Verificar que el evento tiene un tick antes de procesarlo
+                        if "tick" not in ev:
+                            # Si no es un tick, ignorar el evento (puede ser otro tipo de mensaje)
+                            continue
+                        
                         tick_deriv = ev["tick"]
                         ticks_procesados += 1
+                        # Log cada 100 ticks para verificar que los ticks están llegando
+                        if ticks_procesados % 100 == 0:
+                            self.stdout.write(f"[TICKS] Procesados: {ticks_procesados} último_tick_epoch={tick_deriv.epoch} precio={tick_deriv.precio:.5f}")
                         if _limite_alcanzado():
                             self.stdout.write(self.style.SUCCESS("[FIN] Límite alcanzado. Cerrando conexión."))
                             return
