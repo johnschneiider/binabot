@@ -8,13 +8,24 @@ class Command(BaseCommand):
     help = "Verifica el estado actual de la señal en la BD."
 
     def handle(self, *args, **opts) -> None:  # noqa: ANN001
-        cuenta = Cuenta.objects.first()
-        if not cuenta:
-            self.stdout.write("❌ No hay cuenta")
+        # Mostrar todas las cuentas primero
+        todas_cuentas = Cuenta.objects.all().order_by("-updated_at")
+        if not todas_cuentas.exists():
+            self.stdout.write("❌ No hay cuentas")
             return
 
         self.stdout.write("=" * 80)
-        self.stdout.write("ESTADO DE SEÑAL EN BD")
+        self.stdout.write("TODAS LAS CUENTAS")
+        self.stdout.write("=" * 80)
+        for c in todas_cuentas:
+            self.stdout.write(f"  Cuenta ID: {c.id} | Símbolo: {c.simbolo} | Última actualización: {c.updated_at}")
+        self.stdout.write("")
+
+        # Mostrar la cuenta más recientemente actualizada (la que está operando)
+        cuenta = todas_cuentas.first()
+        
+        self.stdout.write("=" * 80)
+        self.stdout.write("ESTADO DE SEÑAL EN BD (CUENTA MÁS RECIENTE)")
         self.stdout.write("=" * 80)
         self.stdout.write(f"Cuenta ID: {cuenta.id}")
         self.stdout.write(f"Símbolo: {cuenta.simbolo}")
