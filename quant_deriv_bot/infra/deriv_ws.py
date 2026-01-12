@@ -104,11 +104,18 @@ class ClienteDerivWS:
                 # MENSAJES NO-TICK (p. ej. RESPUESTAS A AUTH) SE IGNORAN.
                 continue
 
-            yield TickDeriv(
-                symbol=str(tick.get("symbol", symbol)),
-                precio=float(tick["quote"]),
-                epoch=int(tick["epoch"]),
-            )
+            # Validar que el tick tenga los campos necesarios
+            if "quote" not in tick or "epoch" not in tick:
+                continue
+            try:
+                yield TickDeriv(
+                    symbol=str(tick.get("symbol", symbol)),
+                    precio=float(tick["quote"]),
+                    epoch=int(tick["epoch"]),
+                )
+            except (ValueError, KeyError, TypeError):
+                # Si falta algún campo o hay error de conversión, ignorar este tick
+                continue
 
     async def obtener_ticks_history(self, *, symbol: str, count: int = 5000) -> list[TickDeriv]:
         """
