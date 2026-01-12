@@ -21,8 +21,8 @@ class Command(BaseCommand):
             self.stdout.write(f"  Cuenta ID: {c.id} | Símbolo: {c.simbolo} | Última actualización: {c.updated_at}")
         self.stdout.write("")
 
-        # Mostrar la cuenta más recientemente actualizada (la que está operando)
-        cuenta = todas_cuentas.first()
+        # Mostrar la cuenta con el último tick más reciente (la que está operando)
+        cuenta = Cuenta.objects.order_by("-ultimo_tick_epoch", "-updated_at").first()
         
         self.stdout.write("=" * 80)
         self.stdout.write("ESTADO DE SEÑAL EN BD (CUENTA MÁS RECIENTE)")

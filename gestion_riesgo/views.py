@@ -109,7 +109,8 @@ def dashboard(request):
     """
     DASHBOARD WEB PARA MONITOREO (BALANCE + OPERACIONES) EN "TIEMPO REAL" (POLLING).
     """
-    cuenta = Cuenta.objects.order_by("-updated_at").first()
+    # Usar la cuenta con el último tick más reciente (más precisa que updated_at)
+    cuenta = Cuenta.objects.order_by("-ultimo_tick_epoch", "-updated_at").first()
     operaciones_deriv = (
         OperacionDeriv.objects.select_related("cuenta")
         .filter(creada_por_bot=True)
@@ -133,7 +134,8 @@ def estado_json(request):
     """
     ENDPOINT PARA POLLING DESDE EL FRONTEND.
     """
-    cuenta = Cuenta.objects.order_by("-updated_at").first()
+    # Usar la cuenta con el último tick más reciente (más precisa que updated_at)
+    cuenta = Cuenta.objects.order_by("-ultimo_tick_epoch", "-updated_at").first()
     ops_deriv = list(
         OperacionDeriv.objects.order_by("-updated_at")
         .filter(creada_por_bot=True)
@@ -253,7 +255,8 @@ def balance_json(request):
         # fallback seguro
         desde = ahora - timezone.timedelta(minutes=60)
 
-    cuenta = Cuenta.objects.order_by("-updated_at").first()
+    # Usar la cuenta con el último tick más reciente (más precisa que updated_at)
+    cuenta = Cuenta.objects.order_by("-ultimo_tick_epoch", "-updated_at").first()
     if not cuenta:
         return JsonResponse({"cuenta_id": None, "points": []})
 
@@ -281,7 +284,8 @@ def ticks_json(request):
     """
     Devuelve los últimos 50 ticks para el gráfico en tiempo real.
     """
-    cuenta = Cuenta.objects.order_by("-updated_at").first()
+    # Usar la cuenta con el último tick más reciente (más precisa que updated_at)
+    cuenta = Cuenta.objects.order_by("-ultimo_tick_epoch", "-updated_at").first()
     if not cuenta:
         return JsonResponse({"cuenta_id": None, "ticks": []})
     
