@@ -168,6 +168,9 @@
       </div>
     </div>
 
+    {# Datos iniciales para que la UI se pinte bien sin esperar el primer polling #}
+    {{ cuenta.senal_top_contribuciones|default:"[]"|json_script:"initial_senal_top_contribuciones" }}
+
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
@@ -403,6 +406,18 @@
         });
         const texto = lines.join(" · ");
         el.textContent = texto;
+      }
+
+      function aplicarEstadoInicialSenal() {
+        try {
+          const el = document.getElementById("initial_senal_top_contribuciones");
+          if (!el) return;
+          const raw = el.textContent || "[]";
+          const lista = JSON.parse(raw);
+          actualizarSenalUI({ senal_top_contribuciones: lista });
+        } catch (e) {
+          // no romper UI si falla parseo
+        }
       }
 
       function renderOpsDeriv(ops) {
@@ -703,6 +718,9 @@
       });
       cargarBalance(rangoActivo);
       setInterval(() => cargarBalance(rangoActivo), 5000); // Actualizar balance cada 5 segundos (tiempo real)
+
+      // Pintar el modo correcto (extremos vs wᵀx) desde el primer render, sin esperar el polling.
+      aplicarEstadoInicialSenal();
     </script>
   </body>
 </html>
