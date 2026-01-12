@@ -1279,7 +1279,10 @@ class Command(BaseCommand):
                 await dormir_segundos(3.0)
                 continue
             except Exception as e:
+                import traceback
+                error_traceback = traceback.format_exc()
                 self.stderr.write(self.style.ERROR(f"[WS] Error: {e}. Reintentando en 3s..."))
+                self.stderr.write(f"[WS] Traceback: {error_traceback}")
                 # IMPORTANTE: no conservar estados de órdenes a través de reconexión (evita quedar pegado).
                 esperando = None
                 esperando_desde = 0.0
