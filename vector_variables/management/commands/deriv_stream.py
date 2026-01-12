@@ -17,8 +17,10 @@ from gestion_riesgo.models import BalanceDerivSnapshot, Cuenta, Operacion, Opera
 from quant_deriv_bot.infra.deriv_ws import ClienteDerivWS, dormir_segundos
 from vector_pesos.gestor_pesos import GestorPesos
 from vector_pesos.senal import evaluar_senal
+from vector_pesos.senal_extremos import evaluar_senal_extremos
 from vector_pesos.adaptativo import AdaptadorUmbralOnline
 from vector_variables.constructor_vector import ConstructorVectorMercado, Tick
+from vector_variables.constructor_vector_extremos import ConstructorVectorExtremos, Tick as TickExtremos
 from vector_variables.normalizacion import NormalizadorOnlinePorVariable
 
 
@@ -153,18 +155,30 @@ class Command(BaseCommand):
         ilimitado: bool,
         ejecutar_real: bool = False,
     ) -> None:
+        # ===== DETERMINAR TIPO DE ESTRATEGIA =====
+        estrategia_tipo = getattr(settings, "ESTRATEGIA_TIPO", "extremos").strip().lower()
+        usar_extremos = estrategia_tipo == "extremos"
+        
         # ===== INICIALIZACIÓN DE CAPAS =====
-        constructor = ConstructorVectorMercado()
-        gestor_pesos = GestorPesos.con_pesos_fijos_por_defecto(ruta_archivo=getattr(settings, "PESOS_ARCHIVO", None))
+        if usar_extremos:
+            constructor_extremos = ConstructorVectorExtremos(ventana_ticks=50)
+            constructor = None  # No se usa en estrategia de extremos
+            gestor_pesos = None  # No se usa en estrategia de extremos
+            normalizador = None  # No se usa en estrategia de extremos
+        else:
+            constructor = ConstructorVectorMercado()
+            constructor_extremos = None
+            gestor_pesos = GestorPesos.con_pesos_fijos_por_defecto(ruta_archivo=getattr(settings, "PESOS_ARCHIVO", None))
+            normalizador = NormalizadorOnlinePorVariable(
+                alpha=float(settings.NORMALIZACION_ALPHA),
+                min_std=float(settings.NORMALIZACION_MIN_STD),
+                clip=float(settings.NORMALIZACION_CLIP),
+            )
+        
         gestor_riesgo = GestorRiesgo(
             capital_inicial=settings.CAPITAL_INICIAL,
             max_riesgo_por_operacion=settings.MAX_RIESGO_POR_OPERACION,
             max_drawdown=settings.MAX_DRAWDOWN,
-        )
-        normalizador = NormalizadorOnlinePorVariable(
-            alpha=float(settings.NORMALIZACION_ALPHA),
-            min_std=float(settings.NORMALIZACION_MIN_STD),
-            clip=float(settings.NORMALIZACION_CLIP),
         )
 
         adaptativo: AdaptadorUmbralOnline | None = None
@@ -582,6 +596,15 @@ class Command(BaseCommand):
                                 # SI SE CIERRA, LIBERAR PARA PERMITIR NUEVA OPERACIÓN.
                                 if int(contrato.get("is_sold", 0)) == 1:
                                     contrato_abierto_id = None
+                                    
+                                    # Si es estrategia de extremos, entrar en cooldown
+                                    if usar_extremos:
+                                        estado_actual_ext = constructor_extremos.obtener_estado()
+                                        if estado_actual_ext.estado == "EN_OPERACION":
+                                            cooldown_ticks = getattr(settings, "ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", 10)
+                                            constructor_extremos.actualizar_estado("COOLDOWN", ticks_cooldown_restantes=cooldown_ticks)
+                                            self.stdout.write(f"[EXTREMOS] Operación cerrada, entrando en cooldown ({cooldown_ticks} ticks)")
+                                    
                                     # SI EL PROFIT AÚN NO LLEGÓ, FORZAR UNA ACTUALIZACIÓN DE PROFIT_TABLE YA.
                                     await cliente.enviar(
                                         {
@@ -642,16 +665,24 @@ class Command(BaseCommand):
                             self.stdout.write(self.style.SUCCESS("[FIN] Límite alcanzado. Cerrando conexión."))
                             return
 
-                        tick = Tick(precio=tick_deriv.precio, epoch=tick_deriv.epoch)
+                        # Crear objeto Tick según estrategia
+                        if usar_extremos:
+                            tick_extremos = TickExtremos(precio=tick_deriv.precio, epoch=tick_deriv.epoch)
+                            tick = None
+                        else:
+                            tick = Tick(precio=tick_deriv.precio, epoch=tick_deriv.epoch)
+                            tick_extremos = None
                         
                         # Guardar tick para gráfico en tiempo real (mantener solo últimos 50)
                         try:
+                            precio_guardar = tick_deriv.precio
+                            epoch_guardar = tick_deriv.epoch
                             # Crear nuevo tick
                             await sync_to_async(
                                 lambda: TickDerivSnapshot.objects.create(
                                     cuenta_id=int(cuenta.id),
-                                    precio=float(tick.precio),
-                                    epoch=int(tick.epoch),
+                                    precio=float(precio_guardar),
+                                    epoch=int(epoch_guardar),
                                 ),
                                 thread_sensitive=True,
                             )()
@@ -676,17 +707,112 @@ class Command(BaseCommand):
                         except Exception as e:
                             # Log del error pero no romper el bot
                             import traceback
-                            error_msg = f"[TICKS] Error guardando tick #{ticks_procesados} precio={tick.precio:.5f} epoch={tick.epoch}: {e}\n{traceback.format_exc()}"
+                            error_msg = f"[TICKS] Error guardando tick #{ticks_procesados} precio={tick_deriv.precio:.5f} epoch={tick_deriv.epoch}: {e}\n{traceback.format_exc()}"
                             self.stderr.write(error_msg)
                             # También escribir a stdout para que aparezca en logs
                             self.stdout.write(self.style.ERROR(error_msg))
                         
-                        x = constructor.actualizar_con_tick(tick)
-                        x_eval = (
-                            normalizador.actualizar_y_normalizar(x)
-                            if bool(settings.NORMALIZAR_VECTOR)
-                            else x
-                        )
+                        # ===== PROCESAMIENTO SEGÚN ESTRATEGIA =====
+                        if usar_extremos:
+                            # ESTRATEGIA DE EXTREMOS
+                            vector_extremos = constructor_extremos.actualizar_con_tick(tick_extremos)
+                            estado_extremos = constructor_extremos.obtener_estado()
+                            
+                            # Decrementar cooldown si está activo
+                            if estado_extremos.estado == "COOLDOWN":
+                                constructor_extremos.decrementar_cooldown()
+                                estado_extremos = constructor_extremos.obtener_estado()
+                            
+                            # Evaluar señal de extremos
+                            resultado_extremos = evaluar_senal_extremos(
+                                vector_extremos=vector_extremos,
+                                estado_actual=estado_extremos.estado,
+                                tick_actual=ticks_procesados,
+                                tick_entrada=estado_extremos.tick_entrada,
+                                umbral_rango_minimo=getattr(settings, "ESTRATEGIA_EXTREMOS_UMBRAL_RANGO", 0.5),
+                            )
+                            
+                            # Actualizar estado según resultado
+                            if resultado_extremos.decision == "ESPERANDO_VENTA":
+                                constructor_extremos.actualizar_estado("ESPERANDO_CONFIRMACION_VENTA")
+                            elif resultado_extremos.decision == "ESPERANDO_COMPRA":
+                                constructor_extremos.actualizar_estado("ESPERANDO_CONFIRMACION_COMPRA")
+                            elif resultado_extremos.decision == "IDLE":
+                                constructor_extremos.actualizar_estado("IDLE")
+                            elif resultado_extremos.decision == "VENTA":
+                                constructor_extremos.actualizar_estado(
+                                    "EN_OPERACION",
+                                    ultimo_extremo_operado="MAX",
+                                    precio_entrada=resultado_extremos.precio_entrada_sugerido,
+                                    tick_entrada=ticks_procesados,
+                                    tipo_operacion="VENTA",
+                                )
+                            elif resultado_extremos.decision == "COMPRA":
+                                constructor_extremos.actualizar_estado(
+                                    "EN_OPERACION",
+                                    ultimo_extremo_operado="MIN",
+                                    precio_entrada=resultado_extremos.precio_entrada_sugerido,
+                                    tick_entrada=ticks_procesados,
+                                    tipo_operacion="COMPRA",
+                                )
+                            elif resultado_extremos.decision == "CERRAR_OPERACION":
+                                # Cerrar operación y entrar en cooldown
+                                # Nota: El cierre real se maneja cuando Deriv notifica el cierre del contrato
+                                # Aquí solo marcamos que debemos cerrar
+                                cooldown_ticks = getattr(settings, "ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", 10)
+                                constructor_extremos.actualizar_estado("COOLDOWN", ticks_cooldown_restantes=cooldown_ticks)
+                                self.stdout.write(f"[EXTREMOS] Tiempo de operación completado, entrando en cooldown ({cooldown_ticks} ticks)")
+                            
+                            # Convertir resultado a formato compatible
+                            decision_final = resultado_extremos.decision
+                            if decision_final in {"ESPERANDO_VENTA", "ESPERANDO_COMPRA", "IDLE"}:
+                                decision_final = "NO_OPERAR"
+                            
+                            # Crear resultado compatible con código existente
+                            from vector_pesos.senal import ResultadoSenal
+                            resultado = ResultadoSenal(
+                                valor=0.0,  # No usado en estrategia de extremos
+                                decision=decision_final,
+                                contribuciones=None,
+                            )
+                            
+                            # Para dashboard: crear contribuciones simplificadas
+                            top_contrib = [
+                                {
+                                    "variable": "max_50",
+                                    "contribucion": vector_extremos.get("max_50", 0.0),
+                                    "x": vector_extremos.get("max_50", 0.0),
+                                    "w": 1.0,
+                                },
+                                {
+                                    "variable": "min_50",
+                                    "contribucion": vector_extremos.get("min_50", 0.0),
+                                    "x": vector_extremos.get("min_50", 0.0),
+                                    "w": 1.0,
+                                },
+                                {
+                                    "variable": "rango_50",
+                                    "contribucion": vector_extremos.get("rango_50", 0.0),
+                                    "x": vector_extremos.get("rango_50", 0.0),
+                                    "w": 1.0,
+                                },
+                                {
+                                    "variable": "estado",
+                                    "contribucion": 0.0,
+                                    "x": 0.0,
+                                    "w": 0.0,
+                                },
+                            ]
+                            
+                            x_eval = {}  # No usado en estrategia de extremos
+                        else:
+                            # ESTRATEGIA ANTIGUA (VECTORES)
+                            x = constructor.actualizar_con_tick(tick)
+                            x_eval = (
+                                normalizador.actualizar_y_normalizar(x)
+                                if bool(settings.NORMALIZAR_VECTOR)
+                                else x
+                            )
 
                         # ===== WATCHDOG TRADING REAL =====
                         # Evita quedarse días sin operar por un estado "esperando" atascado tras un timeout/error WS.
@@ -760,76 +886,92 @@ class Command(BaseCommand):
                                     thread_sensitive=True,
                                 )()
 
-                        # PESOS ACTUALES (HOY FIJOS; MAÑANA IA)
-                        w = gestor_pesos.obtener_pesos_desde_ia(x)
+                        # ===== EVALUACIÓN DE SEÑAL SEGÚN ESTRATEGIA =====
+                        if not usar_extremos:
+                            # ESTRATEGIA ANTIGUA (VECTORES)
+                            # PESOS ACTUALES (HOY FIJOS; MAÑANA IA)
+                            w = gestor_pesos.obtener_pesos_desde_ia(x)
 
-                        # ===== UMBRAL DINÁMICO (ONLINE) OPCIONAL =====
-                        umbral_compra = float(settings.UMBRAL_COMPRA)
-                        umbral_venta = float(settings.UMBRAL_VENTA)
-                        if adaptativo is not None:
-                            u = float(adaptativo.umbral_actual())
-                            if u != float("inf") and u > 0.0:
-                                umbral_compra = float(u)
-                                umbral_venta = -float(u)
-                            else:
-                                modo = str(getattr(settings, "ADAPTATIVO_MODO_SIN_EVIDENCIA", "no_operar")).strip().lower()
-                                if modo == "warmup":
-                                    uw = float(getattr(settings, "ADAPTATIVO_UMBRAL_WARMUP", 0.09))
-                                    umbral_compra = float(abs(uw))
-                                    umbral_venta = -float(abs(uw))
+                            # ===== UMBRAL DINÁMICO (ONLINE) OPCIONAL =====
+                            umbral_compra = float(settings.UMBRAL_COMPRA)
+                            umbral_venta = float(settings.UMBRAL_VENTA)
+                            if adaptativo is not None:
+                                u = float(adaptativo.umbral_actual())
+                                if u != float("inf") and u > 0.0:
+                                    umbral_compra = float(u)
+                                    umbral_venta = -float(u)
                                 else:
-                                    # Sin evidencia suficiente => no operar.
-                                    umbral_compra = float("inf")
-                                    umbral_venta = -float("inf")
+                                    modo = str(getattr(settings, "ADAPTATIVO_MODO_SIN_EVIDENCIA", "no_operar")).strip().lower()
+                                    if modo == "warmup":
+                                        uw = float(getattr(settings, "ADAPTATIVO_UMBRAL_WARMUP", 0.09))
+                                        umbral_compra = float(abs(uw))
+                                        umbral_venta = -float(abs(uw))
+                                    else:
+                                        # Sin evidencia suficiente => no operar.
+                                        umbral_compra = float("inf")
+                                        umbral_venta = -float("inf")
 
-                        resultado = evaluar_senal(
-                            vector_mercado=x_eval,
-                            vector_pesos=w,
-                            umbral_compra=umbral_compra,
-                            umbral_venta=umbral_venta,
-                            devolver_contribuciones=True,
-                            top_n=int(settings.SENAL_TOP_N),
-                        )
-
-                        # CALENTAMIENTO: EVITA OPERAR CON ESTADÍSTICAS INESTABLES.
-                        if not constructor.listo_para_operar():
-                            # MANTENER CONTRIBUCIONES PARA DEBUG AUNQUE NO SE OPERE.
-                            resultado = type(resultado)(
-                                valor=resultado.valor,
-                                decision="NO_OPERAR",
-                                contribuciones=resultado.contribuciones,
+                            resultado = evaluar_senal(
+                                vector_mercado=x_eval,
+                                vector_pesos=w,
+                                umbral_compra=umbral_compra,
+                                umbral_venta=umbral_venta,
+                                devolver_contribuciones=True,
+                                top_n=int(settings.SENAL_TOP_N),
                             )
 
-                        # ===== TELEMETRÍA DE SEÑAL (PARA AUDITORÍA Y DASHBOARD) =====
-                        top_contrib = []
-                        if resultado.contribuciones:
-                            for nombre, contrib in resultado.contribuciones:
-                                top_contrib.append(
-                                    {
-                                        "variable": str(nombre),
-                                        "contribucion": float(contrib),
-                                        "x": float(x_eval.get(nombre, 0.0)),
-                                        "w": float(w.get(nombre, 0.0)),
-                                    }
+                            # CALENTAMIENTO: EVITA OPERAR CON ESTADÍSTICAS INESTABLES.
+                            if not constructor.listo_para_operar():
+                                # MANTENER CONTRIBUCIONES PARA DEBUG AUNQUE NO SE OPERE.
+                                resultado = type(resultado)(
+                                    valor=resultado.valor,
+                                    decision="NO_OPERAR",
+                                    contribuciones=resultado.contribuciones,
                                 )
 
+                            # ===== TELEMETRÍA DE SEÑAL (PARA AUDITORÍA Y DASHBOARD) =====
+                            top_contrib = []
+                            if resultado.contribuciones:
+                                for nombre, contrib in resultado.contribuciones:
+                                    top_contrib.append(
+                                        {
+                                            "variable": str(nombre),
+                                            "contribucion": float(contrib),
+                                            "x": float(x_eval.get(nombre, 0.0)),
+                                            "w": float(w.get(nombre, 0.0)),
+                                        }
+                                    )
+                        # (Si usar_extremos, resultado y top_contrib ya están definidos arriba)
+
                         # ACTUALIZACIÓN "SUAVE" PARA DASHBOARD (NO ESCRIBIR EN CADA TICK).
-                        # INCLUYE: ÚLTIMO TICK + TELEMETRÍA DE SEÑAL (w^T x).
+                        # INCLUYE: ÚLTIMO TICK + TELEMETRÍA DE SEÑAL.
                         ahora = time.monotonic()
                         tiempo_desde_ultimo_persist = ahora - ultimo_persist
-                        # Log de diagnóstico cada 50 ticks para verificar que el código se ejecuta
+                        
+                        # Preparar valores para dashboard
+                        precio_actual_dash = tick_deriv.precio
+                        epoch_actual_dash = tick_deriv.epoch
+                        senal_valor_dash = resultado.valor if hasattr(resultado, 'valor') else 0.0
+                        senal_decision_dash = resultado.decision
+                        
+                        # Log de diagnóstico cada 50 ticks
                         if ticks_procesados % 50 == 0:
-                            self.stdout.write(f"[DIAG] Tick #{ticks_procesados} tiempo_desde_persist={tiempo_desde_ultimo_persist:.2f}s señal={resultado.valor:.4f}")
+                            if usar_extremos:
+                                estado_actual_ext = constructor_extremos.obtener_estado()
+                                self.stdout.write(f"[DIAG] Tick #{ticks_procesados} estrategia=extremos estado={estado_actual_ext.estado} precio={precio_actual_dash:.5f}")
+                            else:
+                                self.stdout.write(f"[DIAG] Tick #{ticks_procesados} tiempo_desde_persist={tiempo_desde_ultimo_persist:.2f}s señal={senal_valor_dash:.4f}")
+                        
                         if tiempo_desde_ultimo_persist >= 1.0:
                             ultimo_persist = ahora
                             try:
                                 # Actualizar cuenta en BD
                                 resultado_update = await sync_to_async(
                                     lambda: Cuenta.objects.filter(id=cuenta.id).update(
-                                        ultimo_tick_epoch=int(tick.epoch),
-                                        ultimo_precio=float(tick.precio),
-                                        senal_valor=float(resultado.valor),
-                                        senal_decision=str(resultado.decision),
+                                        ultimo_tick_epoch=int(epoch_actual_dash),
+                                        ultimo_precio=float(precio_actual_dash),
+                                        senal_valor=float(senal_valor_dash),
+                                        senal_decision=str(senal_decision_dash),
                                         senal_top_contribuciones=top_contrib,
                                     ),
                                     thread_sensitive=True,
@@ -839,7 +981,11 @@ class Command(BaseCommand):
                                     self.stderr.write(f"[UPDATE] ADVERTENCIA: update() afectó 0 filas (cuenta.id={cuenta.id} puede no existir)")
                                 # Log cada 10 actualizaciones para verificar que funciona (sin saturar logs)
                                 if ticks_procesados % 10 == 0:
-                                    self.stdout.write(f"[UPDATE] BD actualizada: tick={tick.epoch} precio={tick.precio:.5f} señal={resultado.valor:.4f} cuenta_id={cuenta.id}")
+                                    if usar_extremos:
+                                        estado_actual_ext = constructor_extremos.obtener_estado()
+                                        self.stdout.write(f"[UPDATE] BD actualizada: tick={epoch_actual_dash} precio={precio_actual_dash:.5f} estado={estado_actual_ext.estado} cuenta_id={cuenta.id}")
+                                    else:
+                                        self.stdout.write(f"[UPDATE] BD actualizada: tick={epoch_actual_dash} precio={precio_actual_dash:.5f} señal={senal_valor_dash:.4f} cuenta_id={cuenta.id}")
                             except Exception as e:
                                 # Log del error pero no romper el bot
                                 import traceback
@@ -898,7 +1044,8 @@ class Command(BaseCommand):
                                     # ===== GATING POR HORARIO (LOCAL) =====
                                     # Evita operar en ventanas malas pero permite que el proceso corra continuo 24/7.
                                     try:
-                                        hora_local = self._hora_local(int(tick.epoch))
+                                        epoch_para_hora = tick.epoch if tick else tick_extremos.epoch if tick_extremos else epoch_actual_dash
+                                        hora_local = self._hora_local(int(epoch_para_hora))
                                     except Exception:
                                         hora_local = None
                                     if hora_local is not None and hora_local in horas_bloqueadas:
@@ -926,10 +1073,21 @@ class Command(BaseCommand):
                                                 f"(máximo configurado={dur_max}). Ajusta .env o el mercado. No se enviará proposal."
                                             )
                                         continue
-                                    self.stderr.write(
-                                        f"[TRADING] señal={resultado.decision} s={float(resultado.valor):+.4f} stake={float(stake):.2f} "
-                                        f"dur={dur} contract_type={contract_type}"
-                                    )
+                                    # Log según estrategia
+                                    if usar_extremos:
+                                        estado_actual_ext = constructor_extremos.obtener_estado()
+                                        self.stderr.write(
+                                            f"[TRADING] estrategia=extremos decision={resultado.decision} estado={estado_actual_ext.estado} "
+                                            f"stake={float(stake):.2f} dur={dur} contract_type={contract_type}"
+                                        )
+                                    else:
+                                    # Log según estrategia (ya está arriba, pero por si acaso)
+                                    if not usar_extremos:
+                                        self.stderr.write(
+                                            f"[TRADING] señal={resultado.decision} s={float(resultado.valor):+.4f} stake={float(stake):.2f} "
+                                            f"dur={dur} contract_type={contract_type}"
+                                        )
+                                    
                                     await cliente.enviar(
                                         {
                                             "proposal": 1,
@@ -942,26 +1100,41 @@ class Command(BaseCommand):
                                             "symbol": symbol,
                                         }
                                     )
+                                    
                                     # Guardar el umbral real usado para esta decisión (para auditoría en dashboard).
-                                    # - COMPRA (CALL) usa umbral_compra
-                                    # - VENTA (PUT)  usa umbral_venta
                                     umbral_guardar = None
-                                    try:
-                                        if resultado.decision == "COMPRA":
-                                            umbral_guardar = float(abs(umbral_compra)) if float(umbral_compra) != float("inf") else None
-                                        elif resultado.decision == "VENTA":
-                                            umbral_guardar = float(abs(umbral_venta)) if float(umbral_venta) != float("inf") else None
-                                    except Exception:
-                                        umbral_guardar = None
+                                    if usar_extremos:
+                                        # En estrategia de extremos, no hay umbral tradicional
+                                        umbral_guardar = getattr(settings, "ESTRATEGIA_EXTREMOS_UMBRAL_RANGO", 0.5)
+                                    else:
+                                        try:
+                                            if resultado.decision == "COMPRA":
+                                                umbral_guardar = float(abs(umbral_compra)) if float(umbral_compra) != float("inf") else None
+                                            elif resultado.decision == "VENTA":
+                                                umbral_guardar = float(abs(umbral_venta)) if float(umbral_venta) != float("inf") else None
+                                        except Exception:
+                                            umbral_guardar = None
+                                    
+                                    # Preparar datos para esperando
+                                    senal_valor_guardar = float(resultado.valor) if hasattr(resultado, 'valor') else 0.0
+                                    pesos_usados_guardar = dict(w) if not usar_extremos and w else {}
+                                    
                                     esperando = {
                                         "tipo": "proposal",
                                         "stake": float(stake),
-                                        "senal_valor": float(resultado.valor),
+                                        "senal_valor": senal_valor_guardar,
                                         "umbral_usado": umbral_guardar,
-                                        "pesos_usados": dict(w),
+                                        "pesos_usados": pesos_usados_guardar,
                                         "senal_top_contribuciones": top_contrib,
                                     }
                                     esperando_desde = time.monotonic()
+                                    
+                                    # Si es estrategia de extremos, actualizar estado a EN_OPERACION
+                                    if usar_extremos:
+                                        estado_actual_ext = constructor_extremos.obtener_estado()
+                                        if estado_actual_ext.estado in {"ESPERANDO_CONFIRMACION_VENTA", "ESPERANDO_CONFIRMACION_COMPRA"}:
+                                            # El estado ya debería estar en EN_OPERACION, pero por si acaso
+                                            pass
 
                         # ===== LOG DE ALTA SEÑAL (SIEMPRE, INCLUSO EN MODO REAL) =====
                         ahora_l = time.monotonic()

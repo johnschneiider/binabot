@@ -131,6 +131,14 @@ NORMALIZACION_MIN_STD = float(os.getenv("NORMALIZACION_MIN_STD", "1e-8"))
 NORMALIZACION_CLIP = float(os.getenv("NORMALIZACION_CLIP", "5.0"))
 SENAL_TOP_N = int(os.getenv("SENAL_TOP_N", "5"))
 
+# ===== ESTRATEGIA =====
+# Tipo de estrategia: "vectores" (antigua con w^T x) o "extremos" (nueva basada en máximos/mínimos)
+ESTRATEGIA_TIPO = os.getenv("ESTRATEGIA_TIPO", "extremos").strip().lower()
+# Umbral mínimo de rango para operar con estrategia de extremos
+ESTRATEGIA_EXTREMOS_UMBRAL_RANGO = float(os.getenv("ESTRATEGIA_EXTREMOS_UMBRAL_RANGO", "0.5"))
+# Cooldown después de cada operación (en ticks)
+ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS = int(os.getenv("ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", "10"))
+
 # ===== PESOS (ESTRATEGIA) =====
 # ARCHIVO JSON QUE EL BOT PUEDE RECARGAR EN CALIENTE PARA ACTUALIZAR w SIN REDEPLOY.
 PESOS_ARCHIVO = os.getenv("PESOS_ARCHIVO", str(BASE_DIR / "vector_pesos" / "pesos_calibrados.json")).strip()
