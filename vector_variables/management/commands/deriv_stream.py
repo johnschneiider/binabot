@@ -658,7 +658,15 @@ class Command(BaseCommand):
                             # Si no es un tick, ignorar el evento (puede ser otro tipo de mensaje)
                             continue
                         
-                        tick_deriv = ev["tick"]
+                        tick_deriv = ev.get("tick")
+                        # Validar que el tick no sea None y tenga los atributos necesarios
+                        if tick_deriv is None:
+                            continue
+                        if not hasattr(tick_deriv, "epoch") or not hasattr(tick_deriv, "precio"):
+                            continue
+                        if tick_deriv.epoch is None or tick_deriv.precio is None:
+                            continue
+                        
                         ticks_procesados += 1
                         # Log cada 100 ticks para verificar que los ticks están llegando
                         if ticks_procesados % 100 == 0:
