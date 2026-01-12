@@ -229,14 +229,21 @@ class ClienteDerivWS:
 
             if msg.get("tick"):
                 t = msg["tick"]
-                yield {
-                    "tipo": "tick",
-                    "tick": TickDeriv(
-                        symbol=str(t.get("symbol", symbol)),
-                        precio=float(t["quote"]),
-                        epoch=int(t["epoch"]),
-                    ),
-                }
+                # Validar que el tick tenga los campos necesarios antes de crear TickDeriv
+                if not t or "quote" not in t or "epoch" not in t:
+                    continue
+                try:
+                    yield {
+                        "tipo": "tick",
+                        "tick": TickDeriv(
+                            symbol=str(t.get("symbol", symbol)),
+                            precio=float(t["quote"]),
+                            epoch=int(t["epoch"]),
+                        ),
+                    }
+                except (ValueError, KeyError, TypeError):
+                    # Si falta algún campo o hay error de conversión, ignorar este tick
+                    continue
                 continue
 
             if msg.get("balance"):
