@@ -52,6 +52,7 @@ def evaluar_senal_extremos(
     idx_max = vector_extremos.get("idx_max", 0)
     idx_min = vector_extremos.get("idx_min", 0)
     precios = vector_extremos.get("precios", [])
+    eps = 0.0001
 
     # ===== FILTRO DE MERCADO (OBLIGATORIO) =====
     if rango_50 < umbral_rango_minimo:
@@ -76,6 +77,11 @@ def evaluar_senal_extremos(
             decision="NO_OPERAR",
             razon="En cooldown",
         )
+
+    # Si por alguna razón quedamos en estados antiguos de espera, reseteamos a IDLE
+    # (la estrategia ahora entra directo en la reversión del tick siguiente).
+    if estado_actual in {"ESPERANDO_CONFIRMACION_VENTA", "ESPERANDO_CONFIRMACION_COMPRA"}:
+        return ResultadoSenalExtremos(decision="IDLE", razon="Reset espera (entrada directa por reversión)")
 
     # ===== DETECCIÓN DE EXTREMOS =====
     
@@ -103,52 +109,25 @@ def evaluar_senal_extremos(
         conteo_maximos = sum(1 for p in precios if p == max_50)
         conteo_minimos = sum(1 for p in precios if p == min_50)
 
-    # ===== REGLA NUEVA (PEDIDA): MÁXIMO → (SIGUIENTE TICK < MÁXIMO) ⇒ VENTA =====
-    # Paso 1: detectar "tocó máximo" en IDLE y marcar espera.
+    # ===== REGLA (TU PEDIDO): REVERSIÓN INMEDIATA =====
+    # "Se llegó al máximo" en el tick anterior y el tick actual es menor => VENTA.
+    # "Se llegó al mínimo" en el tick anterior y el tick actual es mayor => COMPRA.
     if estado_actual == "IDLE":
-        en_maximo = abs(precio_actual - max_50) < 0.0001
-        if en_maximo and max_fresco and (conteo_maximos <= 2):
-            return ResultadoSenalExtremos(
-                decision="ESPERANDO_VENTA",
-                razon=f"Max tocado: {max_50:.3f} (esperando 1 tick de confirmación)",
-            )
-
-    # Paso 2: confirmación en el tick siguiente: precio_actual < ref_extremo_precio
-    if estado_actual == "ESPERANDO_CONFIRMACION_VENTA":
-        if ref_extremo_tick is None or ref_extremo_precio is None:
-            return ResultadoSenalExtremos(decision="IDLE", razon="Falta ref_extremo para confirmar VENTA")
-        # Solo vale el tick inmediatamente siguiente.
-        if tick_actual != int(ref_extremo_tick) + 1:
-            return ResultadoSenalExtremos(decision="IDLE", razon="VENTA: ventana de confirmación vencida")
-        if float(precio_actual) < float(ref_extremo_precio):
+        # Venta: tick anterior fue el máximo (del buffer actual) y ahora bajó.
+        if max_fresco and (conteo_maximos <= 2) and (abs(float(precio_anterior) - float(max_50)) < eps) and (float(precio_actual) < float(max_50)):
             return ResultadoSenalExtremos(
                 decision="VENTA",
-                razon=f"Confirmación VENTA: {precio_actual:.3f} < max_ref {float(ref_extremo_precio):.3f}",
-                precio_entrada_sugerido=precio_actual,
-            )
-        return ResultadoSenalExtremos(decision="IDLE", razon="Confirmación VENTA fallida (no bajó)")
-
-    # ===== REGLA SIMÉTRICA: MÍNIMO → (SIGUIENTE TICK > MÍNIMO) ⇒ COMPRA =====
-    if estado_actual == "IDLE":
-        en_minimo = abs(precio_actual - min_50) < 0.0001
-        if en_minimo and min_fresco and (conteo_minimos <= 2):
-            return ResultadoSenalExtremos(
-                decision="ESPERANDO_COMPRA",
-                razon=f"Min tocado: {min_50:.3f} (esperando 1 tick de confirmación)",
+                razon=f"Reversión desde MAX: prev={precio_anterior:.3f}==max {max_50:.3f} y ahora {precio_actual:.3f}<max",
+                precio_entrada_sugerido=float(precio_actual),
             )
 
-    if estado_actual == "ESPERANDO_CONFIRMACION_COMPRA":
-        if ref_extremo_tick is None or ref_extremo_precio is None:
-            return ResultadoSenalExtremos(decision="IDLE", razon="Falta ref_extremo para confirmar COMPRA")
-        if tick_actual != int(ref_extremo_tick) + 1:
-            return ResultadoSenalExtremos(decision="IDLE", razon="COMPRA: ventana de confirmación vencida")
-        if float(precio_actual) > float(ref_extremo_precio):
+        # Compra: tick anterior fue el mínimo (del buffer actual) y ahora subió.
+        if min_fresco and (conteo_minimos <= 2) and (abs(float(precio_anterior) - float(min_50)) < eps) and (float(precio_actual) > float(min_50)):
             return ResultadoSenalExtremos(
                 decision="COMPRA",
-                razon=f"Confirmación COMPRA: {precio_actual:.3f} > min_ref {float(ref_extremo_precio):.3f}",
-                precio_entrada_sugerido=precio_actual,
+                razon=f"Reversión desde MIN: prev={precio_anterior:.3f}==min {min_50:.3f} y ahora {precio_actual:.3f}>min",
+                precio_entrada_sugerido=float(precio_actual),
             )
-        return ResultadoSenalExtremos(decision="IDLE", razon="Confirmación COMPRA fallida (no subió)")
 
     # ===== NO HAY SEÑAL =====
     return ResultadoSenalExtremos(

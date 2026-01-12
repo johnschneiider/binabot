@@ -137,7 +137,7 @@ ESTRATEGIA_TIPO = os.getenv("ESTRATEGIA_TIPO", "extremos").strip().lower()
 # Umbral mínimo de rango para operar con estrategia de extremos
 ESTRATEGIA_EXTREMOS_UMBRAL_RANGO = float(os.getenv("ESTRATEGIA_EXTREMOS_UMBRAL_RANGO", "0.5"))
 # Cooldown después de cada operación (en ticks)
-ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS = int(os.getenv("ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", "10"))
+ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS = int(os.getenv("ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", "25"))
 
 # ===== PESOS (ESTRATEGIA) =====
 # ARCHIVO JSON QUE EL BOT PUEDE RECARGAR EN CALIENTE PARA ACTUALIZAR w SIN REDEPLOY.
