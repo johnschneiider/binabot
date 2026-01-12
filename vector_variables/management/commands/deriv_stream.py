@@ -1169,8 +1169,11 @@ class Command(BaseCommand):
                                 top_txt = " top=" + ",".join(
                                     f"{it['variable']}:{it['contribucion']:+.3f}" for it in top_contrib[:3]
                                 )
+                            # Usar epoch_actual_dash si tick es None (estrategia de extremos)
+                            epoch_log = tick.epoch if tick is not None else (tick_extremos.epoch if tick_extremos is not None else epoch_actual_dash)
+                            precio_log = tick.precio if tick is not None else (tick_extremos.precio if tick_extremos is not None else precio_actual_dash)
                             self.stdout.write(
-                                f"t={tick.epoch} p={tick.precio:.5f} s={resultado.valor:.4f} dec={resultado.decision} "
+                                f"t={epoch_log} p={precio_log:.5f} s={resultado.valor:.4f} dec={resultado.decision} "
                                 f"cap={gestor_riesgo.capital_actual:.2f} bloqueado={gestor_riesgo.bloqueado} "
                                 f"n={ticks_procesados}{top_txt}"
                             )
@@ -1193,12 +1196,17 @@ class Command(BaseCommand):
                             gestor_riesgo.registrar_equity(capital_mtm)
 
                             # SALIDAS: STOP (1R) O TP (2R) SOBRE DISTANCIA STOP.
-                            if self._debe_cerrar(posicion, tick.precio):
+                            # Usar precio según estrategia activa
+                            precio_cierre_paper = tick.precio if tick is not None else (tick_extremos.precio if tick_extremos is not None else precio_actual_dash)
+                            if self._debe_cerrar(posicion, precio_cierre_paper):
                                 gestor_riesgo.capital_actual = float(capital_mtm)
 
                                 # CIERRE PERSISTENTE DE LA OPERACIÓN
                                 if operacion_abierta is not None:
-                                    motivo = self._motivo_cierre(operacion_abierta, float(tick.precio))
+                                    # Usar precio y epoch según estrategia activa
+                                    precio_cierre = tick.precio if tick is not None else (tick_extremos.precio if tick_extremos is not None else precio_actual_dash)
+                                    epoch_cierre = tick.epoch if tick is not None else (tick_extremos.epoch if tick_extremos is not None else epoch_actual_dash)
+                                    motivo = self._motivo_cierre(operacion_abierta, float(precio_cierre))
                                     await sync_to_async(
                                         lambda: self._db_cerrar_operacion_y_actualizar_cuenta(
                                             operacion_id=int(operacion_abierta.id),
@@ -1227,16 +1235,18 @@ class Command(BaseCommand):
                                         simbolo=symbol,
                                         estado=Operacion.Estado.ABIERTA,
                                         direccion=direccion,
-                                        precio_entrada=float(tick.precio),
+                                        precio_entrada=float(precio_actual_dash),
                                         tamanio=float(decision_riesgo.tamanio_posicion),
                                         stop_distancia=float(stop_dist),
-                                        opened_epoch=int(tick.epoch),
+                                        opened_epoch=int(epoch_actual_dash),
                                     ),
                                     thread_sensitive=True,
                                 )()
+                                # Usar precio según estrategia activa
+                                precio_entrada_paper = tick.precio if tick is not None else (tick_extremos.precio if tick_extremos is not None else precio_actual_dash)
                                 posicion = PosicionPaper(
                                     direccion=direccion,
-                                    precio_entrada=float(tick.precio),
+                                    precio_entrada=float(precio_entrada_paper),
                                     tamanio=float(decision_riesgo.tamanio_posicion),
                                     stop_distancia=float(stop_dist),
                                     operacion_id=int(operacion_abierta.id),
