@@ -219,11 +219,12 @@
         <table>
           <thead>
             <tr>
-              <th>Contract</th>
+              <th>Tipo</th>
               <th>Estado</th>
               <th>Profit</th>
               <th>Umbral</th>
-              <th>Moneda</th>
+              <th>Entrada</th>
+              <th>Cierre</th>
               <th>Duración</th>
               <th>Fecha/Hora (Colombia)</th>
             </tr>
@@ -231,11 +232,12 @@
           <tbody id="tabla_operaciones_deriv">
             {% for op in operaciones_deriv %}
               <tr>
-                <td class="mono">{{ op.contract_id }}</td>
+                <td class="mono">{{ op.contract_type|default:"—" }}</td>
                 <td>{{ op.estado }}</td>
                 <td class="mono">{{ op.profit|default:"—" }}</td>
                 <td class="mono">{% if op.umbral_usado != None %}{{ op.umbral_usado|floatformat:3 }}{% else %}—{% endif %}</td>
-                <td class="mono">{{ op.moneda|default:"—" }}</td>
+                <td class="mono">{% if op.buy_price != None %}{{ op.buy_price|floatformat:2 }}{% else %}—{% endif %}</td>
+                <td class="mono">{% if op.sell_price != None %}{{ op.sell_price|floatformat:2 }}{% else %}—{% endif %}</td>
                 <td class="mono">
                   {% if op.duracion_segundos != None %}
                     {{ op.duracion_segundos }}s
@@ -252,7 +254,7 @@
                 </td>
               </tr>
             {% empty %}
-              <tr><td colspan="9" class="muted">Aún no hay operaciones Deriv.</td></tr>
+              <tr><td colspan="7" class="muted">Aún no hay operaciones Deriv.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -433,13 +435,17 @@
             : ((op.opened_epoch && op.closed_epoch) ? `${Number(op.closed_epoch) - Number(op.opened_epoch)}s` : "—");
           const fh = op.fecha_hora ? String(op.fecha_hora) : "—";
           const umbral = (op.umbral_usado === null || op.umbral_usado === undefined) ? "—" : Number(op.umbral_usado).toFixed(3);
+          const tipo = (op.contract_type || "—");
+          const entrada = (op.buy_price === null || op.buy_price === undefined) ? "—" : fmt2(op.buy_price);
+          const cierre = (op.sell_price === null || op.sell_price === undefined) ? "—" : fmt2(op.sell_price);
           return `
             <tr>
-              <td class="mono">${op.contract_id}</td>
+              <td class="mono">${tipo}</td>
               <td>${op.estado}</td>
               <td class="mono">${(op.profit === null || op.profit === undefined) ? "—" : fmt2(op.profit)}</td>
               <td class="mono">${umbral}</td>
-              <td class="mono">${op.moneda || "—"}</td>
+              <td class="mono">${entrada}</td>
+              <td class="mono">${cierre}</td>
               <td class="mono">${dur}</td>
               <td class="mono">${fh}</td>
             </tr>
