@@ -669,6 +669,7 @@ class Command(BaseCommand):
                                     umbral_usado=float(esperando.get("umbral_usado")) if esperando.get("umbral_usado") is not None else None,
                                     pesos_usados=esperando.get("pesos_usados"),
                                     senal_top_contribuciones=esperando.get("senal_top_contribuciones"),
+                                    entry_spot=float(esperando.get("entry_spot")) if esperando.get("entry_spot") is not None else None,
                                 )
                             esperando = None
                             continue
@@ -1226,6 +1227,8 @@ class Command(BaseCommand):
                                         # Extremos: guardamos intención para marcar EN_OPERACION sólo cuando Deriv confirme el BUY.
                                         "extremos_decision": str(resultado.decision) if usar_extremos else None,
                                         "extremos_precio_entrada": float(precio_actual_dash) if usar_extremos else None,
+                                        # Guardar spot de entrada (precio del índice) para persistirlo aunque Deriv no lo mande.
+                                        "entry_spot": float(precio_actual_dash) if precio_actual_dash is not None else None,
                                     }
                                     esperando_desde = time.monotonic()
                                     
@@ -1484,6 +1487,7 @@ class Command(BaseCommand):
         umbral_usado: float | None = None,
         pesos_usados: dict | None = None,
         senal_top_contribuciones: list | None = None,
+        entry_spot: float | None = None,
     ) -> None:
         OperacionDeriv.objects.update_or_create(
             contract_id=int(contract_id),
@@ -1499,6 +1503,7 @@ class Command(BaseCommand):
                 "umbral_usado": float(umbral_usado) if umbral_usado is not None else None,
                 "pesos_usados": pesos_usados,
                 "senal_top_contribuciones": senal_top_contribuciones,
+                "entry_spot": float(entry_spot) if entry_spot is not None else None,
             },
         )
 
@@ -1575,8 +1580,19 @@ class Command(BaseCommand):
             buy_price = float(contrato.get("buy_price")) if contrato.get("buy_price") is not None else None
             sell_price = float(contrato.get("sell_price")) if contrato.get("sell_price") is not None else None
             entry_spot = float(contrato.get("entry_spot")) if contrato.get("entry_spot") is not None else None
+            # Fallbacks típicos Deriv para spot de entrada/salida en contratos por ticks
+            if entry_spot is None and contrato.get("entry_tick") is not None:
+                try:
+                    entry_spot = float(contrato.get("entry_tick"))
+                except Exception:
+                    pass
             # Deriv puede variar el nombre/available de spot de salida según estado.
             exit_spot = float(contrato.get("exit_spot")) if contrato.get("exit_spot") is not None else None
+            if exit_spot is None and contrato.get("exit_tick") is not None:
+                try:
+                    exit_spot = float(contrato.get("exit_tick"))
+                except Exception:
+                    pass
             if exit_spot is None and contrato.get("sell_spot") is not None:
                 try:
                     exit_spot = float(contrato.get("sell_spot"))
