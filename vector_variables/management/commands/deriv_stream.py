@@ -1073,8 +1073,10 @@ class Command(BaseCommand):
                                 ticks_desde_entrada = ticks_procesados - estado_actual_ext.tick_entrada
                                 dur_obj = int(getattr(settings, "DERIV_DURACION_TICKS", 5) or 5)
                                 if ticks_desde_entrada >= dur_obj:
-                                    # Forzar cierre de operación (el contrato se cerrará automáticamente por Deriv)
-                                    self.stdout.write(f"[EXTREMOS] Operación alcanzó 5 ticks, esperando cierre automático")
+                                    # El contrato se cerrará automáticamente por Deriv (duration_unit="t").
+                                    self.stdout.write(
+                                        f"[EXTREMOS] Operación alcanzó {dur_obj} ticks (DERIV_DURACION_TICKS), esperando cierre automático"
+                                    )
 
                         # Si estamos en EN_OPERACION pero ya no hay contrato_abierto_id (p.ej. se perdió evento de cierre),
                         # auto-liberar el estado tras una ventana razonable para evitar quedar pegados.
