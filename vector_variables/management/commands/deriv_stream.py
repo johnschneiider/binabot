@@ -766,6 +766,8 @@ class Command(BaseCommand):
                                     "EXTREMOS_UMBRAL_RANGO_MINIMO",
                                     getattr(settings, "ESTRATEGIA_EXTREMOS_UMBRAL_RANGO", 0.5),
                                 ),
+                                permitir_put=("PUT" in contract_types_permitidos),
+                                permitir_call=("CALL" in contract_types_permitidos),
                             )
 
                             # Debug de por qué entra/no entra (para investigar “debería operar”)

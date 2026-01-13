@@ -25,6 +25,8 @@ def evaluar_senal_extremos(
     ref_extremo_tick: Optional[int] = None,
     ref_extremo_precio: Optional[float] = None,
     umbral_rango_minimo: float = 0.5,
+    permitir_put: bool = True,
+    permitir_call: bool = True,
 ) -> ResultadoSenalExtremos:
     """
     EVALÚA SEÑAL BASADA EN EXTREMOS LOCALES.
@@ -117,7 +119,7 @@ def evaluar_senal_extremos(
         # Venta: el tick anterior fue el máximo MÁS RECIENTE del buffer, y el tick actual está por debajo.
         # Usamos idx_max para evitar problemas de precisión float.
         max_en_tick_anterior = (n >= 2) and (int(idx_max) == (n - 2))
-        if max_fresco and (conteo_maximos <= 2) and max_en_tick_anterior and (float(precio_actual) < float(max_50)):
+        if permitir_put and max_fresco and (conteo_maximos <= 2) and max_en_tick_anterior and (float(precio_actual) < float(max_50)):
             return ResultadoSenalExtremos(
                 decision="VENTA",
                 razon=f"Reversión desde MAX: idx_max={idx_max} prev={precio_anterior:.3f} max={max_50:.3f} ahora={precio_actual:.3f}",
@@ -126,7 +128,7 @@ def evaluar_senal_extremos(
 
         # Compra: el tick anterior fue el mínimo MÁS RECIENTE del buffer, y el tick actual está por encima.
         min_en_tick_anterior = (n >= 2) and (int(idx_min) == (n - 2))
-        if min_fresco and (conteo_minimos <= 2) and min_en_tick_anterior and (float(precio_actual) > float(min_50)):
+        if permitir_call and min_fresco and (conteo_minimos <= 2) and min_en_tick_anterior and (float(precio_actual) > float(min_50)):
             return ResultadoSenalExtremos(
                 decision="COMPRA",
                 razon=f"Reversión desde MIN: idx_min={idx_min} prev={precio_anterior:.3f} min={min_50:.3f} ahora={precio_actual:.3f}",
