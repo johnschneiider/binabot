@@ -220,9 +220,12 @@ def estado_json(request):
     # Incluir últimos ticks para el gráfico en tiempo real
     ticks_list = []
     if cuenta:
+        ticks_window = int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100)
+        if ticks_window < 10:
+            ticks_window = 10
         ticks_qs = (
             TickDerivSnapshot.objects.filter(cuenta=cuenta)
-            .order_by("-epoch")[:50]
+            .order_by("-epoch")[:ticks_window]
         )
         for tick_obj in ticks_qs:
             ticks_list.append({
@@ -291,17 +294,20 @@ def balance_json(request):
 @require_http_methods(["GET", "HEAD"])
 def ticks_json(request):
     """
-    Devuelve los últimos 50 ticks para el gráfico en tiempo real.
+    Devuelve los últimos N ticks para el gráfico en tiempo real.
     """
     # Usar la cuenta con el último tick más reciente (más precisa que updated_at)
     cuenta = Cuenta.objects.order_by("-ultimo_tick_epoch", "-updated_at").first()
     if not cuenta:
         return JsonResponse({"cuenta_id": None, "ticks": []})
     
-    # Obtener todos los ticks ordenados por epoch descendente, luego tomar los últimos 50
+    ticks_window = int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100)
+    if ticks_window < 10:
+        ticks_window = 10
+    # Obtener todos los ticks ordenados por epoch descendente, luego tomar los últimos N
     ticks_qs = (
         TickDerivSnapshot.objects.filter(cuenta=cuenta)
-        .order_by("-epoch")[:50]
+        .order_by("-epoch")[:ticks_window]
     )
     
     # Convertir a lista y ordenar por epoch ascendente para el gráfico

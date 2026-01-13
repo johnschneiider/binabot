@@ -706,10 +706,13 @@ class Command(BaseCommand):
                             tick = Tick(precio=tick_deriv.precio, epoch=tick_deriv.epoch)
                             tick_extremos = None
                         
-                        # Guardar tick para gráfico en tiempo real (mantener solo últimos 50)
+                        # Guardar tick para gráfico en tiempo real (mantener solo últimos N)
                         try:
                             precio_guardar = tick_deriv.precio
                             epoch_guardar = tick_deriv.epoch
+                            ticks_window = int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100)
+                            if ticks_window < 10:
+                                ticks_window = 10
                             # Crear nuevo tick
                             await sync_to_async(
                                 lambda: TickDerivSnapshot.objects.create(
@@ -720,7 +723,7 @@ class Command(BaseCommand):
                                 thread_sensitive=True,
                             )()
                             
-                            # Limpiar ticks antiguos (mantener solo últimos 50) - solo cada 10 ticks para eficiencia
+                            # Limpiar ticks antiguos (mantener solo últimos N) - solo cada 10 ticks para eficiencia
                             if ticks_procesados % 10 == 0:
                                 todos_ids = await sync_to_async(
                                     lambda: list(
@@ -731,8 +734,8 @@ class Command(BaseCommand):
                                     thread_sensitive=True,
                                 )()
                                 
-                                if len(todos_ids) > 50:
-                                    ids_a_eliminar = todos_ids[50:]
+                                if len(todos_ids) > ticks_window:
+                                    ids_a_eliminar = todos_ids[ticks_window:]
                                     await sync_to_async(
                                         lambda: TickDerivSnapshot.objects.filter(id__in=ids_a_eliminar).delete(),
                                         thread_sensitive=True,

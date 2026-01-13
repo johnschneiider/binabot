@@ -193,7 +193,7 @@
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
-          <div class="big">Precio en Tiempo Real (últimos 50 ticks)</div>
+          <div class="big">Precio en Tiempo Real (últimos {{ extremos_ventana_ticks|default:100 }} ticks)</div>
           <div class="muted">Eje X: ticks · Eje Y: precio</div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -204,7 +204,7 @@
       <div class="chart-wrap" style="margin-top: 10px;">
         <canvas id="ticks_chart"></canvas>
       </div>
-      <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos 50 ticks recibidos</div>
+      <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos {{ extremos_ventana_ticks|default:100 }} ticks recibidos</div>
     </div>
 
     <div class="card" style="margin-top: 14px;">
