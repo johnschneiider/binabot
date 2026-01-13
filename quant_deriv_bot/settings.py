@@ -153,6 +153,11 @@ EXTREMOS_MAX_REPETICIONES = int(os.getenv("EXTREMOS_MAX_REPETICIONES", "2"))
 # min_reversion = max(EXTREMOS_MIN_REVERSION_ABS, EXTREMOS_MIN_REVERSION_FRAC * rango)
 EXTREMOS_MIN_REVERSION_FRAC = float(os.getenv("EXTREMOS_MIN_REVERSION_FRAC", "0.05"))
 EXTREMOS_MIN_REVERSION_ABS = float(os.getenv("EXTREMOS_MIN_REVERSION_ABS", "0.0"))
+# Filtro adicional (confirmación 2-ticks):
+# Exige que el retroceso desde el extremo sea mayor que el “ruido” típico reciente
+# (promedio de |delta| en los últimos K ticks), multiplicado por un factor.
+EXTREMOS_PROMEDIO_DELTA_TICKS = int(os.getenv("EXTREMOS_PROMEDIO_DELTA_TICKS", "20"))
+EXTREMOS_PROMEDIO_DELTA_FACTOR = float(os.getenv("EXTREMOS_PROMEDIO_DELTA_FACTOR", "1.0"))
 
 # ===== PESOS (ESTRATEGIA) =====
 # ARCHIVO JSON QUE EL BOT PUEDE RECARGAR EN CALIENTE PARA ACTUALIZAR w SIN REDEPLOY.
