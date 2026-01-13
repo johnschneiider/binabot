@@ -1524,6 +1524,14 @@ class Command(BaseCommand):
                     continue
                 buy_price = float(t.get("buy_price")) if t.get("buy_price") is not None else None
                 sell_price = float(t.get("sell_price")) if t.get("sell_price") is not None else None
+                # Spot (precio del índice) si Deriv lo entrega en profit_table (no siempre).
+                entry_spot = float(t.get("entry_spot")) if t.get("entry_spot") is not None else None
+                exit_spot = float(t.get("exit_spot")) if t.get("exit_spot") is not None else None
+                if exit_spot is None and t.get("sell_spot") is not None:
+                    try:
+                        exit_spot = float(t.get("sell_spot"))
+                    except Exception:
+                        pass
                 profit = float(t.get("profit")) if t.get("profit") is not None else None
                 if profit is None and buy_price is not None and sell_price is not None:
                     # SI DERIV NO ENVÍA PROFIT EXPLÍCITO, SE DERIVA COMO SELL - BUY.
@@ -1543,6 +1551,8 @@ class Command(BaseCommand):
                     moneda=moneda,
                     buy_price=buy_price,
                     sell_price=sell_price,
+                    entry_spot=entry_spot,
+                    exit_spot=exit_spot,
                     payout=float(t.get("payout")) if t.get("payout") is not None else None,
                     profit=profit,
                     opened_epoch=int(t.get("purchase_time")) if t.get("purchase_time") is not None else None,
@@ -1563,7 +1573,19 @@ class Command(BaseCommand):
             buy_price = float(contrato.get("buy_price")) if contrato.get("buy_price") is not None else None
             sell_price = float(contrato.get("sell_price")) if contrato.get("sell_price") is not None else None
             entry_spot = float(contrato.get("entry_spot")) if contrato.get("entry_spot") is not None else None
+            # Deriv puede variar el nombre/available de spot de salida según estado.
             exit_spot = float(contrato.get("exit_spot")) if contrato.get("exit_spot") is not None else None
+            if exit_spot is None and contrato.get("sell_spot") is not None:
+                try:
+                    exit_spot = float(contrato.get("sell_spot"))
+                except Exception:
+                    pass
+            # Fallback: si ya está sold, current_spot suele ser el spot final.
+            if exit_spot is None and int(contrato.get("is_sold", 0)) == 1 and contrato.get("current_spot") is not None:
+                try:
+                    exit_spot = float(contrato.get("current_spot"))
+                except Exception:
+                    pass
             profit = float(contrato.get("profit")) if contrato.get("profit") is not None else None
             if profit is None and buy_price is not None and sell_price is not None:
                 profit = float(sell_price) - float(buy_price)
