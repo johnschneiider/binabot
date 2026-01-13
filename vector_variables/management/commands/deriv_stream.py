@@ -1548,23 +1548,28 @@ class Command(BaseCommand):
                 if not moneda:
                     moneda = str(Cuenta.objects.filter(id=int(cuenta_id)).values_list("moneda_deriv", flat=True).first() or "")
 
-                OperacionDeriv.objects.filter(contract_id=cid_i).update(
-                    simbolo=str(t.get("symbol") or ""),
-                    transaction_id=int(t["transaction_id"]) if t.get("transaction_id") is not None else None,
-                    contract_type=str(t.get("contract_type") or ""),
-                    longcode=str(t.get("longcode") or ""),
-                    shortcode=str(t.get("shortcode") or ""),
-                    estado=OperacionDeriv.Estado.CERRADA if t.get("sell_time") else OperacionDeriv.Estado.ABIERTA,
-                    moneda=moneda,
-                    buy_price=buy_price,
-                    sell_price=sell_price,
-                    entry_spot=entry_spot,
-                    exit_spot=exit_spot,
-                    payout=float(t.get("payout")) if t.get("payout") is not None else None,
-                    profit=profit,
-                    opened_epoch=int(t.get("purchase_time")) if t.get("purchase_time") is not None else None,
-                    closed_epoch=int(t.get("sell_time")) if t.get("sell_time") is not None else None,
-                )
+                # Importante: NO pisar entry_spot/exit_spot con NULL si Deriv no lo trae.
+                update_kwargs = {
+                    "simbolo": str(t.get("symbol") or ""),
+                    "transaction_id": int(t["transaction_id"]) if t.get("transaction_id") is not None else None,
+                    "contract_type": str(t.get("contract_type") or ""),
+                    "longcode": str(t.get("longcode") or ""),
+                    "shortcode": str(t.get("shortcode") or ""),
+                    "estado": OperacionDeriv.Estado.CERRADA if t.get("sell_time") else OperacionDeriv.Estado.ABIERTA,
+                    "moneda": moneda,
+                    "buy_price": buy_price,
+                    "sell_price": sell_price,
+                    "payout": float(t.get("payout")) if t.get("payout") is not None else None,
+                    "profit": profit,
+                    "opened_epoch": int(t.get("purchase_time")) if t.get("purchase_time") is not None else None,
+                    "closed_epoch": int(t.get("sell_time")) if t.get("sell_time") is not None else None,
+                }
+                if entry_spot is not None:
+                    update_kwargs["entry_spot"] = float(entry_spot)
+                if exit_spot is not None:
+                    update_kwargs["exit_spot"] = float(exit_spot)
+
+                OperacionDeriv.objects.filter(contract_id=cid_i).update(**update_kwargs)
 
         await sync_to_async(_actualizar_solo_existentes, thread_sensitive=True)()
 
@@ -1611,6 +1616,13 @@ class Command(BaseCommand):
             moneda = str(contrato.get("currency") or "")
             if not moneda:
                 moneda = str(Cuenta.objects.filter(id=int(cuenta_id)).values_list("moneda_deriv", flat=True).first() or "")
+
+            # Importante: no pisar spot existente con NULL si el payload no lo trae.
+            existente = OperacionDeriv.objects.filter(contract_id=int(cid)).values("entry_spot", "exit_spot").first()
+            if entry_spot is None and existente and existente.get("entry_spot") is not None:
+                entry_spot = float(existente.get("entry_spot"))
+            if exit_spot is None and existente and existente.get("exit_spot") is not None:
+                exit_spot = float(existente.get("exit_spot"))
 
             OperacionDeriv.objects.update_or_create(
                 contract_id=int(cid),
