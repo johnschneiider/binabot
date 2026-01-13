@@ -176,6 +176,11 @@ class OperacionDeriv(models.Model):
     payout = models.FloatField(null=True, blank=True)
     profit = models.FloatField(null=True, blank=True)
 
+    # ===== SPOT (PRECIO DEL ÍNDICE) EN ENTRADA/SALIDA =====
+    # Nota: buy_price/sell_price son stake/payout del contrato, NO el spot del mercado.
+    entry_spot = models.FloatField(null=True, blank=True)
+    exit_spot = models.FloatField(null=True, blank=True)
+
     # ===== TELEMETRÍA DE ENTRADA (PARA APRENDIZAJE ONLINE / AUDITORÍA) =====
     # Score s = w^T x en el instante de entrada (antes de enviar proposal/buy).
     senal_valor = models.FloatField(null=True, blank=True)

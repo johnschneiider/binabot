@@ -236,8 +236,8 @@
                 <td>{{ op.estado }}</td>
                 <td class="mono">{{ op.profit|default:"—" }}</td>
                 <td class="mono">{% if op.umbral_usado != None %}{{ op.umbral_usado|floatformat:3 }}{% else %}—{% endif %}</td>
-                <td class="mono">{% if op.buy_price != None %}{{ op.buy_price|floatformat:2 }}{% else %}—{% endif %}</td>
-                <td class="mono">{% if op.sell_price != None %}{{ op.sell_price|floatformat:2 }}{% else %}—{% endif %}</td>
+                <td class="mono">{% if op.entry_spot != None %}{{ op.entry_spot|floatformat:3 }}{% else %}—{% endif %}</td>
+                <td class="mono">{% if op.exit_spot != None %}{{ op.exit_spot|floatformat:3 }}{% else %}—{% endif %}</td>
                 <td class="mono">
                   {% if op.duracion_segundos != None %}
                     {{ op.duracion_segundos }}s
@@ -436,8 +436,8 @@
           const fh = op.fecha_hora ? String(op.fecha_hora) : "—";
           const umbral = (op.umbral_usado === null || op.umbral_usado === undefined) ? "—" : Number(op.umbral_usado).toFixed(3);
           const tipo = (op.contract_type || "—");
-          const entrada = (op.buy_price === null || op.buy_price === undefined) ? "—" : fmt2(op.buy_price);
-          const cierre = (op.sell_price === null || op.sell_price === undefined) ? "—" : fmt2(op.sell_price);
+          const entrada = (op.entry_spot === null || op.entry_spot === undefined) ? "—" : Number(op.entry_spot).toFixed(3);
+          const cierre = (op.exit_spot === null || op.exit_spot === undefined) ? "—" : Number(op.exit_spot).toFixed(3);
           return `
             <tr>
               <td class="mono">${tipo}</td>

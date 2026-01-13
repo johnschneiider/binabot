@@ -1560,6 +1560,8 @@ class Command(BaseCommand):
         def _upsert() -> None:
             buy_price = float(contrato.get("buy_price")) if contrato.get("buy_price") is not None else None
             sell_price = float(contrato.get("sell_price")) if contrato.get("sell_price") is not None else None
+            entry_spot = float(contrato.get("entry_spot")) if contrato.get("entry_spot") is not None else None
+            exit_spot = float(contrato.get("exit_spot")) if contrato.get("exit_spot") is not None else None
             profit = float(contrato.get("profit")) if contrato.get("profit") is not None else None
             if profit is None and buy_price is not None and sell_price is not None:
                 profit = float(sell_price) - float(buy_price)
@@ -1580,6 +1582,8 @@ class Command(BaseCommand):
                     "moneda": moneda,
                     "buy_price": buy_price,
                     "sell_price": sell_price,
+                    "entry_spot": entry_spot,
+                    "exit_spot": exit_spot,
                     "payout": float(contrato.get("payout")) if contrato.get("payout") is not None else None,
                     "profit": profit,
                     "opened_epoch": int(contrato.get("date_start")) if contrato.get("date_start") is not None else None,
