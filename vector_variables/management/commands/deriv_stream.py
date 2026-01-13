@@ -642,6 +642,22 @@ class Command(BaseCommand):
                                 )
                                 await cliente.enviar({"proposal_open_contract": 1, "contract_id": int(contrato_id), "subscribe": 1})
                                 ultimo_open_contract = time.monotonic()
+                                # Estrategia de extremos: marcar EN_OPERACION sólo cuando el BUY fue aceptado.
+                                if usar_extremos and constructor_extremos is not None:
+                                    try:
+                                        tick_n = int(constructor_extremos.ticks_procesados())
+                                    except Exception:
+                                        tick_n = int(ticks_procesados)
+                                    dec = (esperando.get("extremos_decision") or "").upper()
+                                    precio_ent = esperando.get("extremos_precio_entrada")
+                                    if dec in {"VENTA", "COMPRA"}:
+                                        constructor_extremos.actualizar_estado(
+                                            "EN_OPERACION",
+                                            ultimo_extremo_operado=("MAX" if dec == "VENTA" else "MIN"),
+                                            precio_entrada=float(precio_ent) if precio_ent is not None else None,
+                                            tick_entrada=int(tick_n),
+                                            tipo_operacion=("VENTA" if dec == "VENTA" else "COMPRA"),
+                                        )
                                 await sync_to_async(self._db_registrar_compra_deriv, thread_sensitive=True)(
                                     cuenta_id=int(cuenta.id),
                                     simbolo=symbol,
@@ -787,21 +803,13 @@ class Command(BaseCommand):
                             elif resultado_extremos.decision == "IDLE":
                                 constructor_extremos.actualizar_estado("IDLE")
                             elif resultado_extremos.decision == "VENTA":
-                                constructor_extremos.actualizar_estado(
-                                    "EN_OPERACION",
-                                    ultimo_extremo_operado="MAX",
-                                    precio_entrada=resultado_extremos.precio_entrada_sugerido,
-                                    tick_entrada=ticks_procesados,
-                                    tipo_operacion="VENTA",
-                                )
+                                # IMPORTANTE:
+                                # No marcar EN_OPERACION hasta que Deriv confirme el BUY.
+                                # Si algo bloquea la entrada (min_stake/horario/contract_types), quedaríamos pegados en EN_OPERACION.
+                                constructor_extremos.actualizar_estado("IDLE")
                             elif resultado_extremos.decision == "COMPRA":
-                                constructor_extremos.actualizar_estado(
-                                    "EN_OPERACION",
-                                    ultimo_extremo_operado="MIN",
-                                    precio_entrada=resultado_extremos.precio_entrada_sugerido,
-                                    tick_entrada=ticks_procesados,
-                                    tipo_operacion="COMPRA",
-                                )
+                                # IMPORTANTE: ver comentario en VENTA.
+                                constructor_extremos.actualizar_estado("IDLE")
                             elif resultado_extremos.decision == "CERRAR_OPERACION":
                                 # Cerrar operación y entrar en cooldown
                                 # Nota: El cierre real se maneja cuando Deriv notifica el cierre del contrato
@@ -1063,9 +1071,29 @@ class Command(BaseCommand):
                             estado_actual_ext = constructor_extremos.obtener_estado()
                             if estado_actual_ext.estado == "EN_OPERACION" and estado_actual_ext.tick_entrada:
                                 ticks_desde_entrada = ticks_procesados - estado_actual_ext.tick_entrada
-                                if ticks_desde_entrada >= 5:
+                                dur_obj = int(getattr(settings, "DERIV_DURACION_TICKS", 5) or 5)
+                                if ticks_desde_entrada >= dur_obj:
                                     # Forzar cierre de operación (el contrato se cerrará automáticamente por Deriv)
                                     self.stdout.write(f"[EXTREMOS] Operación alcanzó 5 ticks, esperando cierre automático")
+
+                        # Si estamos en EN_OPERACION pero ya no hay contrato_abierto_id (p.ej. se perdió evento de cierre),
+                        # auto-liberar el estado tras una ventana razonable para evitar quedar pegados.
+                        if usar_extremos and modo_real and contrato_abierto_id is None:
+                            estado_actual_ext = constructor_extremos.obtener_estado()
+                            if estado_actual_ext.estado == "EN_OPERACION" and estado_actual_ext.tick_entrada:
+                                dur_obj = int(getattr(settings, "DERIV_DURACION_TICKS", 5) or 5)
+                                ticks_desde_entrada = ticks_procesados - int(estado_actual_ext.tick_entrada)
+                                if ticks_desde_entrada >= (dur_obj + 2):
+                                    cooldown_ticks = getattr(
+                                        settings,
+                                        "EXTREMOS_COOLDOWN_TICKS",
+                                        getattr(settings, "ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", 25),
+                                    )
+                                    constructor_extremos.actualizar_estado("COOLDOWN", ticks_cooldown_restantes=cooldown_ticks)
+                                    self.stderr.write(
+                                        f"[EXTREMOS] Auto-reset EN_OPERACION sin contrato_abierto_id (ticks_desde_entrada={ticks_desde_entrada}). "
+                                        f"Entrando en cooldown ({cooldown_ticks} ticks)."
+                                    )
                         
                         if modo_real and esperando is None and contrato_abierto_id is None:
                             # Verificar bloqueo por cooldown en estrategia de extremos
@@ -1191,6 +1219,9 @@ class Command(BaseCommand):
                                         "umbral_usado": umbral_guardar,
                                         "pesos_usados": pesos_usados_guardar,
                                         "senal_top_contribuciones": top_contrib,
+                                        # Extremos: guardamos intención para marcar EN_OPERACION sólo cuando Deriv confirme el BUY.
+                                        "extremos_decision": str(resultado.decision) if usar_extremos else None,
+                                        "extremos_precio_entrada": float(precio_actual_dash) if usar_extremos else None,
                                     }
                                     esperando_desde = time.monotonic()
                                     
