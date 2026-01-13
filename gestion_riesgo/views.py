@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone as dt_timezone
 import re
 
+from django.conf import settings
 from django.utils import timezone
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -125,7 +126,12 @@ def dashboard(request):
     return render(
         request,
         "gestion_riesgo/dashboard.html",
-        {"cuenta": cuenta, "operaciones_deriv": operaciones_deriv, "winrate_ult15": _winrate_ultimas_deriv(n=15)},
+        {
+            "cuenta": cuenta,
+            "operaciones_deriv": operaciones_deriv,
+            "winrate_ult15": _winrate_ultimas_deriv(n=15),
+            "extremos_ventana_ticks": int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100),
+        },
     )
 
 
@@ -208,6 +214,7 @@ def estado_json(request):
             "senal_top_contribuciones": cuenta.senal_top_contribuciones if cuenta.senal_top_contribuciones else [],
             "updated_at": cuenta.updated_at.isoformat() if cuenta.updated_at else None,
             "winrate_ult15": _winrate_ultimas_deriv(n=15),
+            "extremos_ventana_ticks": int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100),
         }
     
     # Incluir últimos ticks para el gráfico en tiempo real

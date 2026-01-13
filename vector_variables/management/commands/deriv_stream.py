@@ -161,7 +161,9 @@ class Command(BaseCommand):
         
         # ===== INICIALIZACIÓN DE CAPAS =====
         if usar_extremos:
-            constructor_extremos = ConstructorVectorExtremos(ventana_ticks=50)
+            constructor_extremos = ConstructorVectorExtremos(
+                ventana_ticks=int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100)
+            )
             constructor = None  # No se usa en estrategia de extremos
             gestor_pesos = None  # No se usa en estrategia de extremos
             normalizador = None  # No se usa en estrategia de extremos

@@ -39,11 +39,11 @@ class ConstructorVectorExtremos:
     """
     CONSTRUCTOR SIMPLIFICADO PARA ESTRATEGIA DE EXTREMOS.
     
-    MANTIENE ÚNICAMENTE LOS ÚLTIMOS 50 TICKS Y CALCULA EXTREMOS.
+    MANTIENE ÚNICAMENTE LOS ÚLTIMOS N TICKS (configurable) Y CALCULA EXTREMOS.
     """
 
-    def __init__(self, ventana_ticks: int = 50) -> None:
-        self.ventana_ticks = int(ventana_ticks)
+    def __init__(self, ventana_ticks: int | None = None) -> None:
+        self.ventana_ticks = int(ventana_ticks or getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100)
         self._precios: deque[float] = deque(maxlen=self.ventana_ticks)
         self._ticks_procesados: int = 0
         self._estado: EstadoExtremos = EstadoExtremos(
@@ -64,7 +64,7 @@ class ConstructorVectorExtremos:
 
     def listo_para_operar(self, min_ticks: int | None = None) -> bool:
         """Indica si hay suficientes ticks para operar."""
-        objetivo = int(min_ticks or 50)
+        objetivo = int(min_ticks or self.ventana_ticks)
         return self._ticks_procesados >= objetivo
 
     def actualizar_con_tick(self, tick: Tick) -> dict[str, float]:
@@ -72,13 +72,13 @@ class ConstructorVectorExtremos:
         ACTUALIZA EL VECTOR CON UN NUEVO TICK Y CALCULA VARIABLES DE EXTREMOS.
         
         Retorna un diccionario con:
-        - precios: lista de últimos 50 precios
-        - max_50: máximo de los últimos 50 ticks
-        - min_50: mínimo de los últimos 50 ticks
-        - rango_50: diferencia entre max y min
+        - precios: lista de últimos N precios
+        - max_50: máximo de los últimos N ticks (nombre histórico por compatibilidad)
+        - min_50: mínimo de los últimos N ticks (nombre histórico por compatibilidad)
+        - rango_50: diferencia entre max y min (nombre histórico por compatibilidad)
         - precio_actual: último precio
         - precio_anterior: penúltimo precio
-        - idx_max: índice del máximo más reciente (0=antiguo, 49=actual)
+        - idx_max: índice del máximo más reciente (0=antiguo, N-1=actual)
         - idx_min: índice del mínimo más reciente
         """
         self._ticks_procesados += 1

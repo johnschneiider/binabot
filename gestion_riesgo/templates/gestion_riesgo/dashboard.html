@@ -139,11 +139,11 @@
           <div id="extremos_wrap" style="display:none; width: 100%;">
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div style="padding: 10px; background: #f9fafb; border-radius: 8px;">
-                <div class="muted" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px;">Máximo (últ 50)</div>
+                <div class="muted" id="ext_label_max" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px;">Máximo (últ {{ extremos_ventana_ticks|default:100 }})</div>
                 <div class="big mono" id="ext_max">—</div>
               </div>
               <div style="padding: 10px; background: #f9fafb; border-radius: 8px;">
-                <div class="muted" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px;">Mínimo (últ 50)</div>
+                <div class="muted" id="ext_label_min" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px;">Mínimo (últ {{ extremos_ventana_ticks|default:100 }})</div>
                 <div class="big mono" id="ext_min">—</div>
               </div>
             </div>
@@ -363,7 +363,12 @@
         const esExtremos = (m.max_50 !== null && m.max_50 !== undefined) && (m.min_50 !== null && m.min_50 !== undefined);
 
         if (esExtremos) {
-          if (titulo) titulo.textContent = "Estrategia: Extremos (últimos 50 ticks)";
+          const w = (c && c.extremos_ventana_ticks) ? Number(c.extremos_ventana_ticks) : {{ extremos_ventana_ticks|default:100 }};
+          if (titulo) titulo.textContent = `Estrategia: Extremos (últimos ${w} ticks)`;
+          const labMax = document.getElementById("ext_label_max");
+          const labMin = document.getElementById("ext_label_min");
+          if (labMax) labMax.textContent = `Máximo (últ ${w})`;
+          if (labMin) labMin.textContent = `Mínimo (últ ${w})`;
           if (wrapSenal) wrapSenal.style.display = "none";
           if (wrapExt) wrapExt.style.display = "block";
 

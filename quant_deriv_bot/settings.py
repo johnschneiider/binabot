@@ -139,6 +139,21 @@ ESTRATEGIA_EXTREMOS_UMBRAL_RANGO = float(os.getenv("ESTRATEGIA_EXTREMOS_UMBRAL_R
 # Cooldown después de cada operación (en ticks)
 ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS = int(os.getenv("ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS", "25"))
 
+# ===== ESTRATEGIA EXTREMOS (CONFIG AVANZADA) =====
+# Ventana de ticks para calcular máximos/mínimos.
+EXTREMOS_VENTANA_TICKS = int(os.getenv("EXTREMOS_VENTANA_TICKS", "100"))
+# Cuántos ticks hacia atrás se considera "fresco" un extremo.
+EXTREMOS_FRESCURA_TICKS = int(os.getenv("EXTREMOS_FRESCURA_TICKS", "5"))
+# Ventana para contar repeticiones de extremos (anti-consolidación).
+EXTREMOS_VENTANA_REPETICIONES = int(os.getenv("EXTREMOS_VENTANA_REPETICIONES", "10"))
+# Máximo de repeticiones del extremo dentro de EXTREMOS_VENTANA_REPETICIONES.
+EXTREMOS_MAX_REPETICIONES = int(os.getenv("EXTREMOS_MAX_REPETICIONES", "2"))
+# Anti “continuación de tendencia”:
+# Exige que el precio se aleje del extremo al menos un delta mínimo antes de entrar.
+# min_reversion = max(EXTREMOS_MIN_REVERSION_ABS, EXTREMOS_MIN_REVERSION_FRAC * rango)
+EXTREMOS_MIN_REVERSION_FRAC = float(os.getenv("EXTREMOS_MIN_REVERSION_FRAC", "0.05"))
+EXTREMOS_MIN_REVERSION_ABS = float(os.getenv("EXTREMOS_MIN_REVERSION_ABS", "0.0"))
+
 # ===== PESOS (ESTRATEGIA) =====
 # ARCHIVO JSON QUE EL BOT PUEDE RECARGAR EN CALIENTE PARA ACTUALIZAR w SIN REDEPLOY.
 PESOS_ARCHIVO = os.getenv("PESOS_ARCHIVO", str(BASE_DIR / "vector_pesos" / "pesos_calibrados.json")).strip()

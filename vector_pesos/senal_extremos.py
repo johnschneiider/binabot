@@ -55,6 +55,13 @@ def evaluar_senal_extremos(
     idx_min = vector_extremos.get("idx_min", 0)
     precios = vector_extremos.get("precios", [])
     eps = 0.0001
+    ventana = int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100)
+    frescura = int(getattr(settings, "EXTREMOS_FRESCURA_TICKS", 5) or 5)
+    ventana_rep = int(getattr(settings, "EXTREMOS_VENTANA_REPETICIONES", 10) or 10)
+    max_rep = int(getattr(settings, "EXTREMOS_MAX_REPETICIONES", 2) or 2)
+    min_rev_frac = float(getattr(settings, "EXTREMOS_MIN_REVERSION_FRAC", 0.05) or 0.05)
+    min_rev_abs = float(getattr(settings, "EXTREMOS_MIN_REVERSION_ABS", 0.0) or 0.0)
+    min_rev = max(min_rev_abs, min_rev_frac * float(rango_50 or 0.0))
 
     # ===== FILTRO DE MERCADO (OBLIGATORIO) =====
     if rango_50 < umbral_rango_minimo:
@@ -87,26 +94,26 @@ def evaluar_senal_extremos(
 
     # ===== DETECCIÓN DE EXTREMOS =====
     
-    # Calcular posición relativa (0=antiguo, 49=actual)
-    # Si tenemos menos de 50 ticks, ajustar
-    if len(precios) < 50:
+    # Calcular posición relativa (0=antiguo, N-1=actual)
+    # Si tenemos menos de N ticks, ajustar
+    if len(precios) < ventana:
         pos_max = idx_max
         pos_min = idx_min
-        umbral_frescura = len(precios) - 5  # Últimos 5 ticks disponibles
+        umbral_frescura = max(0, len(precios) - frescura)  # Últimos `frescura` ticks disponibles
     else:
         pos_max = idx_max
         pos_min = idx_min
-        umbral_frescura = 45  # Últimos 5 ticks de 50
+        umbral_frescura = max(0, ventana - frescura)  # Últimos `frescura` ticks de `ventana`
 
     # Verificar si el extremo es "fresco" (últimos 5 ticks)
     max_fresco = pos_max >= umbral_frescura
     min_fresco = pos_min >= umbral_frescura
 
     # Contar repeticiones recientes (evitar consolidación)
-    if len(precios) >= 10:
-        ultimos_10 = precios[-10:]
-        conteo_maximos = sum(1 for p in ultimos_10 if p == max_50)
-        conteo_minimos = sum(1 for p in ultimos_10 if p == min_50)
+    if len(precios) >= ventana_rep:
+        ultimos_n = precios[-ventana_rep:]
+        conteo_maximos = sum(1 for p in ultimos_n if p == max_50)
+        conteo_minimos = sum(1 for p in ultimos_n if p == min_50)
     else:
         conteo_maximos = sum(1 for p in precios if p == max_50)
         conteo_minimos = sum(1 for p in precios if p == min_50)
@@ -119,19 +126,39 @@ def evaluar_senal_extremos(
         # Venta: el tick anterior fue el máximo MÁS RECIENTE del buffer, y el tick actual está por debajo.
         # Usamos idx_max para evitar problemas de precisión float.
         max_en_tick_anterior = (n >= 2) and (int(idx_max) == (n - 2))
-        if permitir_put and max_fresco and (conteo_maximos <= 2) and max_en_tick_anterior and (float(precio_actual) < float(max_50)):
+        if (
+            permitir_put
+            and max_fresco
+            and (conteo_maximos <= max_rep)
+            and max_en_tick_anterior
+            and (float(precio_actual) < float(max_50))
+            and ((float(max_50) - float(precio_actual)) >= float(min_rev))
+        ):
             return ResultadoSenalExtremos(
                 decision="VENTA",
-                razon=f"Reversión desde MAX: idx_max={idx_max} prev={precio_anterior:.3f} max={max_50:.3f} ahora={precio_actual:.3f}",
+                razon=(
+                    f"Reversión desde MAX: idx_max={idx_max} prev={precio_anterior:.3f} "
+                    f"max={max_50:.3f} ahora={precio_actual:.3f} min_rev={min_rev:.5f}"
+                ),
                 precio_entrada_sugerido=float(precio_actual),
             )
 
         # Compra: el tick anterior fue el mínimo MÁS RECIENTE del buffer, y el tick actual está por encima.
         min_en_tick_anterior = (n >= 2) and (int(idx_min) == (n - 2))
-        if permitir_call and min_fresco and (conteo_minimos <= 2) and min_en_tick_anterior and (float(precio_actual) > float(min_50)):
+        if (
+            permitir_call
+            and min_fresco
+            and (conteo_minimos <= max_rep)
+            and min_en_tick_anterior
+            and (float(precio_actual) > float(min_50))
+            and ((float(precio_actual) - float(min_50)) >= float(min_rev))
+        ):
             return ResultadoSenalExtremos(
                 decision="COMPRA",
-                razon=f"Reversión desde MIN: idx_min={idx_min} prev={precio_anterior:.3f} min={min_50:.3f} ahora={precio_actual:.3f}",
+                razon=(
+                    f"Reversión desde MIN: idx_min={idx_min} prev={precio_anterior:.3f} "
+                    f"min={min_50:.3f} ahora={precio_actual:.3f} min_rev={min_rev:.5f}"
+                ),
                 precio_entrada_sugerido=float(precio_actual),
             )
 
