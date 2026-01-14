@@ -424,14 +424,27 @@ class Command(BaseCommand):
                                             if nuevo_ciclo_balance_inicio and nuevo_ciclo_balance_inicio > 0:
                                                 pnl_pct = (float(balance_val) / float(nuevo_ciclo_balance_inicio)) - 1.0
                                                 if pnl_pct >= float(ciclo_tp):
-                                                    # REQUERIMIENTO: al llegar a la meta, NO pausar.
-                                                    # En su lugar reiniciamos el ciclo (baseline fresco) y seguimos operando.
-                                                    nuevo_ciclo_pausa_hasta = None
-                                                    nuevo_ciclo_balance_inicio = float(balance_val)
-                                                    nuevo_ciclo_inicio_epoch = int(ahora_epoch)
-                                                    ciclo_bloqueado = False
-                                                    riesgo_motivo = f"TAKE_PROFIT_{float(ciclo_tp):.4f}_SIN_PAUSA"
-                                                    ciclo_evento = "TAKE_PROFIT_CONTINUAR"
+                                                    # META DEL CICLO ALCANZADA:
+                                                    # - NO tocamos la lógica de entradas/senal.
+                                                    # - Solo gobernanza de capital: pausar el bot (bloquear nuevas entradas)
+                                                    #   por `CICLO_PAUSA_TP_SEG` y reiniciar el ciclo al reanudar.
+                                                    pausa_tp_eff = int(max(0, int(pausa_tp)))
+                                                    if pausa_tp_eff <= 0:
+                                                        # Modo informativo: marcar meta alcanzada pero no pausar.
+                                                        nuevo_ciclo_pausa_hasta = None
+                                                        # Reiniciar baseline para nueva meta inmediatamente.
+                                                        nuevo_ciclo_balance_inicio = float(balance_val)
+                                                        nuevo_ciclo_inicio_epoch = int(ahora_epoch)
+                                                        ciclo_bloqueado = False
+                                                        riesgo_motivo = f"TAKE_PROFIT_{float(ciclo_tp):.4f}_SIN_PAUSA"
+                                                        ciclo_evento = "TAKE_PROFIT_CONTINUAR"
+                                                    else:
+                                                        nuevo_ciclo_pausa_hasta = int(ahora_epoch + pausa_tp_eff)
+                                                        # Mantener baseline del ciclo para auditoría/dashboard durante la pausa.
+                                                        # Al reanudar (cuando expire), el código de arriba limpia baseline y arranca uno nuevo.
+                                                        ciclo_bloqueado = True
+                                                        riesgo_motivo = f"TAKE_PROFIT_{float(ciclo_tp):.4f}_PAUSA_{int(pausa_tp_eff)}s"
+                                                        ciclo_evento = "TAKE_PROFIT"
                                                 elif pnl_pct <= -float(ciclo_sl):
                                                     # Si pausa_sl <= 0 => stoploss informativo SIN pausar (operación continua).
                                                     if int(pausa_sl) <= 0:
