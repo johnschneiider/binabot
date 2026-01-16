@@ -215,6 +215,9 @@ def estado_json(request):
             "updated_at": cuenta.updated_at.isoformat() if cuenta.updated_at else None,
             "winrate_ult15": _winrate_ultimas_deriv(n=15),
             "extremos_ventana_ticks": int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100),
+            # Extraer max_50 y min_50 de senal_top_contribuciones para la gráfica
+            "max_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "max_50"), None),
+            "min_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "min_50"), None),
         }
     
     # Incluir últimos ticks para el gráfico en tiempo real

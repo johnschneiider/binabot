@@ -575,6 +575,24 @@
               pointRadius: 2,
               pointHoverRadius: 4,
               borderWidth: 2,
+            }, {
+              label: "Máximo detectado",
+              data: [],
+              borderColor: "#ef4444",
+              backgroundColor: "rgba(239,68,68,0.1)",
+              borderDash: [5, 5],
+              borderWidth: 1.5,
+              pointRadius: 0,
+              fill: false,
+            }, {
+              label: "Mínimo detectado",
+              data: [],
+              borderColor: "#3b82f6",
+              backgroundColor: "rgba(59,130,246,0.1)",
+              borderDash: [5, 5],
+              borderWidth: 1.5,
+              pointRadius: 0,
+              fill: false,
             }],
           },
           options: {
@@ -632,6 +650,8 @@
           }
           const data = await res.json();
           const c = data.cuenta;
+          // Guardar datos de cuenta para usar en gráfica de ticks
+          window.lastCuentaData = c || {};
           if (c) {
             setText("simbolo", c.simbolo);
             const wr = c.winrate_ult15;
