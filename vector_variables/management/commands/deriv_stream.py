@@ -1160,22 +1160,23 @@ class Command(BaseCommand):
 
                                     # ===== GATING POR HORARIO (LOCAL) =====
                                     # Evita operar en ventanas malas pero permite que el proceso corra continuo 24/7.
+                                    hora_local = None
                                     try:
                                         epoch_para_hora = tick.epoch if tick else tick_extremos.epoch if tick_extremos else epoch_actual_dash
-                                        hora_local = self._hora_local(int(epoch_para_hora))
-                                        # Log de diagnóstico si está en horas bloqueadas
-                                        if hora_local is not None and hora_local in horas_bloqueadas:
-                                            self.stderr.write(
-                                                f"[TRADING] SKIP horario_bloqueado hora={int(hora_local):02d} decision={resultado.decision} contract_type={contract_type}"
-                                            )
-                                            continue
+                                        if epoch_para_hora:
+                                            hora_local = self._hora_local(int(epoch_para_hora))
                                     except Exception as e:
-                                        # Si hay error calculando hora, loguear pero NO bloquear (fallback seguro)
+                                        # Si hay error calculando hora, loguear y bloquear por seguridad
                                         self.stderr.write(
-                                            f"[TRADING] WARN error calculando hora_local: {e} epoch={epoch_para_hora if 'epoch_para_hora' in locals() else 'N/A'}"
+                                            f"[TRADING] WARN error calculando hora_local: {e} epoch={epoch_para_hora if 'epoch_para_hora' in locals() else 'N/A'}. Bloqueando operación por seguridad."
                                         )
-                                        # Continuar sin bloqueo si hay error (fallback)
-                                        pass
+                                        continue
+                                    
+                                    if hora_local is not None and hora_local in horas_bloqueadas:
+                                        self.stderr.write(
+                                            f"[TRADING] SKIP horario_bloqueado hora={int(hora_local):02d} decision={resultado.decision} contract_type={contract_type}"
+                                        )
+                                        continue
 
                                     # ===== GATING POR CONTRACT TYPE =====
                                     # Permite apagar CALL o restringir tipos desde .env sin cambiar lógica.
