@@ -1064,9 +1064,9 @@ class Command(BaseCommand):
                                 if ticks_procesados % 10 == 0:
                                     if usar_extremos:
                                         estado_actual_ext = constructor_extremos.obtener_estado()
-                                        self.stdout.write(f"[UPDATE] BD actualizada: tick={epoch_actual_dash} precio={precio_actual_dash:.5f} estado={estado_actual_ext.estado} cuenta_id={cuenta.id}")
+                                        self.stdout.write(f"[UPDATE] BD actualizada: tick={epoch_actual_dash} precio={precio_actual_dash:.5f} estado={estado_actual_ext.estado} cuenta_id={cuenta.id} filas_afectadas={resultado_update}")
                                     else:
-                                        self.stdout.write(f"[UPDATE] BD actualizada: tick={epoch_actual_dash} precio={precio_actual_dash:.5f} señal={senal_valor_dash:.4f} cuenta_id={cuenta.id}")
+                                        self.stdout.write(f"[UPDATE] BD actualizada: tick={epoch_actual_dash} precio={precio_actual_dash:.5f} señal={senal_valor_dash:.4f} cuenta_id={cuenta.id} filas_afectadas={resultado_update}")
                             except Exception as e:
                                 # Log del error pero no romper el bot
                                 import traceback
