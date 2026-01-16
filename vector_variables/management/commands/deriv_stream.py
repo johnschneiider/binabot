@@ -1165,6 +1165,13 @@ class Command(BaseCommand):
                                         epoch_para_hora = tick.epoch if tick else tick_extremos.epoch if tick_extremos else epoch_actual_dash
                                         if epoch_para_hora:
                                             hora_local = self._hora_local(int(epoch_para_hora))
+                                            # Log de diagnóstico (solo si está en horas bloqueadas o si hay problema)
+                                            if hora_local is not None:
+                                                if hora_local in horas_bloqueadas:
+                                                    self.stderr.write(
+                                                        f"[TRADING] SKIP horario_bloqueado hora={int(hora_local):02d} decision={resultado.decision} contract_type={contract_type}"
+                                                    )
+                                                    continue
                                     except Exception as e:
                                         # Si hay error calculando hora, loguear y bloquear por seguridad
                                         self.stderr.write(
@@ -1172,9 +1179,10 @@ class Command(BaseCommand):
                                         )
                                         continue
                                     
-                                    if hora_local is not None and hora_local in horas_bloqueadas:
+                                    # Si no se pudo calcular la hora, bloquear por seguridad
+                                    if hora_local is None:
                                         self.stderr.write(
-                                            f"[TRADING] SKIP horario_bloqueado hora={int(hora_local):02d} decision={resultado.decision} contract_type={contract_type}"
+                                            f"[TRADING] WARN hora_local=None, bloqueando por seguridad. epoch={epoch_para_hora if 'epoch_para_hora' in locals() else 'N/A'}"
                                         )
                                         continue
 
