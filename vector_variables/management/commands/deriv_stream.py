@@ -6,6 +6,7 @@ import sys
 import time
 from datetime import datetime
 from dataclasses import dataclass
+from zoneinfo import ZoneInfo
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
