@@ -252,6 +252,7 @@ def balance_json(request):
     Filtros:
     - range=hour  => últimos 60 minutos
     - range=day   => últimas 2 horas
+    - range=24h    => últimas 24 horas
     - range=week  => últimos 7 días
     - range=month => últimas 4 semanas
     """
@@ -262,6 +263,8 @@ def balance_json(request):
         desde = ahora - timezone.timedelta(minutes=60)
     elif rango == "day":
         desde = ahora - timezone.timedelta(hours=2)
+    elif rango == "24h":
+        desde = ahora - timezone.timedelta(hours=24)
     elif rango == "week":
         desde = ahora - timezone.timedelta(days=7)
     elif rango == "month":
