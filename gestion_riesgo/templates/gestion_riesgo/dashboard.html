@@ -716,9 +716,28 @@
             const cambioStr = cambio >= 0 ? `+${cambio.toFixed(5)}` : cambio.toFixed(5);
             setText("ticks_current_price", `${ultimoPrecio.toFixed(5)} (${cambioStr})`);
             
+            // Obtener max_50 y min_50 de la cuenta (si están disponibles)
+            const cuentaData = window.lastCuentaData || {};
+            const max50 = cuentaData.max_50;
+            const min50 = cuentaData.min_50;
+            
             // Actualizar gráfico - usar solo los valores Y (precios)
             ticksChart.data.labels = ticksOrdenados.map((t, i) => i + 1);
             ticksChart.data.datasets[0].data = ticksOrdenados.map(t => Number(t.precio));
+            
+            // Agregar líneas de máximo y mínimo si están disponibles
+            if (max50 !== null && max50 !== undefined) {
+              ticksChart.data.datasets[1].data = ticksOrdenados.map(() => Number(max50));
+            } else {
+              ticksChart.data.datasets[1].data = [];
+            }
+            
+            if (min50 !== null && min50 !== undefined) {
+              ticksChart.data.datasets[2].data = ticksOrdenados.map(() => Number(min50));
+            } else {
+              ticksChart.data.datasets[2].data = [];
+            }
+            
             ticksChart.update('none'); // 'none' para animación más rápida (tiempo real)
           } else {
             setText("ticks_count", "0 ticks");
@@ -727,6 +746,8 @@
             if (ticksChart) {
               ticksChart.data.labels = [];
               ticksChart.data.datasets[0].data = [];
+              ticksChart.data.datasets[1].data = [];
+              ticksChart.data.datasets[2].data = [];
               ticksChart.update('none');
             }
           }
