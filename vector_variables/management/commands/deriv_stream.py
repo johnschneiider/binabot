@@ -1163,13 +1163,19 @@ class Command(BaseCommand):
                                     try:
                                         epoch_para_hora = tick.epoch if tick else tick_extremos.epoch if tick_extremos else epoch_actual_dash
                                         hora_local = self._hora_local(int(epoch_para_hora))
-                                    except Exception:
-                                        hora_local = None
-                                    if hora_local is not None and hora_local in horas_bloqueadas:
+                                        # Log de diagnóstico si está en horas bloqueadas
+                                        if hora_local is not None and hora_local in horas_bloqueadas:
+                                            self.stderr.write(
+                                                f"[TRADING] SKIP horario_bloqueado hora={int(hora_local):02d} decision={resultado.decision} contract_type={contract_type}"
+                                            )
+                                            continue
+                                    except Exception as e:
+                                        # Si hay error calculando hora, loguear pero NO bloquear (fallback seguro)
                                         self.stderr.write(
-                                            f"[TRADING] SKIP horario_bloqueado hora={int(hora_local):02d} decision={resultado.decision} contract_type={contract_type}"
+                                            f"[TRADING] WARN error calculando hora_local: {e} epoch={epoch_para_hora if 'epoch_para_hora' in locals() else 'N/A'}"
                                         )
-                                        continue
+                                        # Continuar sin bloqueo si hay error (fallback)
+                                        pass
 
                                     # ===== GATING POR CONTRACT TYPE =====
                                     # Permite apagar CALL o restringir tipos desde .env sin cambiar lógica.
