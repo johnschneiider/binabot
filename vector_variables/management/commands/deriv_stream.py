@@ -1047,6 +1047,9 @@ class Command(BaseCommand):
                             ultimo_persist = ahora
                             try:
                                 # Actualizar cuenta en BD
+                                # Nota: updated_at con auto_now=True no se actualiza con update(), 
+                                # así que lo actualizamos manualmente
+                                from django.utils import timezone as django_timezone
                                 resultado_update = await sync_to_async(
                                     lambda: Cuenta.objects.filter(id=cuenta.id).update(
                                         ultimo_tick_epoch=int(epoch_actual_dash),
@@ -1054,6 +1057,7 @@ class Command(BaseCommand):
                                         senal_valor=float(senal_valor_dash),
                                         senal_decision=str(senal_decision_dash),
                                         senal_top_contribuciones=top_contrib,
+                                        updated_at=django_timezone.now(),
                                     ),
                                     thread_sensitive=True,
                                 )()
