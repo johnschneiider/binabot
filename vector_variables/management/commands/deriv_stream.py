@@ -409,6 +409,11 @@ class Command(BaseCommand):
                                             ciclo_bloqueado = True
                                             riesgo_motivo = f"PAUSA_CICLO_HASTA_{ciclo_pausa_hasta}"
                                             ciclo_evento = "PAUSA"
+                                            # IMPORTANTE: Preservar el baseline durante la pausa.
+                                            # Si no hay baseline (por reinicio del servicio), usar balance actual como fallback.
+                                            if nuevo_ciclo_balance_inicio is None:
+                                                nuevo_ciclo_balance_inicio = float(balance_val)
+                                                nuevo_ciclo_inicio_epoch = int(ahora_epoch)
                                         else:
                                             # Si terminó la pausa, limpiar y arrancar ciclo con baseline fresco.
                                             if ciclo_pausa_hasta is not None and ahora_epoch >= ciclo_pausa_hasta:
@@ -422,7 +427,8 @@ class Command(BaseCommand):
                                                 ciclo_evento = "CICLO_INICIADO"
 
                                             # Evaluar PnL % del ciclo
-                                            if nuevo_ciclo_balance_inicio and nuevo_ciclo_balance_inicio > 0:
+                                            # IMPORTANTE: Solo calcular PnL si tenemos un baseline válido.
+                                            if nuevo_ciclo_balance_inicio is not None and nuevo_ciclo_balance_inicio > 0:
                                                 pnl_pct = (float(balance_val) / float(nuevo_ciclo_balance_inicio)) - 1.0
                                                 if pnl_pct >= float(ciclo_tp):
                                                     # META DEL CICLO ALCANZADA:
