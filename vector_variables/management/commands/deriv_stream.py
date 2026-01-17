@@ -1132,8 +1132,8 @@ class Command(BaseCommand):
                             
                             if resultado.decision in {"COMPRA", "VENTA"} and not gestor_riesgo.bloqueado:
                                 # STAKE:
-                                # - Calculado como 0.01% del balance actual (crece proporcionalmente con el capital)
-                                # - Mínimo: 0.35 USD (si el 0.01% es menor, usar 0.35)
+                                # - Calculado como 1% del balance actual (crece proporcionalmente con el capital)
+                                # - Mínimo: 0.35 USD (si el 1% es menor, usar 0.35)
                                 # - Opcional: DERIV_STAKE_FIJO para forzar un monto (p.ej. 0.5 USD)
                                 stake_fijo = getattr(settings, "DERIV_STAKE_FIJO", None)
                                 balance_actual = float(gestor_riesgo.capital_actual)
@@ -1143,16 +1143,16 @@ class Command(BaseCommand):
                                 if balance_actual <= 0.0:
                                     continue
 
-                                # Base stake: fijo (si existe) o 0.01% del balance actual.
+                                # Base stake: fijo (si existe) o 1% del balance actual.
                                 if stake_fijo is not None:
                                     try:
                                         stake = float(stake_fijo)
                                     except Exception:
-                                        # Si stake_fijo es inválido, calcular como 0.01% del balance
-                                        stake = balance_actual * 0.0001
+                                        # Si stake_fijo es inválido, calcular como 1% del balance
+                                        stake = balance_actual * 0.01
                                 else:
-                                    # Calcular como 0.01% del balance actual
-                                    stake = balance_actual * 0.0001
+                                    # Calcular como 1% del balance actual
+                                    stake = balance_actual * 0.01
 
                                 # Aplicar mínimo dinámico (0.35) si el stake calculado es menor
                                 stake = max(float(stake), float(min_stake_dinamico))
