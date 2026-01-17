@@ -1,114 +1,80 @@
 #!/bin/bash
-# Script de diagnóstico para bot detenido
-# Verifica estado del servicio, logs, bloqueos, y configuración
+# Script de diagnóstico para bot que no entra después de operar
 
-cd /var/www/vitalmix.com.co/app || exit 1
+APP_DIR="/var/www/vitalmix.com.co/app"
+VENV_ACTIVATE="$APP_DIR/.venv/bin/activate"
+MANAGE_PY="$APP_DIR/manage.py"
 
-echo "=== DIAGNÓSTICO: BOT DETENIDO ==="
+echo "=== DIAGNÓSTICO: BOT NO ENTRA DESPUÉS DE OPERAR ==="
 echo ""
 
-echo "1. ESTADO DEL SERVICIO"
+# 1. Últimas operaciones realizadas
+echo "1. ÚLTIMAS OPERACIONES REALIZADAS"
 echo "--------------------"
-systemctl status binabot-vitalmix.service --no-pager -l | head -20
+journalctl -u binabot-vitalmix.service --since "30 minutes ago" --no-pager | grep -E "buy OK|Operación cerrada|cooldown" | tail -20
 echo ""
 
-echo "2. PROCESO ACTIVO"
+# 2. Estado actual y decisión (últimos 50 ticks)
+echo "2. ESTADO Y DECISIÓN RECIENTE"
 echo "--------------------"
-ps aux | grep "manage.py bot_con_panel" | grep -v grep || echo "❌ NO HAY PROCESO ACTIVO"
+journalctl -u binabot-vitalmix.service --since "10 minutes ago" --no-pager | grep -E "\[EXTREMOS\]|\[TRADING\]|decision=" | tail -30
 echo ""
 
-echo "3. PUERTO ESCUCHANDO (8502)"
+# 3. SKIPs recientes (qué está bloqueando)
+echo "3. SKIPS RECIENTES (¿QUÉ ESTÁ BLOQUEANDO?)"
 echo "--------------------"
-ss -tlnp | grep 8502 || netstat -tlnp | grep 8502 || echo "❌ PUERTO 8502 NO ESTÁ ESCUCHANDO"
+journalctl -u binabot-vitalmix.service --since "10 minutes ago" --no-pager | grep "SKIP" | tail -20
 echo ""
 
-echo "4. ÚLTIMOS 50 LOGS (ERRORES Y WARNINGS)"
+# 4. Estado en BD vs estado en memoria (constructor_extremos)
+echo "4. ESTADO EN BD"
 echo "--------------------"
-journalctl -u binabot-vitalmix.service --since "30 minutes ago" --no-pager | grep -E "ERROR|Exception|Traceback|WARN|SKIP|bloqueado|PAUSA" | tail -50 || echo "Sin errores recientes"
-echo ""
-
-echo "5. ÚLTIMOS TICKS RECIBIDOS"
-echo "--------------------"
-journalctl -u binabot-vitalmix.service --since "10 minutes ago" --no-pager | grep -E "tick=|UPDATE.*BD actualizada.*tick=" | tail -10 || echo "No hay ticks recientes"
-echo ""
-
-echo "6. ESTADO DE LA CUENTA (BASE DE DATOS)"
-echo "--------------------"
-source .venv/bin/activate
-python manage.py shell << 'PYEOF'
+source "$VENV_ACTIVATE"
+python "$MANAGE_PY" shell -c "
 from gestion_riesgo.models import Cuenta
 import time
-
-c = Cuenta.objects.order_by('-ultimo_tick_epoch', '-updated_at').first()
-if c:
-    print(f"cuenta_id: {c.id}")
-    print(f"simbolo: {c.simbolo}")
-    print(f"balance_deriv: {c.balance_deriv}")
-    print(f"bloqueado: {c.bloqueado}")
-    print(f"riesgo_motivo: {c.riesgo_motivo}")
-    now = int(time.time())
-    if c.ciclo_pausa_hasta_epoch:
-        resta = int(c.ciclo_pausa_hasta_epoch) - now
-        print(f"ciclo_pausa_hasta_epoch: {c.ciclo_pausa_hasta_epoch} (restan {resta}s = {resta//3600}h {resta%3600//60}m)")
-    else:
-        print(f"ciclo_pausa_hasta_epoch: None")
-    print(f"ultimo_tick_epoch: {c.ultimo_tick_epoch}")
-    if c.ultimo_tick_epoch:
-        edad = now - int(c.ultimo_tick_epoch)
-        print(f"edad_ultimo_tick: {edad}s ({edad//60}m)")
-    print(f"senal_decision: {c.senal_decision}")
-    print(f"senal_valor: {c.senal_valor}")
-else:
-    print("❌ NO HAY CUENTA EN LA BD")
-PYEOF
+c = Cuenta.objects.get(id=2)
+now = int(time.time())
+print(f'cuenta_id: {c.id}')
+print(f'senal_decision: {c.senal_decision}')
+print(f'bloqueado: {c.bloqueado}')
+print(f'riesgo_motivo: {c.riesgo_motivo}')
+if c.ciclo_pausa_hasta_epoch:
+    resta = int(c.ciclo_pausa_hasta_epoch) - now
+    print(f'ciclo_pausa_hasta_epoch: {c.ciclo_pausa_hasta_epoch} (restan {resta}s)')
+"
 echo ""
 
-echo "7. CONFIGURACIÓN CLAVE"
+# 5. Verificar si hay señales pero se están rechazando
+echo "5. SEÑALES RECIENTES (decision=VENTA/COMPRA pero no operando)"
 echo "--------------------"
-python manage.py shell << 'PYEOF'
+journalctl -u binabot-vitalmix.service --since "10 minutes ago" --no-pager | grep -E "decision=VENTA|decision=COMPRA" | grep -v "buy OK" | tail -20
+echo ""
+
+# 6. Verificar cooldown activo en logs
+echo "6. COOLDOWN ACTIVO?"
+echo "--------------------"
+journalctl -u binabot-vitalmix.service --since "10 minutes ago" --no-pager | grep -E "COOLDOWN|cooldown|En cooldown" | tail -10
+echo ""
+
+# 7. Configuración de cooldown
+echo "7. CONFIGURACIÓN COOLDOWN"
+echo "--------------------"
+python "$MANAGE_PY" shell -c "
 from django.conf import settings
-import os
-
-print(f"DERIV_MODO_REAL: {settings.DERIV_MODO_REAL}")
-print(f"DERIV_CONFIRMAR_REAL: {settings.DERIV_CONFIRMAR_REAL}")
-print(f"CICLO_HABILITADO: {getattr(settings, 'CICLO_HABILITADO', None)}")
-print(f"DRAWDOWN_GLOBAL_HABILITADO: {getattr(settings, 'DRAWDOWN_GLOBAL_HABILITADO', None)}")
-print(f"ESTRATEGIA_TIPO: {getattr(settings, 'ESTRATEGIA_TIPO', None)}")
-print(f"DERIV_CONTRACT_TYPES_PERMITIDOS: {getattr(settings, 'DERIV_CONTRACT_TYPES_PERMITIDOS', None)}")
-print(f"DERIV_BLOQUEO_HORAS_LOCAL: {getattr(settings, 'DERIV_BLOQUEO_HORAS_LOCAL', None)}")
-PYEOF
+print(f'ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS: {getattr(settings, \"ESTRATEGIA_EXTREMOS_COOLDOWN_TICKS\", None)}')
+print(f'EXTREMOS_COOLDOWN_TICKS: {getattr(settings, \"EXTREMOS_COOLDOWN_TICKS\", None)}')
+"
 echo ""
 
-echo "8. ÚLTIMAS OPERACIONES"
+echo "8. RESUMEN"
 echo "--------------------"
-python manage.py shell << 'PYEOF'
-from gestion_riesgo.models import OperacionDeriv
-from django.utils import timezone
-from datetime import timedelta
-
-ops = OperacionDeriv.objects.filter(creada_por_bot=True).order_by('-updated_at')[:5]
-if ops:
-    for op in ops:
-        print(f"ID: {op.id} | Tipo: {op.contract_type} | Estado: {op.estado} | Profit: {op.profit} | Updated: {op.updated_at}")
-else:
-    print("No hay operaciones")
-PYEOF
+echo "Si ves 'decision=VENTA' o 'decision=COMPRA' pero no hay 'buy OK':"
+echo "  - Revisar SKIPs para ver qué está bloqueando"
 echo ""
-
-echo "9. VERIFICAR CONEXIÓN WEBSOCKET"
-echo "--------------------"
-journalctl -u binabot-vitalmix.service --since "10 minutes ago" --no-pager | grep -E "\[WS\]|WebSocket|connected|disconnected|timeout" | tail -10 || echo "Sin logs de WebSocket recientes"
+echo "Si ves 'COOLDOWN' o 'En cooldown':"
+echo "  - El bot está en período de espera tras operación (normal)"
 echo ""
-
-echo "10. RECOMENDACIONES"
-echo "--------------------"
-echo "Si el bot está bloqueado:"
-echo "  - Verificar 'bloqueado' y 'riesgo_motivo' en la BD"
-echo "  - Verificar 'ciclo_pausa_hasta_epoch' si hay pausa activa"
+echo "Si ves 'decision=NO_OPERAR' constantemente:"
+echo "  - Las condiciones de entrada no se están cumpliendo"
 echo ""
-echo "Si no hay ticks:"
-echo "  - Verificar conexión WebSocket a Deriv"
-echo "  - Verificar DERIV_API_TOKEN y permisos"
-echo ""
-echo "Si hay errores:"
-echo "  - Revisar logs completos: journalctl -u binabot-vitalmix.service -f"
