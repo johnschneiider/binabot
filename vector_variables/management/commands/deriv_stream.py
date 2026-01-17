@@ -1132,33 +1132,33 @@ class Command(BaseCommand):
                             
                             if resultado.decision in {"COMPRA", "VENTA"} and not gestor_riesgo.bloqueado:
                                 # STAKE:
-                                # - Por defecto: stake por riesgo (max_riesgo_por_operacion * capital_actual)
+                                # - Calculado como 0.01% del balance actual (crece proporcionalmente con el capital)
+                                # - Mínimo: 0.35 USD (si el 0.01% es menor, usar 0.35)
                                 # - Opcional: DERIV_STAKE_FIJO para forzar un monto (p.ej. 0.5 USD)
                                 stake_fijo = getattr(settings, "DERIV_STAKE_FIJO", None)
-                                riesgo_cap = min(float(gestor_riesgo.riesgo_disponible()), float(gestor_riesgo.capital_actual))
+                                balance_actual = float(gestor_riesgo.capital_actual)
                                 min_stake = float(getattr(settings, "DERIV_MIN_STAKE", 1.0))
+                                min_stake_dinamico = 0.35  # Mínimo dinámico: 0.35 USD
 
-                                if riesgo_cap <= 0.0:
+                                if balance_actual <= 0.0:
                                     continue
 
-                                # Si el riesgo disponible no alcanza el mínimo, NO operamos (evita violar el riesgo).
-                                if riesgo_cap + 1e-12 < min_stake:
-                                    self.stderr.write(
-                                        f"[TRADING] SKIP stake_minimo_sobre_riesgo riesgo_cap={riesgo_cap:.4f} min_stake={min_stake:.4f}"
-                                    )
-                                    continue
-
-                                # Base stake: fijo (si existe) o riesgo_cap.
+                                # Base stake: fijo (si existe) o 0.01% del balance actual.
                                 if stake_fijo is not None:
                                     try:
                                         stake = float(stake_fijo)
                                     except Exception:
-                                        stake = float(riesgo_cap)
+                                        # Si stake_fijo es inválido, calcular como 0.01% del balance
+                                        stake = balance_actual * 0.0001
                                 else:
-                                    stake = float(riesgo_cap)
+                                    # Calcular como 0.01% del balance actual
+                                    stake = balance_actual * 0.0001
 
-                                # Respetar límites de riesgo/capital y mínimo.
-                                stake = min(float(stake), float(riesgo_cap))
+                                # Aplicar mínimo dinámico (0.35) si el stake calculado es menor
+                                stake = max(float(stake), float(min_stake_dinamico))
+                                
+                                # Respetar límites: no exceder el balance actual ni el mínimo configurado
+                                stake = min(float(stake), float(balance_actual))
                                 stake = max(float(stake), float(min_stake))
                                 if stake > 0:
                                     contract_type = "CALL" if resultado.decision == "COMPRA" else "PUT"
