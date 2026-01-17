@@ -195,7 +195,43 @@ def evaluar_senal_extremos(
             )
 
     # ===== NO HAY SEÑAL =====
+    # Diagnosticar por qué no se cumplen las condiciones
+    razon_detalle = []
+    if estado_actual == "IDLE":
+        n = len(precios)
+        max_en_t_2 = (n >= 3) and (int(idx_max) == (n - 3))
+        min_en_t_2 = (n >= 3) and (int(idx_min) == (n - 3))
+        required_move = max(float(min_rev), float(avg_abs_delta) * float(avg_delta_factor))
+        
+        # Diagnóstico para PUT
+        if permitir_put:
+            if not max_fresco:
+                razon_detalle.append("max_no_fresco")
+            if not (conteo_maximos <= max_rep):
+                razon_detalle.append(f"max_rep_excedido({conteo_maximos}>{max_rep})")
+            if not max_en_t_2:
+                razon_detalle.append(f"max_no_en_t-2(idx={idx_max},n={n},esperado={n-3})")
+            if n >= 3:
+                tick_2_bajista = (float(precios[-2]) < float(precios[-3]))
+                tick_1_bajista = (float(precios[-1]) < float(precios[-2]))
+                if not tick_2_bajista:
+                    razon_detalle.append("tick-2_no_bajista")
+                if not tick_1_bajista:
+                    razon_detalle.append("tick-1_no_bajista")
+                if not (float(precio_actual) < float(max_50)):
+                    razon_detalle.append("precio>=max")
+                retroceso = float(max_50) - float(precio_actual)
+                if retroceso < float(required_move):
+                    razon_detalle.append(f"retroceso_insuficiente({retroceso:.4f}<{required_move:.4f})")
+        
+        if not razon_detalle:
+            razon_detalle.append("condiciones_no_cumplidas")
+    
+    razon_final = "No se cumplen condiciones para operar"
+    if razon_detalle:
+        razon_final += f": {', '.join(razon_detalle[:3])}"  # Limitar a 3 razones para no saturar logs
+    
     return ResultadoSenalExtremos(
         decision="NO_OPERAR",
-        razon="No se cumplen condiciones para operar",
+        razon=razon_final,
     )
