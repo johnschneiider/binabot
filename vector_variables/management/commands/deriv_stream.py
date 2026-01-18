@@ -245,6 +245,47 @@ class Command(BaseCommand):
         if modo_real and not settings.DERIV_API_TOKEN:
             raise CommandError("Modo real requiere DERIV_API_TOKEN con permisos de 'trade'.")
 
+        # ===== CONTEXTO DE ARRANQUE (DB/CUENTA/HORA) =====
+        try:
+            db_name = settings.DATABASES.get("default", {}).get("NAME", "<desconocido>")
+        except Exception:
+            db_name = "<desconocido>"
+        ahora_epoch = int(time.time())
+        try:
+            hora_local_now = int(self._hora_local(ahora_epoch))
+        except Exception:
+            hora_local_now = -1
+        self.stdout.write(
+            "[CFG] "
+            f"db={db_name} cuenta_id={int(cuenta.id)} "
+            f"hora_local={hora_local_now} horas_bloqueadas={sorted(list(horas_bloqueadas))}"
+        )
+
+        # ===== AUTO-INICIALIZAR CICLO SI FALTA (modo real) =====
+        # Si Deriv no emite updates de balance por un rato, `ciclo_balance_inicio` puede quedarse en None.
+        # Lo inicializamos al arrancar usando el balance_deriv persistido (si existe).
+        if modo_real and bool(getattr(settings, "CICLO_HABILITADO", False)):
+            try:
+                if getattr(cuenta, "ciclo_balance_inicio", None) is None and getattr(cuenta, "balance_deriv", None) is not None:
+                    from django.utils import timezone as django_timezone
+
+                    baseline = float(cuenta.balance_deriv)
+                    await sync_to_async(
+                        lambda: Cuenta.objects.filter(id=cuenta.id).update(
+                            ciclo_balance_inicio=baseline,
+                            ciclo_inicio_epoch=int(ahora_epoch),
+                            ciclo_pausa_hasta_epoch=None,
+                            ciclo_ultimo_evento="CICLO_INICIADO_AUTO",
+                            riesgo_motivo="CICLO_ACTIVO",
+                            updated_at=django_timezone.now(),
+                        ),
+                        thread_sensitive=True,
+                    )()
+                    # Refrescar copia local (para que el resto del loop vea el baseline).
+                    cuenta = await sync_to_async(lambda: Cuenta.objects.get(id=cuenta.id), thread_sensitive=True)()
+            except Exception as e:
+                self.stderr.write(f"[CFG] WARN no se pudo auto-inicializar ciclo: {e}")
+
         # ===== CONFIG EFECTIVA (LOG 1 VEZ) =====
         pesos_archivo = getattr(settings, "PESOS_ARCHIVO", "") or ""
         pesos_info = "PESOS_ARCHIVO=<vacío>"
@@ -504,6 +545,7 @@ class Command(BaseCommand):
                                     if prev_bloqueado and (not bloqueado_real):
                                         self.stderr.write(f"[RISK] DESBLOQUEO motivo={riesgo_motivo} balance={balance_val:.2f}")
 
+                                    from django.utils import timezone as django_timezone
                                     await sync_to_async(
                                         lambda: Cuenta.objects.filter(id=cuenta.id).update(
                                             balance_deriv=balance_val,
@@ -515,6 +557,7 @@ class Command(BaseCommand):
                                             ciclo_inicio_epoch=nuevo_ciclo_inicio_epoch,
                                             ciclo_pausa_hasta_epoch=nuevo_ciclo_pausa_hasta,
                                             ciclo_ultimo_evento=ciclo_evento,
+                                            updated_at=django_timezone.now(),
                                         ),
                                         thread_sensitive=True,
                                     )()
@@ -552,10 +595,12 @@ class Command(BaseCommand):
                                         # No rompe trading si falla el storage de la gráfica.
                                         pass
                             else:
+                                from django.utils import timezone as django_timezone
                                 await sync_to_async(
                                     lambda: Cuenta.objects.filter(id=cuenta.id).update(
                                         balance_deriv=float(bal.balance),
                                         moneda_deriv=str(bal.currency),
+                                        updated_at=django_timezone.now(),
                                     ),
                                     thread_sensitive=True,
                                 )()
@@ -1472,7 +1517,8 @@ class Command(BaseCommand):
         REGLA:
         - SI YA EXISTE, SE REANUDA CON SU CAPITAL (EVITA RESETEAR AL REINICIAR EL BOT).
         """
-        cuenta = Cuenta.objects.filter(simbolo=simbolo).order_by("-updated_at").first()
+        qs = Cuenta.objects.filter(simbolo=simbolo).order_by("id")
+        cuenta = qs.first()
         if cuenta is None:
             cuenta = Cuenta.objects.create(
                 simbolo=simbolo,
@@ -1481,6 +1527,16 @@ class Command(BaseCommand):
                 max_capital_historico=float(settings.CAPITAL_INICIAL),
                 bloqueado=False,
             )
+        else:
+            # Si hay duplicados por despliegues anteriores, usar siempre la más antigua (id más bajo)
+            # para evitar “cambiar de cuenta” por timestamps/updated_at.
+            try:
+                if qs.count() > 1:
+                    # No usamos logger para mantener el patrón de logs grepeables del comando.
+                    # Nota: este warning no bloquea trading.
+                    print(f"[CFG] WARN multiples Cuenta para simbolo={simbolo} usando cuenta_id={cuenta.id}")
+            except Exception:
+                pass
 
         # REANUDAR ESTADO DE RIESGO DESDE BD
         gestor_riesgo.capital_actual = float(cuenta.capital_actual)
