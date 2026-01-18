@@ -13,6 +13,45 @@ from django.db.models import F
 from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, TickDerivSnapshot
 
 
+def _parse_horas_bloqueadas(spec: str) -> set[int]:
+    """
+    spec: "2-3,22" (rangos inclusivos). Espacios/; permitidos.
+    Retorna horas [0..23]. Entradas inválidas se ignoran.
+    """
+    raw = (spec or "").strip()
+    if not raw:
+        return set()
+    out: set[int] = set()
+    for part in raw.replace(";", ",").replace(" ", ",").split(","):
+        tok = part.strip()
+        if not tok:
+            continue
+        if "-" in tok:
+            a_s, b_s = tok.split("-", 1)
+            try:
+                a = int(a_s.strip())
+                b = int(b_s.strip())
+            except Exception:
+                continue
+            lo, hi = (a, b) if a <= b else (b, a)
+            for h in range(lo, hi + 1):
+                if 0 <= h <= 23:
+                    out.add(h)
+        else:
+            try:
+                h = int(tok)
+            except Exception:
+                continue
+            if 0 <= h <= 23:
+                out.add(h)
+    return out
+
+
+def _hora_local_actual() -> int:
+    # TIME_ZONE del proyecto (ej: America/Bogota)
+    return int(timezone.localtime(timezone.now()).hour)
+
+
 def _winrate_ultimas_deriv(*, n: int = 15) -> dict:
     """
     Winrate simple para el dashboard.
@@ -123,6 +162,11 @@ def dashboard(request):
     for op in operaciones_deriv:
         epoch_ref = op.closed_epoch or op.opened_epoch
         op.fecha_hora = _fecha_hora_colombia_desde_epoch(int(epoch_ref) if epoch_ref else None)
+
+    horas_bloqueadas = _parse_horas_bloqueadas(str(getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""))
+    hora_local_actual = _hora_local_actual()
+    horario_bloqueado = bool(horas_bloqueadas and (hora_local_actual in horas_bloqueadas))
+
     return render(
         request,
         "gestion_riesgo/dashboard.html",
@@ -131,6 +175,9 @@ def dashboard(request):
             "operaciones_deriv": operaciones_deriv,
             "winrate_ult15": _winrate_ultimas_deriv(n=15),
             "extremos_ventana_ticks": int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100),
+            "hora_local_actual": hora_local_actual,
+            "horario_bloqueado": horario_bloqueado,
+            "horas_bloqueadas": sorted(list(horas_bloqueadas)),
         },
     )
 
@@ -186,6 +233,10 @@ def estado_json(request):
         dt_ciclo_inicio = _fecha_hora_colombia_desde_epoch(cuenta.ciclo_inicio_epoch) if cuenta.ciclo_inicio_epoch else None
         dt_ultimo_tick = _fecha_hora_colombia_desde_epoch(cuenta.ultimo_tick_epoch) if cuenta.ultimo_tick_epoch else None
 
+        horas_bloqueadas = _parse_horas_bloqueadas(str(getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""))
+        hora_local_actual = _hora_local_actual()
+        horario_bloqueado = bool(horas_bloqueadas and (hora_local_actual in horas_bloqueadas))
+
         cuenta_dict = {
             "id": cuenta.id,
             "simbolo": cuenta.simbolo,
@@ -215,6 +266,9 @@ def estado_json(request):
             "updated_at": cuenta.updated_at.isoformat() if cuenta.updated_at else None,
             "winrate_ult15": _winrate_ultimas_deriv(n=15),
             "extremos_ventana_ticks": int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100),
+            "hora_local_actual": hora_local_actual,
+            "horario_bloqueado": horario_bloqueado,
+            "horas_bloqueadas": sorted(list(horas_bloqueadas)),
             # Extraer max_50 y min_50 de senal_top_contribuciones para la gráfica
             "max_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "max_50"), None),
             "min_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "min_50"), None),
