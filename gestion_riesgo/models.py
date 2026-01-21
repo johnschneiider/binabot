@@ -12,7 +12,8 @@ class Cuenta(models.Model):
     - NO MEZCLA LÓGICA DE MERCADO NI ESTRATEGIA.
     """
 
-    simbolo = models.CharField(max_length=32, default="R_100")
+    # Default: R_10 para evitar “cuentas fantasma” R_100 en instalaciones nuevas.
+    simbolo = models.CharField(max_length=32, default="R_10")
     # BALANCE REAL DESDE DERIV (API).
     balance_deriv = models.FloatField(null=True, blank=True)
     moneda_deriv = models.CharField(max_length=16, default="", blank=True)

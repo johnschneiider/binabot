@@ -149,8 +149,10 @@ def dashboard(request):
     """
     DASHBOARD WEB PARA MONITOREO (BALANCE + OPERACIONES) EN "TIEMPO REAL" (POLLING).
     """
-    # Usar la cuenta con el último tick más reciente (más precisa que updated_at)
-    cuenta = Cuenta.objects.order_by("-ultimo_tick_epoch", "-updated_at").first()
+    # Usar SOLO la cuenta del símbolo configurado para evitar mezclar dashboards (ej: R_10 vs R_100).
+    cuenta = Cuenta.objects.filter(simbolo=str(getattr(settings, "DERIV_SYMBOL", "") or "").strip()).order_by(
+        "-ultimo_tick_epoch", "-updated_at"
+    ).first()
     operaciones_deriv = (
         OperacionDeriv.objects.select_related("cuenta")
         .filter(creada_por_bot=True)
@@ -187,8 +189,10 @@ def estado_json(request):
     """
     ENDPOINT PARA POLLING DESDE EL FRONTEND.
     """
-    # Usar la cuenta con el último tick más reciente (más precisa que updated_at)
-    cuenta = Cuenta.objects.order_by("-ultimo_tick_epoch", "-updated_at").first()
+    # Usar SOLO la cuenta del símbolo configurado para evitar mezclar dashboards (ej: R_10 vs R_100).
+    cuenta = Cuenta.objects.filter(simbolo=str(getattr(settings, "DERIV_SYMBOL", "") or "").strip()).order_by(
+        "-ultimo_tick_epoch", "-updated_at"
+    ).first()
     ops_deriv = list(
         OperacionDeriv.objects.order_by("-updated_at")
         .filter(creada_por_bot=True)
@@ -328,7 +332,9 @@ def balance_json(request):
         desde = ahora - timezone.timedelta(minutes=60)
 
     # Usar la cuenta con el último tick más reciente (más precisa que updated_at)
-    cuenta = Cuenta.objects.order_by("-ultimo_tick_epoch", "-updated_at").first()
+    cuenta = Cuenta.objects.filter(simbolo=str(getattr(settings, "DERIV_SYMBOL", "") or "").strip()).order_by(
+        "-ultimo_tick_epoch", "-updated_at"
+    ).first()
     if not cuenta:
         return JsonResponse({"cuenta_id": None, "points": []})
 
@@ -357,7 +363,9 @@ def ticks_json(request):
     Devuelve los últimos N ticks para el gráfico en tiempo real.
     """
     # Usar la cuenta con el último tick más reciente (más precisa que updated_at)
-    cuenta = Cuenta.objects.order_by("-ultimo_tick_epoch", "-updated_at").first()
+    cuenta = Cuenta.objects.filter(simbolo=str(getattr(settings, "DERIV_SYMBOL", "") or "").strip()).order_by(
+        "-ultimo_tick_epoch", "-updated_at"
+    ).first()
     if not cuenta:
         return JsonResponse({"cuenta_id": None, "ticks": []})
     

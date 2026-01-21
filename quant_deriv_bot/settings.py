@@ -82,7 +82,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DERIV_APP_ID = os.getenv("DERIV_APP_ID", "1089").strip()
 DERIV_API_TOKEN = os.getenv("DERIV_API_TOKEN", "").strip()
 DERIV_ACCOUNT_ID = os.getenv("DERIV_ACCOUNT_ID", "").strip()
-DERIV_SYMBOL = os.getenv("DERIV_SYMBOL", "R_100").strip()
+# Símbolo por defecto del bot. En producción se recomienda setear DERIV_SYMBOL en el entorno.
+# Default: R_10 (evita crear/mostrar accidentalmente cuentas R_100 en instalaciones nuevas).
+DERIV_SYMBOL = os.getenv("DERIV_SYMBOL", "R_10").strip()
 DERIV_MODO_REAL = (os.getenv("DERIV_MODO_REAL", "False").strip().lower() in {"1", "true", "yes", "y"})
 DERIV_CONFIRMAR_REAL = os.getenv("DERIV_CONFIRMAR_REAL", "NO").strip().upper()
 DERIV_DURACION_TICKS = int(os.getenv("DERIV_DURACION_TICKS", "5"))

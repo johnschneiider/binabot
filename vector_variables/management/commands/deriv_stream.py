@@ -995,6 +995,7 @@ class Command(BaseCommand):
                             ahora_epoch_tick = int(time.time())
                             if ahora_epoch_tick >= int(ciclo_pausa_hasta_epoch_mem):
                                 ciclo_pausa_hasta_epoch_mem = None
+                                ciclo_habil = bool(getattr(settings, "CICLO_HABILITADO", False))
                                 dd_habil = bool(getattr(settings, "DRAWDOWN_GLOBAL_HABILITADO", True))
                                 bloqueado_dd = False
                                 if dd_habil and max_balance_deriv_mem and max_balance_deriv_mem > 0:
@@ -1006,14 +1007,29 @@ class Command(BaseCommand):
                                     prev_dd = (riesgo_motivo_mem or "").strip() == "DRAWDOWN"
                                     bloqueado_dd = (not (drawdown <= dd_unblock)) if prev_dd else bool(drawdown >= dd_max)
 
+                                # BUGFIX:
+                                # Antes limpiábamos solo la PAUSA pero dejábamos `ciclo_balance_inicio` antiguo en BD.
+                                # Eso hace que al llegar el próximo `balance` (o poll) se re-evalúe con pnl_pct >= TP
+                                # y se re-dispare TAKE_PROFIT => pausa 24h en loop.
+                                # Aquí reiniciamos el ciclo de forma idempotente al expirar la pausa.
+                                nuevo_ciclo_balance_inicio = float(balance_deriv_mem) if (ciclo_habil and float(balance_deriv_mem) > 0.0) else None
+                                nuevo_ciclo_inicio_epoch = int(ahora_epoch_tick) if ciclo_habil else None
+
                                 gestor_riesgo.bloqueado = bool(bloqueado_dd)
-                                riesgo_motivo_mem = "DRAWDOWN" if bloqueado_dd else "OK"
+                                if bloqueado_dd:
+                                    riesgo_motivo_mem = "DRAWDOWN"
+                                else:
+                                    riesgo_motivo_mem = "CICLO_ACTIVO" if ciclo_habil else "OK"
                                 await sync_to_async(
                                     lambda: Cuenta.objects.filter(id=cuenta.id).update(
                                         bloqueado=bool(bloqueado_dd),
-                                        riesgo_motivo=("DRAWDOWN" if bloqueado_dd else "OK"),
+                                        riesgo_motivo=("DRAWDOWN" if bloqueado_dd else ("CICLO_ACTIVO" if ciclo_habil else "OK")),
                                         ciclo_pausa_hasta_epoch=None,
-                                        ciclo_ultimo_evento="PAUSA_EXPIRADA_AUTO_CLEAR",
+                                        ciclo_balance_inicio=nuevo_ciclo_balance_inicio,
+                                        ciclo_inicio_epoch=nuevo_ciclo_inicio_epoch,
+                                        ciclo_ultimo_evento=("PAUSA_EXPIRADA_REINICIAR_CICLO" if ciclo_habil else "PAUSA_EXPIRADA_AUTO_CLEAR"),
+                                        # Mantener updated_at consistente (para depuración/ordenamiento)
+                                        updated_at=django_timezone.now(),
                                     ),
                                     thread_sensitive=True,
                                 )()
