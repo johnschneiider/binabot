@@ -994,6 +994,7 @@ class Command(BaseCommand):
                         if modo_real and ciclo_pausa_hasta_epoch_mem is not None:
                             ahora_epoch_tick = int(time.time())
                             if ahora_epoch_tick >= int(ciclo_pausa_hasta_epoch_mem):
+                                from django.utils import timezone as django_timezone
                                 ciclo_pausa_hasta_epoch_mem = None
                                 ciclo_habil = bool(getattr(settings, "CICLO_HABILITADO", False))
                                 dd_habil = bool(getattr(settings, "DRAWDOWN_GLOBAL_HABILITADO", True))
