@@ -335,7 +335,9 @@ class Command(BaseCommand):
                 # Verificar consistencia con operaciones
                 if cerradas:
                     profit_ops = sum(op.profit for op in cerradas)
-                    variacion_balance = balance_actual - (snapshots[-1].balance if snapshots else balance_actual)
+                    snapshot_inicial = snapshots.last() if snapshots else None
+                    balance_inicial = snapshot_inicial.balance if snapshot_inicial else balance_actual
+                    variacion_balance = balance_actual - balance_inicial
                     if abs(profit_ops - variacion_balance) > 10:  # Tolerancia de 10 USD
                         self.stdout.write(self.style.WARNING(
                             f"  ⚠️  Inconsistencia: Profit operaciones ({profit_ops:.2f}) vs variación balance ({variacion_balance:.2f})"
