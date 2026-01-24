@@ -313,10 +313,10 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.SUCCESS("  ✅ Balance en máximo histórico"))
 
             # Snapshots recientes
-            snapshots = BalanceDerivSnapshot.objects.filter(
+            snapshots = list(BalanceDerivSnapshot.objects.filter(
                 cuenta=cuenta,
                 created_at__gte=desde_dt
-            ).order_by("-created_at")[:100]
+            ).order_by("-created_at")[:100])
 
             if snapshots:
                 balances = [s.balance for s in snapshots]
@@ -335,7 +335,8 @@ class Command(BaseCommand):
                 # Verificar consistencia con operaciones
                 if cerradas:
                     profit_ops = sum(op.profit for op in cerradas)
-                    snapshot_inicial = snapshots.last() if snapshots else None
+                    # snapshots está ordenado por -created_at, así que el último es el más antiguo
+                    snapshot_inicial = snapshots[-1] if snapshots else None
                     balance_inicial = snapshot_inicial.balance if snapshot_inicial else balance_actual
                     variacion_balance = balance_actual - balance_inicial
                     if abs(profit_ops - variacion_balance) > 10:  # Tolerancia de 10 USD
