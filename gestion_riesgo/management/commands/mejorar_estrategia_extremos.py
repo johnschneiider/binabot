@@ -212,11 +212,27 @@ class Command(BaseCommand):
             gap_wr = wr_necesario - wr_actual
             
             if gap_wr > 0:
-                # Incremento proporcional al gap
-                factor_incremento = 1.0 + (gap_wr * 2.0)  # Más agresivo si el gap es grande
+                # Cálculo más práctico: basado en el gap de winrate necesario
+                # Si necesitas mejorar 3.4pp, necesitas filtrar aproximadamente 5-7% más operaciones
+                # Esto se traduce en incrementos más agresivos de los filtros
                 
-                min_rev_frac_nuevo = min(min_rev_frac_actual * factor_incremento, 0.20)  # Máximo 20%
-                delta_factor_nuevo = min(delta_factor_actual * factor_incremento, 2.5)  # Máximo 2.5
+                # Factor de incremento basado en el gap absoluto (más intuitivo)
+                # Gap de 3.4pp = incremento de ~30-50% en filtros
+                factor_incremento_min_rev = 1.0 + (gap_wr * 10.0)  # ~34% para gap de 3.4pp
+                factor_incremento_delta = 1.0 + (gap_wr * 8.0)  # ~27% para gap de 3.4pp
+                
+                # Aplicar incrementos con límites razonables
+                min_rev_frac_nuevo = min(min_rev_frac_actual * factor_incremento_min_rev, 0.20)  # Máximo 20%
+                delta_factor_nuevo = min(delta_factor_actual * factor_incremento_delta, 2.5)  # Máximo 2.5
+                
+                # Asegurar incrementos mínimos significativos
+                incremento_min_rev = min_rev_frac_nuevo - min_rev_frac_actual
+                incremento_delta = delta_factor_nuevo - delta_factor_actual
+                
+                if incremento_min_rev < 0.02:  # Mínimo 2% de incremento
+                    min_rev_frac_nuevo = min_rev_frac_actual + 0.03
+                if incremento_delta < 0.2:  # Mínimo 0.2 de incremento
+                    delta_factor_nuevo = delta_factor_actual + 0.3
                 
                 mejoras.append({
                     "tipo": "FILTROS",
@@ -230,15 +246,29 @@ class Command(BaseCommand):
 
         # Mejora 2: Bloquear horas problemáticas
         if horas_problematicas:
-            horas_a_bloquear = [h for h, _, _, _, _ in horas_problematicas[:5]]  # Top 5 más problemáticas
-            mejoras.append({
-                "tipo": "HORARIOS",
-                "descripcion": "Bloquear horas problemáticas",
-                "cambios": {
-                    "DERIV_BLOQUEO_HORAS_LOCAL": ("actual", horas_a_bloquear),
-                },
-                "razon": f"{len(horas_problematicas)} horas con winrate < 45% y pérdidas consistentes"
-            })
+            # Verificar qué horas ya están bloqueadas
+            bloqueo_actual = getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""
+            horas_bloqueadas_actuales = self._parsear_horas_bloqueadas(bloqueo_actual)
+            
+            # Filtrar horas que ya están bloqueadas
+            horas_a_bloquear = []
+            for h, _, _, _, _ in horas_problematicas[:5]:  # Top 5 más problemáticas
+                if h not in horas_bloqueadas_actuales:
+                    horas_a_bloquear.append(h)
+            
+            if horas_a_bloquear:
+                mejoras.append({
+                    "tipo": "HORARIOS",
+                    "descripcion": "Bloquear horas problemáticas",
+                    "cambios": {
+                        "DERIV_BLOQUEO_HORAS_LOCAL": ("actual", horas_a_bloquear),
+                    },
+                    "razon": f"{len(horas_a_bloquear)} horas problemáticas no bloqueadas (de {len(horas_problematicas)} detectadas)"
+                })
+            elif horas_problematicas:
+                # Todas las horas problemáticas ya están bloqueadas
+                self.stdout.write("")
+                self.stdout.write(self.style.SUCCESS("✅ Todas las horas problemáticas ya están bloqueadas"))
 
         # Mejora 3: Aumentar duración si el movimiento es pequeño
         dur_actual = getattr(settings, "DERIV_DURACION_TICKS", 5)
@@ -280,3 +310,26 @@ class Command(BaseCommand):
 
         self.stdout.write("")
         self.stdout.write("=" * 100)
+
+    def _parsear_horas_bloqueadas(self, bloqueo_horas: str) -> set[int]:
+        """Parsea DERIV_BLOQUEO_HORAS_LOCAL y retorna set de horas bloqueadas."""
+        horas = set()
+        if not bloqueo_horas:
+            return horas
+        for part in bloqueo_horas.replace(" ", "").split(","):
+            if "-" in part:
+                try:
+                    a, b = part.split("-", 1)
+                    for h in range(int(a), int(b) + 1):
+                        if 0 <= h <= 23:
+                            horas.add(h)
+                except ValueError:
+                    pass
+            else:
+                try:
+                    h = int(part)
+                    if 0 <= h <= 23:
+                        horas.add(h)
+                except ValueError:
+                    pass
+        return horas
