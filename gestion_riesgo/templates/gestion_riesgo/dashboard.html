@@ -319,6 +319,57 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
+      // ===== Crosshair (línea vertical + horizontal) =====
+      // Dibuja una cruz que sigue el cursor dentro del área del gráfico.
+      // No depende del tooltip (lo tenemos desactivado).
+      const crosshairPlugin = {
+        id: "crosshairPlugin",
+        afterEvent(chart, args) {
+          const e = args?.event;
+          if (!e) return;
+          // Guardar última posición del cursor solo si está dentro del chartArea.
+          if (e.type === "mousemove" || e.type === "mousedown" || e.type === "mouseup") {
+            chart.$crosshair = { x: e.x, y: e.y, inChartArea: !!e.inChartArea };
+          } else if (e.type === "mouseout" || e.type === "mouseleave") {
+            chart.$crosshair = null;
+          }
+        },
+        afterDraw(chart, args, opts) {
+          const pos = chart.$crosshair;
+          if (!pos || !pos.inChartArea) return;
+
+          const { ctx, chartArea } = chart;
+          if (!ctx || !chartArea) return;
+
+          const color = (opts && opts.color) ? String(opts.color) : "rgba(0,0,0,0.35)";
+          const width = (opts && Number.isFinite(opts.width)) ? Number(opts.width) : 1;
+          const dash = (opts && Array.isArray(opts.dash)) ? opts.dash : [];
+
+          ctx.save();
+          ctx.lineWidth = width;
+          ctx.strokeStyle = color;
+          ctx.setLineDash(dash);
+
+          // Vertical
+          ctx.beginPath();
+          ctx.moveTo(pos.x, chartArea.top);
+          ctx.lineTo(pos.x, chartArea.bottom);
+          ctx.stroke();
+
+          // Horizontal
+          ctx.beginPath();
+          ctx.moveTo(chartArea.left, pos.y);
+          ctx.lineTo(chartArea.right, pos.y);
+          ctx.stroke();
+
+          ctx.restore();
+        },
+      };
+
+      if (window.Chart && typeof window.Chart.register === "function") {
+        window.Chart.register(crosshairPlugin);
+      }
+
       function fmt2(x) {
         if (x === null || x === undefined) return "—";
         const n = Number(x);
@@ -551,6 +602,9 @@
             maintainAspectRatio: false,
             animation: false,
             plugins: {
+              crosshairPlugin: { color: "rgba(0,0,0,0.35)", width: 1 },
+            },
+            plugins: {
               legend: { display: false },
               tooltip: { enabled: false },
             },
@@ -645,6 +699,9 @@
             maintainAspectRatio: false,
             animation: {
               duration: 300,
+            },
+            plugins: {
+              crosshairPlugin: { color: "rgba(0,0,0,0.35)", width: 1 },
             },
             plugins: {
               legend: { display: false },
@@ -886,6 +943,9 @@
             maintainAspectRatio: false,
             animation: {
               duration: 300,
+            },
+            plugins: {
+              crosshairPlugin: { color: "rgba(0,0,0,0.35)", width: 1 },
             },
             plugins: {
               legend: { 
