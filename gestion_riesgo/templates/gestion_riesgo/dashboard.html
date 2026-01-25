@@ -247,7 +247,7 @@
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
-          <div class="big">Volatilidad (últimos 100 ticks)</div>
+          <div class="big">Volatilidad (últimos 200 ticks)</div>
           <div class="muted">Eje X: ticks · Eje Y: volatilidad</div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -257,7 +257,7 @@
       <div class="chart-wrap" style="margin-top: 10px;">
         <canvas id="volatilidad_chart"></canvas>
       </div>
-      <div class="muted" style="margin-top: 8px;">Volatilidad calculada sobre retornos de últimos 100 ticks</div>
+      <div class="muted" style="margin-top: 8px;">Volatilidad calculada sobre retornos de últimos 100 ticks · Mostrando últimos 200 ticks</div>
     </div>
 
     <div class="card" style="margin-top: 14px;">
@@ -641,7 +641,7 @@
               data: [],
               borderColor: "#000000",
               backgroundColor: "rgba(0,0,0,0.1)",
-              fill: false,
+              fill: true,
               tension: 0.1,
               pointRadius: 0,
               pointHoverRadius: 0,
@@ -925,7 +925,7 @@
           ensureVolatilidadChart();
           if (!volatilidadChart) return;
           
-          // Calcular volatilidad histórica (últimos 100 ticks)
+          // Calcular volatilidad histórica (últimos 100 ticks para cálculo, pero mostrar todos los ticks disponibles)
           const volatilidades = [];
           for (let i = 0; i < ticks.length; i++) {
             if (i < 100) {
@@ -950,6 +950,7 @@
             }
           }
           
+          // Mostrar todos los ticks disponibles (hasta 200)
           volatilidadChart.data.labels = ticks.map((t, i) => i + 1);
           volatilidadChart.data.datasets[0].data = volatilidades;
           volatilidadChart.update('none');
