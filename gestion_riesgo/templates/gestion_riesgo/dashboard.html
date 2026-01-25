@@ -663,24 +663,6 @@
               borderWidth: 1.5,
               pointRadius: 0,
               fill: false,
-            }, {
-              label: "Máximo detectado",
-              data: [],
-              borderColor: "#ef4444",
-              backgroundColor: "rgba(239,68,68,0.1)",
-              borderDash: [5, 5],
-              borderWidth: 1.5,
-              pointRadius: 0,
-              fill: false,
-            }, {
-              label: "Mínimo detectado",
-              data: [],
-              borderColor: "#3b82f6",
-              backgroundColor: "rgba(59,130,246,0.1)",
-              borderDash: [5, 5],
-              borderWidth: 1.5,
-              pointRadius: 0,
-              fill: false,
             }],
           },
           options: {
@@ -805,10 +787,8 @@
             const cambioStr = cambio >= 0 ? `+${cambio.toFixed(5)}` : cambio.toFixed(5);
             setText("ticks_current_price", `${ultimoPrecio.toFixed(5)} (${cambioStr})`);
             
-            // Obtener max_50 y min_50 de la cuenta (si están disponibles)
+            // Obtener datos de la cuenta
             const cuentaData = window.lastCuentaData || {};
-            const max50 = cuentaData.max_50;
-            const min50 = cuentaData.min_50;
             
             // Actualizar gráfico - usar solo los valores Y (precios)
             ticksChart.data.labels = ticksOrdenados.map((t, i) => i + 1);
@@ -818,23 +798,10 @@
             const emaFast = calcularEMA(ticksOrdenados.map(t => Number(t.precio)), emaFastPeriod);
             const emaSlow = calcularEMA(ticksOrdenados.map(t => Number(t.precio)), emaSlowPeriod);
             
-            // Actualizar datasets: Precio, EMA Rápida, EMA Lenta, Max, Min
+            // Actualizar datasets: Precio, EMA Rápida, EMA Lenta
             ticksChart.data.datasets[0].data = ticksOrdenados.map(t => Number(t.precio));
             ticksChart.data.datasets[1].data = emaFast;
             ticksChart.data.datasets[2].data = emaSlow;
-            
-            // Agregar líneas de máximo y mínimo si están disponibles
-            if (max50 !== null && max50 !== undefined) {
-              ticksChart.data.datasets[3].data = ticksOrdenados.map(() => Number(max50));
-            } else {
-              ticksChart.data.datasets[3].data = [];
-            }
-            
-            if (min50 !== null && min50 !== undefined) {
-              ticksChart.data.datasets[4].data = ticksOrdenados.map(() => Number(min50));
-            } else {
-              ticksChart.data.datasets[4].data = [];
-            }
             
             // Actualizar volatilidad si está disponible
             const contribMap = _contribMap(cuentaData.senal_top_contribuciones || []);
@@ -854,8 +821,6 @@
               ticksChart.data.datasets[0].data = [];
               ticksChart.data.datasets[1].data = [];
               ticksChart.data.datasets[2].data = [];
-              ticksChart.data.datasets[3].data = [];
-              ticksChart.data.datasets[4].data = [];
               ticksChart.update('none');
             }
           }
