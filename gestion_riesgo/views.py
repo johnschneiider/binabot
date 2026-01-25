@@ -244,11 +244,7 @@ def estado_json(request):
                 "ultimo_precio": cuenta.ultimo_precio,
                 "senal_valor": cuenta.senal_valor,
                 "senal_decision": cuenta.senal_decision,
-                "senal_top_contribuciones": [
-                    x
-                    for x in (cuenta.senal_top_contribuciones or [])
-                    if (x or {}).get("variable") not in {"max_50", "min_50", "rango_50"}
-                ],
+                "senal_top_contribuciones": cuenta.senal_top_contribuciones if cuenta.senal_top_contribuciones else [],
                 "updated_at": cuenta.updated_at.isoformat() if cuenta.updated_at else None,
                 "winrate_ult15": _winrate_ultimas_deriv(n=15),
                 "hora_local_actual": hora_local_actual,
