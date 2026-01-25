@@ -621,8 +621,6 @@
             animation: false,
             plugins: {
               crosshairPlugin: { color: "rgba(0,0,0,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
-            },
-            plugins: {
               legend: { display: false },
               tooltip: { enabled: false },
             },
@@ -667,9 +665,88 @@
 
       // ===== GRÁFICAS TICKS (R_10 y R_100) =====
       const charts = {
-        "R_10": { chart: null, emaFast: 50, emaSlow: 100, lastTicks: null },
-        "R_100": { chart: null, emaFast: 50, emaSlow: 100, lastTicks: null }
+        "R_10": { chart: null, emaFast: 50, emaSlow: 100, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null },
+        "R_100": { chart: null, emaFast: 50, emaSlow: 100, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null }
       };
+
+      function resetEmaCache(simbolo) {
+        const o = charts[simbolo];
+        if (!o) return;
+        o.emaFastByEpoch = null;
+        o.emaSlowByEpoch = null;
+        o.emaLastEpoch = null;
+        o.emaLastFast = null;
+        o.emaLastSlow = null;
+      }
+
+      function _ensureEmaMaps(o) {
+        if (!o.emaFastByEpoch) o.emaFastByEpoch = new Map();
+        if (!o.emaSlowByEpoch) o.emaSlowByEpoch = new Map();
+      }
+
+      function _alpha(periodo) {
+        const p = Math.max(1, parseInt(periodo || 1, 10));
+        return 2.0 / (p + 1.0);
+      }
+
+      // EMA incremental por epoch: una vez calculada para un tick, no cambia.
+      function actualizarEmaCacheDesdeTicks(simbolo, ticksAsc) {
+        const o = charts[simbolo];
+        if (!o || !ticksAsc || ticksAsc.length === 0) return;
+        _ensureEmaMaps(o);
+
+        const alphaFast = _alpha(o.emaFast);
+        const alphaSlow = _alpha(o.emaSlow);
+
+        const lastEpochInList = Number(ticksAsc[ticksAsc.length - 1].epoch || 0);
+
+        const tieneEstado = (o.emaLastEpoch !== null && o.emaLastEpoch !== undefined);
+        const haySolape = tieneEstado ? ticksAsc.some(t => Number(t.epoch) === Number(o.emaLastEpoch)) : false;
+
+        if (!tieneEstado || !haySolape) {
+          o.emaFastByEpoch.clear();
+          o.emaSlowByEpoch.clear();
+          const firstPrice = Number(ticksAsc[0].precio);
+          let emaF = firstPrice;
+          let emaS = firstPrice;
+          o.emaFastByEpoch.set(Number(ticksAsc[0].epoch), emaF);
+          o.emaSlowByEpoch.set(Number(ticksAsc[0].epoch), emaS);
+          for (let i = 1; i < ticksAsc.length; i++) {
+            const price = Number(ticksAsc[i].precio);
+            emaF = (alphaFast * price) + ((1.0 - alphaFast) * emaF);
+            emaS = (alphaSlow * price) + ((1.0 - alphaSlow) * emaS);
+            const ep = Number(ticksAsc[i].epoch);
+            o.emaFastByEpoch.set(ep, emaF);
+            o.emaSlowByEpoch.set(ep, emaS);
+          }
+          o.emaLastEpoch = lastEpochInList;
+          o.emaLastFast = emaF;
+          o.emaLastSlow = emaS;
+        } else if (lastEpochInList > Number(o.emaLastEpoch)) {
+          let emaF = Number(o.emaLastFast);
+          let emaS = Number(o.emaLastSlow);
+          for (const t of ticksAsc) {
+            const ep = Number(t.epoch);
+            if (ep <= Number(o.emaLastEpoch)) continue;
+            const price = Number(t.precio);
+            emaF = (alphaFast * price) + ((1.0 - alphaFast) * emaF);
+            emaS = (alphaSlow * price) + ((1.0 - alphaSlow) * emaS);
+            o.emaFastByEpoch.set(ep, emaF);
+            o.emaSlowByEpoch.set(ep, emaS);
+          }
+          o.emaLastEpoch = lastEpochInList;
+          o.emaLastFast = emaF;
+          o.emaLastSlow = emaS;
+        }
+
+        const epochsSet = new Set(ticksAsc.map(t => Number(t.epoch)));
+        for (const k of Array.from(o.emaFastByEpoch.keys())) {
+          if (!epochsSet.has(Number(k))) o.emaFastByEpoch.delete(k);
+        }
+        for (const k of Array.from(o.emaSlowByEpoch.keys())) {
+          if (!epochsSet.has(Number(k))) o.emaSlowByEpoch.delete(k);
+        }
+      }
 
       function ensureTicksChart(simbolo) {
         const chartId = `ticks_chart_${simbolo.toLowerCase().replace("_", "")}`;
@@ -720,8 +797,6 @@
             },
             plugins: {
               crosshairPlugin: { color: "rgba(0,0,0,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
-            },
-            plugins: {
               legend: { display: false },
               tooltip: { enabled: false },
             },
@@ -860,10 +935,11 @@
               }
             }
             
-            // Calcular EMAs sobre los datos reales
+            // EMA incremental por epoch (no recalcula el pasado)
+            actualizarEmaCacheDesdeTicks(simbolo, ticksParaGrafico);
             const preciosReales = ticksParaGrafico.map(t => Number(t.precio));
-            const emaFastCalculada = calcularEMA(preciosReales, chartObj.emaFast);
-            const emaSlowCalculada = calcularEMA(preciosReales, chartObj.emaSlow);
+            const emaFastCalculada = ticksParaGrafico.map(t => chartObj.emaFastByEpoch ? (chartObj.emaFastByEpoch.get(Number(t.epoch)) ?? null) : null);
+            const emaSlowCalculada = ticksParaGrafico.map(t => chartObj.emaSlowByEpoch ? (chartObj.emaSlowByEpoch.get(Number(t.epoch)) ?? null) : null);
             
             // Agregar datos reales
             precios.push(...preciosReales);
@@ -964,8 +1040,6 @@
             },
             plugins: {
               crosshairPlugin: { color: "rgba(0,0,0,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
-            },
-            plugins: {
               legend: { 
                 display: true,
                 position: 'top',
@@ -1080,6 +1154,7 @@
       document.getElementById("ema_update_btn_r10")?.addEventListener("click", () => {
         charts["R_10"].emaFast = parseInt(document.getElementById("ema_fast_period_r10")?.value || "50", 10);
         charts["R_10"].emaSlow = parseInt(document.getElementById("ema_slow_period_r10")?.value || "100", 10);
+        resetEmaCache("R_10");
         // Recalcular EMAs con los nuevos periodos
         if (charts["R_10"].lastTicks) {
           actualizarGraficoTicks("R_10", charts["R_10"].lastTicks, null);
@@ -1090,6 +1165,7 @@
       document.getElementById("ema_update_btn_r100")?.addEventListener("click", () => {
         charts["R_100"].emaFast = parseInt(document.getElementById("ema_fast_period_r100")?.value || "50", 10);
         charts["R_100"].emaSlow = parseInt(document.getElementById("ema_slow_period_r100")?.value || "100", 10);
+        resetEmaCache("R_100");
         // Recalcular EMAs con los nuevos periodos
         if (charts["R_100"].lastTicks) {
           actualizarGraficoTicks("R_100", charts["R_100"].lastTicks, null);
