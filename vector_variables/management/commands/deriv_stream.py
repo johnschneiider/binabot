@@ -117,7 +117,14 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options) -> None:  # noqa: ANN001
-        symbol = (options.get("symbol") or settings.DERIV_SYMBOL).strip()
+        # Obtener símbolos: si se especifica --symbol, usar ese; si no, usar R_10 y R_100 por defecto
+        symbol_arg = options.get("symbol")
+        if symbol_arg:
+            symbols = [symbol_arg.strip()]
+        else:
+            # Por defecto, manejar ambos activos
+            symbols = ["R_10", "R_100"]
+        
         ilimitado = bool(options.get("ilimitado"))
         permitir_sin_venv = bool(options.get("permitir_sin_venv"))
         max_ticks = int(options.get("max_ticks") or 0)
@@ -135,9 +142,11 @@ class Command(BaseCommand):
             raise CommandError("Debes definir `--max-ticks` y/o `--max-segundos` (no se permite ilimitado por defecto).")
 
         ejecutar_real = bool(options.get("real"))
+        
+        # Ejecutar para todos los símbolos en paralelo
         asyncio.run(
-            self._run(
-                symbol,
+            self._run_multiple_symbols(
+                symbols=symbols,
                 max_ticks=max_ticks,
                 max_segundos=max_segundos,
                 max_reintentos=max_reintentos,
@@ -145,6 +154,35 @@ class Command(BaseCommand):
                 ejecutar_real=ejecutar_real,
             )
         )
+
+    async def _run_multiple_symbols(
+        self,
+        symbols: list[str],
+        *,
+        max_ticks: int,
+        max_segundos: int,
+        max_reintentos: int,
+        ilimitado: bool,
+        ejecutar_real: bool = False,
+    ) -> None:
+        """
+        Ejecuta el bot para múltiples símbolos en paralelo.
+        """
+        # Crear tareas para cada símbolo
+        tasks = []
+        for symbol in symbols:
+            task = self._run(
+                symbol=symbol,
+                max_ticks=max_ticks,
+                max_segundos=max_segundos,
+                max_reintentos=max_reintentos,
+                ilimitado=ilimitado,
+                ejecutar_real=ejecutar_real,
+            )
+            tasks.append(task)
+        
+        # Ejecutar todas las tareas en paralelo
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _run(
         self,
@@ -246,6 +284,8 @@ class Command(BaseCommand):
             raise CommandError("Modo real requiere DERIV_API_TOKEN con permisos de 'trade'.")
 
         # ===== CONTEXTO DE ARRANQUE (DB/CUENTA/HORA) =====
+        # Log de inicio para identificar qué símbolo está procesando
+        print(f"[{symbol}] Iniciando bot para símbolo {symbol}")
         try:
             db_name = settings.DATABASES.get("default", {}).get("NAME", "<desconocido>")
         except Exception:
@@ -345,7 +385,7 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"[WS] Conectando a Deriv | intento={intentos} | symbol={symbol} | app_id={settings.DERIV_APP_ID}"
+                    print(f"[{symbol}] [WS] Conectando a Deriv | intento={intentos} | symbol={symbol} | app_id={settings.DERIV_APP_ID}")
                 )
             )
             try:
@@ -375,6 +415,7 @@ class Command(BaseCommand):
                         except Exception as e:
                             self.stderr.write(f"[TRADING] Falló re-suscripción open_contract: {e}")
 
+                    print(f"[{symbol}] [WS] Conexión establecida, iniciando stream de eventos...")
                     async for ev in cliente.stream_eventos(symbol, incluir_balance=incluir_balance):
                         # Balance poll periódico (one-shot). Esto garantiza recalcular ciclos/drawdown aunque
                         # Deriv no envíe mensajes `balance` cuando el monto no cambia.
