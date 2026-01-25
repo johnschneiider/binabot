@@ -36,7 +36,7 @@ cd /var/www/vitalmix.com.co/app
 source .venv/bin/activate
 
 # Probar conexión a la base de datos
-python manage.py dbshell --command "SELECT 1;"
+python manage.py shell -c "from django.db import connection; cursor = connection.cursor(); cursor.execute('SELECT 1'); print('BD OK:', cursor.fetchone())"
 
 # Verificar migraciones pendientes
 python manage.py showmigrations
