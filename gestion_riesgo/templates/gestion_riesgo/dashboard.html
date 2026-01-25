@@ -787,9 +787,12 @@
           renderOpsDeriv(data.operaciones_deriv || []);
           
           // Actualizar gráficos de ticks para ambos activos
+          console.log("[REFRESCAR] ticksPorActivo:", ticksPorActivo);
+          console.log("[REFRESCAR] cuentas:", cuentas);
           for (const simbolo of ["R_10", "R_100"]) {
             const ticks = ticksPorActivo[simbolo] || [];
             const cuentaData = cuentas[simbolo];
+            console.log(`[REFRESCAR] ${simbolo}: ${ticks.length} ticks, cuenta:`, cuentaData ? "existe" : "no existe");
             actualizarGraficoTicks(simbolo, ticks, cuentaData);
           }
         } catch (e) {
