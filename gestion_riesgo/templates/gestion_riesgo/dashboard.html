@@ -341,22 +341,40 @@
           const { ctx, chartArea } = chart;
           if (!ctx || !chartArea) return;
 
-          const color = (opts && opts.color) ? String(opts.color) : "rgba(0,0,0,0.35)";
-          const width = (opts && Number.isFinite(opts.width)) ? Number(opts.width) : 1;
+          const color = (opts && opts.color) ? String(opts.color) : "rgba(0,0,0,0.75)";
+          const width = (opts && Number.isFinite(opts.width)) ? Number(opts.width) : 1.5;
+          const outlineColor = (opts && opts.outlineColor) ? String(opts.outlineColor) : "rgba(255,255,255,0.55)";
+          const outlineWidth = (opts && Number.isFinite(opts.outlineWidth)) ? Number(opts.outlineWidth) : (width + 2);
           const dash = (opts && Array.isArray(opts.dash)) ? opts.dash : [];
 
           ctx.save();
-          ctx.lineWidth = width;
-          ctx.strokeStyle = color;
           ctx.setLineDash(dash);
 
-          // Vertical
+          // Vertical (outline + main)
+          ctx.lineWidth = outlineWidth;
+          ctx.strokeStyle = outlineColor;
           ctx.beginPath();
           ctx.moveTo(pos.x, chartArea.top);
           ctx.lineTo(pos.x, chartArea.bottom);
           ctx.stroke();
 
-          // Horizontal
+          ctx.lineWidth = width;
+          ctx.strokeStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(pos.x, chartArea.top);
+          ctx.lineTo(pos.x, chartArea.bottom);
+          ctx.stroke();
+
+          // Horizontal (outline + main)
+          ctx.lineWidth = outlineWidth;
+          ctx.strokeStyle = outlineColor;
+          ctx.beginPath();
+          ctx.moveTo(chartArea.left, pos.y);
+          ctx.lineTo(chartArea.right, pos.y);
+          ctx.stroke();
+
+          ctx.lineWidth = width;
+          ctx.strokeStyle = color;
           ctx.beginPath();
           ctx.moveTo(chartArea.left, pos.y);
           ctx.lineTo(chartArea.right, pos.y);
@@ -602,7 +620,7 @@
             maintainAspectRatio: false,
             animation: false,
             plugins: {
-              crosshairPlugin: { color: "rgba(0,0,0,0.35)", width: 1 },
+              crosshairPlugin: { color: "rgba(0,0,0,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
             },
             plugins: {
               legend: { display: false },
@@ -701,7 +719,7 @@
               duration: 300,
             },
             plugins: {
-              crosshairPlugin: { color: "rgba(0,0,0,0.35)", width: 1 },
+              crosshairPlugin: { color: "rgba(0,0,0,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
             },
             plugins: {
               legend: { display: false },
@@ -945,7 +963,7 @@
               duration: 300,
             },
             plugins: {
-              crosshairPlugin: { color: "rgba(0,0,0,0.35)", width: 1 },
+              crosshairPlugin: { color: "rgba(0,0,0,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
             },
             plugins: {
               legend: { 
