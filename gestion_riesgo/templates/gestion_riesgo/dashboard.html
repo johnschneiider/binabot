@@ -1087,14 +1087,6 @@
         }
       });
 
-      // Guardar ticks para recalcular EMAs cuando cambien los periodos
-      window.lastTicksData = null;
-      const originalActualizarGraficoTicks = actualizarGraficoTicks;
-      actualizarGraficoTicks = function(ticks) {
-        window.lastTicksData = ticks;
-        originalActualizarGraficoTicks(ticks);
-      };
-
       refrescar();
       setInterval(refrescar, 1000); // Actualiza señal Y ticks cada 1 segundo
 

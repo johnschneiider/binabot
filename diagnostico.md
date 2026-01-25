@@ -6,4 +6,6 @@ python manage.py auditar_bot --completo --dias 30
 
 
 para reiniciar
-systemctl restart binabot-vitalmix.service
+cd /var/www/vitalmix.com.co/app
+git pull origin main
+sudo systemctl restart binabot-vitalmix.service
