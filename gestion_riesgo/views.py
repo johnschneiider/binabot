@@ -188,14 +188,102 @@ def dashboard(request):
 def estado_json(request):
     """
     ENDPOINT PARA POLLING DESDE EL FRONTEND.
+    Soporta múltiples activos: R_10 y R_100.
     """
-    # Usar SOLO la cuenta del símbolo configurado para evitar mezclar dashboards (ej: R_10 vs R_100).
-    cuenta = Cuenta.objects.filter(simbolo=str(getattr(settings, "DERIV_SYMBOL", "") or "").strip()).order_by(
+    # Obtener datos de ambos activos: R_10 y R_100
+    simbolos = ["R_10", "R_100"]
+    cuentas_dict = {}
+    ticks_dict = {}
+    
+    for simbolo in simbolos:
+        cuenta = Cuenta.objects.filter(simbolo=simbolo).order_by(
+            "-ultimo_tick_epoch", "-updated_at"
+        ).first()
+        
+        if cuenta:
+            now_epoch = int(timezone.now().timestamp())
+            pausa_hasta_epoch = int(cuenta.ciclo_pausa_hasta_epoch) if cuenta.ciclo_pausa_hasta_epoch is not None else None
+            dt_pausa_local = _fecha_hora_colombia_desde_epoch(pausa_hasta_epoch) if pausa_hasta_epoch else None
+            pausa_restante_seg = max(0, int(pausa_hasta_epoch - now_epoch)) if pausa_hasta_epoch else None
+
+            riesgo_ui = _riesgo_motivo_ui(cuenta.riesgo_motivo)
+            pausa_epoch_from_motivo = riesgo_ui.get("pausa_hasta_epoch")
+            if pausa_epoch_from_motivo:
+                pausa_hasta_epoch = int(pausa_epoch_from_motivo)
+                dt_pausa_local = _fecha_hora_colombia_desde_epoch(pausa_hasta_epoch)
+                pausa_restante_seg = max(0, int(pausa_hasta_epoch - now_epoch))
+
+            dt_ciclo_inicio = _fecha_hora_colombia_desde_epoch(cuenta.ciclo_inicio_epoch) if cuenta.ciclo_inicio_epoch else None
+            dt_ultimo_tick = _fecha_hora_colombia_desde_epoch(cuenta.ultimo_tick_epoch) if cuenta.ultimo_tick_epoch else None
+
+            horas_bloqueadas = _parse_horas_bloqueadas(str(getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""))
+            hora_local_actual = _hora_local_actual()
+            horario_bloqueado = bool(horas_bloqueadas and (hora_local_actual in horas_bloqueadas))
+
+            cuentas_dict[simbolo] = {
+                "id": cuenta.id,
+                "simbolo": cuenta.simbolo,
+                "balance_deriv": cuenta.balance_deriv,
+                "moneda_deriv": cuenta.moneda_deriv,
+                "max_balance_deriv_historico": cuenta.max_balance_deriv_historico,
+                "capital_inicial": cuenta.capital_inicial,
+                "capital_actual": cuenta.capital_actual,
+                "max_capital_historico": cuenta.max_capital_historico,
+                "bloqueado": cuenta.bloqueado,
+                "riesgo_motivo": cuenta.riesgo_motivo,
+                "riesgo_motivo_ui": riesgo_ui.get("label") or cuenta.riesgo_motivo,
+                "ciclo_balance_inicio": cuenta.ciclo_balance_inicio,
+                "ciclo_inicio_epoch": cuenta.ciclo_inicio_epoch,
+                "ciclo_inicio_local": dt_ciclo_inicio.strftime("%Y-%m-%d %H:%M:%S") if dt_ciclo_inicio else None,
+                "ciclo_pausa_hasta_epoch": cuenta.ciclo_pausa_hasta_epoch,
+                "ciclo_pausa_hasta_local": dt_pausa_local.strftime("%Y-%m-%d %H:%M:%S") if dt_pausa_local else None,
+                "ciclo_pausa_restante_seg": pausa_restante_seg,
+                "ciclo_pausa_restante_hhmmss": _fmt_hhmmss(pausa_restante_seg) if pausa_restante_seg is not None else None,
+                "ciclo_ultimo_evento": cuenta.ciclo_ultimo_evento,
+                "ultimo_tick_epoch": cuenta.ultimo_tick_epoch,
+                "ultimo_tick_local": dt_ultimo_tick.strftime("%Y-%m-%d %H:%M:%S") if dt_ultimo_tick else None,
+                "ultimo_precio": cuenta.ultimo_precio,
+                "senal_valor": cuenta.senal_valor,
+                "senal_decision": cuenta.senal_decision,
+                "senal_top_contribuciones": cuenta.senal_top_contribuciones if cuenta.senal_top_contribuciones else [],
+                "updated_at": cuenta.updated_at.isoformat() if cuenta.updated_at else None,
+                "winrate_ult15": _winrate_ultimas_deriv(n=15),
+                "extremos_ventana_ticks": 200,
+                "hora_local_actual": hora_local_actual,
+                "horario_bloqueado": horario_bloqueado,
+                "horas_bloqueadas": sorted(list(horas_bloqueadas)),
+                "max_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "max_50"), None),
+                "min_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "min_50"), None),
+                "volatilidad_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "volatilidad_100"), None),
+                "ema_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_50"), None),
+                "ema_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_100"), None),
+            }
+            
+            # Obtener ticks para este activo
+            ticks_window = 200
+            if ticks_window < 10:
+                ticks_window = 10
+            ticks_qs = (
+                TickDerivSnapshot.objects.filter(cuenta=cuenta)
+                .order_by("-epoch")[:ticks_window]
+            )
+            ticks_list = []
+            for tick_obj in ticks_qs:
+                ticks_list.append({
+                    "precio": float(tick_obj.precio),
+                    "epoch": int(tick_obj.epoch),
+                })
+            ticks_list.sort(key=lambda x: x["epoch"])
+            ticks_dict[simbolo] = ticks_list
+    
+    # Mantener compatibilidad: usar R_10 como cuenta principal para operaciones
+    cuenta_principal = Cuenta.objects.filter(simbolo="R_10").order_by(
         "-ultimo_tick_epoch", "-updated_at"
     ).first()
+    # Obtener operaciones de ambos activos
     ops_deriv = list(
         OperacionDeriv.objects.order_by("-updated_at")
-        .filter(creada_por_bot=True)
+        .filter(creada_por_bot=True, simbolo__in=["R_10", "R_100"])
         .annotate(duracion_segundos=F("closed_epoch") - F("opened_epoch"))
         .values(
             "id",
@@ -218,8 +306,6 @@ def estado_json(request):
         dt_local = _fecha_hora_colombia_desde_epoch(int(epoch_ref) if epoch_ref else None)
         # FORMATO SIMPLE PARA UI (SIN UTC).
         op["fecha_hora"] = dt_local.strftime("%Y-%m-%d %H:%M:%S") if dt_local else None
-    cuenta_dict = None
-    if cuenta is not None:
         now_epoch = int(timezone.now().timestamp())
         pausa_hasta_epoch = int(cuenta.ciclo_pausa_hasta_epoch) if cuenta.ciclo_pausa_hasta_epoch is not None else None
         dt_pausa_local = _fecha_hora_colombia_desde_epoch(pausa_hasta_epoch) if pausa_hasta_epoch else None
@@ -298,10 +384,15 @@ def estado_json(request):
             })
         ticks_list.sort(key=lambda x: x["epoch"])  # Ordenar ascendente
     
+    # Mantener compatibilidad: cuenta principal es R_10
+    cuenta_dict = cuentas_dict.get("R_10")
+    
     return JsonResponse({
-        "cuenta": cuenta_dict, 
+        "cuenta": cuenta_dict,  # Compatibilidad con código existente
+        "cuentas": cuentas_dict,  # Nuevo: datos de todos los activos
         "operaciones_deriv": ops_deriv,
-        "ticks": ticks_list,
+        "ticks": ticks_dict.get("R_10", []),  # Compatibilidad
+        "ticks_por_activo": ticks_dict,  # Nuevo: ticks por activo
     })
 
 
