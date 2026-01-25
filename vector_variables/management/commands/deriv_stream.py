@@ -884,10 +884,6 @@ class Command(BaseCommand):
                                         f"dec={resultado_extremos.decision} "
                                         f"p_prev={float(vector_extremos.get('precio_anterior',0.0)):.3f} "
                                         f"p={float(vector_extremos.get('precio_actual',0.0)):.3f} "
-                                        f"max={float(vector_extremos.get('max_50',0.0)):.3f} "
-                                        f"min={float(vector_extremos.get('min_50',0.0)):.3f} "
-                                        f"idx_max={int(vector_extremos.get('idx_max',0))} "
-                                        f"idx_min={int(vector_extremos.get('idx_min',0))} "
                                         f"razon={resultado_extremos.razon}"
                                     )
                                 except Exception:
@@ -898,13 +894,13 @@ class Command(BaseCommand):
                                 constructor_extremos.actualizar_estado(
                                     "ESPERANDO_CONFIRMACION_VENTA",
                                     ref_extremo_tick=int(ticks_procesados),
-                                    ref_extremo_precio=float(vector_extremos.get("max_50", precio_actual_dash)),
+                                    ref_extremo_precio=float(precio_actual_dash),
                                 )
                             elif resultado_extremos.decision == "ESPERANDO_COMPRA":
                                 constructor_extremos.actualizar_estado(
                                     "ESPERANDO_CONFIRMACION_COMPRA",
                                     ref_extremo_tick=int(ticks_procesados),
-                                    ref_extremo_precio=float(vector_extremos.get("min_50", precio_actual_dash)),
+                                    ref_extremo_precio=float(precio_actual_dash),
                                 )
                             elif resultado_extremos.decision == "IDLE":
                                 constructor_extremos.actualizar_estado("IDLE")
@@ -998,24 +994,6 @@ class Command(BaseCommand):
                             
                             # Para dashboard: crear contribuciones simplificadas
                             top_contrib = [
-                                {
-                                    "variable": "max_50",
-                                    "contribucion": vector_extremos.get("max_50", 0.0),
-                                    "x": vector_extremos.get("max_50", 0.0),
-                                    "w": 1.0,
-                                },
-                                {
-                                    "variable": "min_50",
-                                    "contribucion": vector_extremos.get("min_50", 0.0),
-                                    "x": vector_extremos.get("min_50", 0.0),
-                                    "w": 1.0,
-                                },
-                                {
-                                    "variable": "rango_50",
-                                    "contribucion": vector_extremos.get("rango_50", 0.0),
-                                    "x": vector_extremos.get("rango_50", 0.0),
-                                    "w": 1.0,
-                                },
                                 {
                                     "variable": "volatilidad_100",
                                     "contribucion": volatilidad_100,

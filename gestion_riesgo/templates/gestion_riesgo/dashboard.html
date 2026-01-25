@@ -156,23 +156,6 @@
             <div class="muted" style="margin-top: 4px;">Intensidad de señal (wᵀx)</div>
           </div>
 
-          <!-- ===== Layout estrategia nueva (extremos) ===== -->
-          <div id="extremos_wrap" style="display:none; width: 100%;">
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <div style="padding: 10px; background: #f9fafb; border-radius: 8px;">
-                <div class="muted" id="ext_label_max" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px;">Máximo (últ {{ extremos_ventana_ticks|default:100 }})</div>
-                <div class="big mono" id="ext_max">—</div>
-              </div>
-              <div style="padding: 10px; background: #f9fafb; border-radius: 8px;">
-                <div class="muted" id="ext_label_min" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px;">Mínimo (últ {{ extremos_ventana_ticks|default:100 }})</div>
-                <div class="big mono" id="ext_min">—</div>
-              </div>
-            </div>
-            <div class="muted" style="margin-top: 8px;">
-              Rango (máx - mín): <span class="mono" id="ext_rango">—</span>
-            </div>
-          </div>
-
           {% if cuenta and cuenta.senal_decision %}
             {% if cuenta.senal_decision == "COMPRA" %}
               <div class="badge ok mono" id="senal_decision_badge">COMPRA</div>
@@ -430,7 +413,7 @@
         for (const it of lista) {
           const k = (it && it.variable) ? String(it.variable) : "";
           if (!k) continue;
-          // En extremos usamos "contribucion" o "x" como "valor" (max_50/min_50/rango_50/volatilidad_100/ema_50/ema_100).
+          // Usamos "contribucion" o "x" como "valor".
           out[k] = _numOrNull(it.x !== undefined ? it.x : it.contribucion);
         }
         return out;
@@ -438,45 +421,14 @@
 
       function actualizarSenalUI(c) {
         const wrapSenal = document.getElementById("senal_valor_wrap");
-        const wrapExt = document.getElementById("extremos_wrap");
         const titulo = document.getElementById("senal_titulo");
         const contribEl = document.getElementById("senal_contribuciones");
 
         const lista = c && c.senal_top_contribuciones ? c.senal_top_contribuciones : [];
-        const m = _contribMap(lista);
-        const esExtremos = (m.max_50 !== null && m.max_50 !== undefined) && (m.min_50 !== null && m.min_50 !== undefined);
+        _contribMap(lista); // Mantener compatibilidad; no usamos máximos/mínimos en UI.
 
-        if (esExtremos) {
-          const w = (c && c.extremos_ventana_ticks) ? Number(c.extremos_ventana_ticks) : {{ extremos_ventana_ticks|default:100 }};
-          if (titulo) titulo.textContent = `Estrategia: Extremos (últimos ${w} ticks)`;
-          const labMax = document.getElementById("ext_label_max");
-          const labMin = document.getElementById("ext_label_min");
-          if (labMax) labMax.textContent = `Máximo (últ ${w})`;
-          if (labMin) labMin.textContent = `Mínimo (últ ${w})`;
-          if (wrapSenal) wrapSenal.style.display = "none";
-          if (wrapExt) wrapExt.style.display = "block";
-
-          const maxV = _numOrNull(m.max_50);
-          const minV = _numOrNull(m.min_50);
-          const rangoV = _numOrNull(m.rango_50);
-
-          const elMax = document.getElementById("ext_max");
-          const elMin = document.getElementById("ext_min");
-          const elR = document.getElementById("ext_rango");
-          if (elMax) elMax.textContent = (maxV === null) ? "—" : maxV.toFixed(2);
-          if (elMin) elMin.textContent = (minV === null) ? "—" : minV.toFixed(2);
-          if (elR) elR.textContent = (rangoV === null) ? "—" : rangoV.toFixed(2);
-
-          if (contribEl) {
-            contribEl.textContent = "Interpretación: si el precio acaba de tocar un máximo/mínimo reciente, espera confirmación en el siguiente tick y decide COMPRA/VENTA.";
-          }
-          return;
-        }
-
-        // Estrategia antigua (wᵀx)
-        if (titulo) titulo.textContent = "Señal (wᵀx) · Top contribuciones";
+        if (titulo) titulo.textContent = "Monitoreo · Indicadores";
         if (wrapSenal) wrapSenal.style.display = "block";
-        if (wrapExt) wrapExt.style.display = "none";
         renderContribuciones(lista);
       }
 
@@ -884,22 +836,16 @@
 
       // Función para calcular EMA
       function calcularEMA(precios, periodo) {
-        if (precios.length < periodo) return precios.map(() => null);
-        const alpha = 2.0 / (periodo + 1.0);
-        const ema = [];
-        let emaAnterior = precios[0];
-        for (let i = 0; i < precios.length; i++) {
-          if (i < periodo - 1) {
-            ema.push(null);
-          } else if (i === periodo - 1) {
-            // Primera EMA: promedio simple de los primeros N valores
-            const suma = precios.slice(0, periodo).reduce((a, b) => a + b, 0);
-            emaAnterior = suma / periodo;
-            ema.push(emaAnterior);
-          } else {
-            emaAnterior = (alpha * precios[i]) + ((1.0 - alpha) * emaAnterior);
-            ema.push(emaAnterior);
-          }
+        const n = Array.isArray(precios) ? precios.length : 0;
+        if (n === 0) return [];
+        const p = Math.max(1, parseInt(periodo || 1, 10));
+        const alpha = 2.0 / (p + 1.0);
+        const ema = new Array(n);
+        // Semilla: primer precio, para que la EMA cubra todo el gráfico (sin huecos).
+        ema[0] = Number(precios[0]);
+        for (let i = 1; i < n; i++) {
+          const price = Number(precios[i]);
+          ema[i] = (alpha * price) + ((1.0 - alpha) * ema[i - 1]);
         }
         return ema;
       }

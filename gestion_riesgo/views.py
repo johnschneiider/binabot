@@ -176,7 +176,6 @@ def dashboard(request):
             "cuenta": cuenta,
             "operaciones_deriv": operaciones_deriv,
             "winrate_ult15": _winrate_ultimas_deriv(n=15),
-            "extremos_ventana_ticks": 200,  # Ventana de 200 ticks
             "hora_local_actual": hora_local_actual,
             "horario_bloqueado": horario_bloqueado,
             "horas_bloqueadas": sorted(list(horas_bloqueadas)),
@@ -245,15 +244,16 @@ def estado_json(request):
                 "ultimo_precio": cuenta.ultimo_precio,
                 "senal_valor": cuenta.senal_valor,
                 "senal_decision": cuenta.senal_decision,
-                "senal_top_contribuciones": cuenta.senal_top_contribuciones if cuenta.senal_top_contribuciones else [],
+                "senal_top_contribuciones": [
+                    x
+                    for x in (cuenta.senal_top_contribuciones or [])
+                    if (x or {}).get("variable") not in {"max_50", "min_50", "rango_50"}
+                ],
                 "updated_at": cuenta.updated_at.isoformat() if cuenta.updated_at else None,
                 "winrate_ult15": _winrate_ultimas_deriv(n=15),
-                "extremos_ventana_ticks": 200,
                 "hora_local_actual": hora_local_actual,
                 "horario_bloqueado": horario_bloqueado,
                 "horas_bloqueadas": sorted(list(horas_bloqueadas)),
-                "max_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "max_50"), None),
-                "min_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "min_50"), None),
                 "volatilidad_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "volatilidad_100"), None),
                 "ema_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_50"), None),
                 "ema_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_100"), None),
