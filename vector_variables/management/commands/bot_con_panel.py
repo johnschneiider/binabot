@@ -21,6 +21,12 @@ class Command(BaseCommand):
 
         # REENVIAR FLAGS DEL STREAM
         parser.add_argument("--symbol", type=str, default=None)
+        parser.add_argument(
+            "--symbols",
+            type=str,
+            default=None,
+            help="Lista separada por comas (ej: R_10,R_100). Si no se pasa, usa R_10 y R_100 por defecto.",
+        )
         parser.add_argument("--max-ticks", type=int, default=2000)
         parser.add_argument("--max-segundos", type=int, default=300)
         parser.add_argument("--max-reintentos", type=int, default=10)
@@ -45,14 +51,26 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Dashboard: http://{host}:{port}/"))
 
         # EJECUTAR STREAM EN ESTE MISMO PROCESO
-        symbol = options.get("symbol")
+        # Compatibilidad:
+        # - Si se pasa --symbol => corre SOLO ese
+        # - Si se pasa --symbols => corre esa lista
+        # - Si no se pasa nada => corre R_10 y R_100
+        symbol = (options.get("symbol") or "").strip()
+        symbols_raw = (options.get("symbols") or "").strip()
+        if symbol:
+            symbols = [symbol]
+        elif symbols_raw:
+            symbols = [s.strip() for s in symbols_raw.split(",") if s.strip()]
+        else:
+            symbols = ["R_10", "R_100"]
+
         stream = DerivStreamCommand()
         stream.stdout = self.stdout
         stream.stderr = self.stderr
 
         asyncio.run(
-            stream._run(
-                (symbol or "").strip() or settings.DERIV_SYMBOL,
+            stream._run_multiple_symbols(
+                symbols=symbols,
                 max_ticks=int(options.get("max_ticks")),
                 max_segundos=int(options.get("max_segundos")),
                 max_reintentos=int(options.get("max_reintentos")),
