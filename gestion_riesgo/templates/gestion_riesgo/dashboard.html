@@ -38,6 +38,15 @@
         th, td { padding: 8px; font-size: 12px; }
         th { font-size: 11px; }
         .row { flex-direction: column; align-items: flex-start; gap: 6px; }
+        .chart-wrap { height: 200px !important; }
+        input[type="number"] { width: 50px !important; font-size: 11px !important; }
+        button { padding: 5px 10px !important; font-size: 11px !important; }
+        label { font-size: 11px !important; }
+      }
+      @media (max-width: 480px) {
+        .chart-wrap { height: 180px !important; }
+        .card { padding: 10px; }
+        .big { font-size: 16px; }
       }
     </style>
   </head>
@@ -206,7 +215,7 @@
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
-          <div class="big">Precio en Tiempo Real (últimos {{ extremos_ventana_ticks|default:100 }} ticks)</div>
+          <div class="big">Precio en Tiempo Real (últimos 200 ticks)</div>
           <div class="muted">Eje X: ticks · Eje Y: precio</div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -214,10 +223,41 @@
           <div class="muted mono" style="font-size: 13px; font-weight: 600;" id="ticks_current_price">—</div>
         </div>
       </div>
+      
+      <!-- Controles de EMAs -->
+      <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 12px; color: #6b7280; font-weight: 500;">EMA Rápida:</label>
+          <input type="number" id="ema_fast_period" value="50" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 12px; color: #6b7280; font-weight: 500;">EMA Lenta:</label>
+          <input type="number" id="ema_slow_period" value="100" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
+        </div>
+        <button id="ema_update_btn" style="padding: 6px 12px; background: #111827; color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Actualizar EMAs</button>
+      </div>
+      
       <div class="chart-wrap" style="margin-top: 10px;">
         <canvas id="ticks_chart"></canvas>
       </div>
-      <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos {{ extremos_ventana_ticks|default:100 }} ticks recibidos</div>
+      <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos 200 ticks recibidos</div>
+    </div>
+
+    <!-- Gráfico de Volatilidad -->
+    <div class="card" style="margin-top: 14px;">
+      <div class="row">
+        <div>
+          <div class="big">Volatilidad (últimos 100 ticks)</div>
+          <div class="muted">Eje X: ticks · Eje Y: volatilidad</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="muted mono" style="font-size: 13px; font-weight: 600;" id="volatilidad_current">—</div>
+        </div>
+      </div>
+      <div class="chart-wrap" style="margin-top: 10px;">
+        <canvas id="volatilidad_chart"></canvas>
+      </div>
+      <div class="muted" style="margin-top: 8px;">Volatilidad calculada sobre retornos de últimos 100 ticks</div>
     </div>
 
     <div class="card" style="margin-top: 14px;">
@@ -374,8 +414,8 @@
         for (const it of lista) {
           const k = (it && it.variable) ? String(it.variable) : "";
           if (!k) continue;
-          // En extremos usamos "contribucion" como "valor" (max_50/min_50/rango_50).
-          out[k] = _numOrNull(it.contribucion);
+          // En extremos usamos "contribucion" o "x" como "valor" (max_50/min_50/rango_50/volatilidad_100/ema_50/ema_100).
+          out[k] = _numOrNull(it.x !== undefined ? it.x : it.contribucion);
         }
         return out;
       }
@@ -584,6 +624,8 @@
 
       // ===== GRÁFICA TICKS =====
       let ticksChart = null;
+      let emaFastPeriod = 50;
+      let emaSlowPeriod = 100;
 
       function ensureTicksChart() {
         const ctx = document.getElementById("ticks_chart");
@@ -603,6 +645,24 @@
               pointRadius: 2,
               pointHoverRadius: 4,
               borderWidth: 2,
+            }, {
+              label: "EMA Rápida",
+              data: [],
+              borderColor: "#f59e0b",
+              backgroundColor: "rgba(245,158,11,0.1)",
+              borderDash: [3, 3],
+              borderWidth: 1.5,
+              pointRadius: 0,
+              fill: false,
+            }, {
+              label: "EMA Lenta",
+              data: [],
+              borderColor: "#8b5cf6",
+              backgroundColor: "rgba(139,92,246,0.1)",
+              borderDash: [5, 5],
+              borderWidth: 1.5,
+              pointRadius: 0,
+              fill: false,
             }, {
               label: "Máximo detectado",
               data: [],
@@ -754,17 +814,34 @@
             ticksChart.data.labels = ticksOrdenados.map((t, i) => i + 1);
             ticksChart.data.datasets[0].data = ticksOrdenados.map(t => Number(t.precio));
             
+            // Calcular EMAs
+            const emaFast = calcularEMA(ticksOrdenados.map(t => Number(t.precio)), emaFastPeriod);
+            const emaSlow = calcularEMA(ticksOrdenados.map(t => Number(t.precio)), emaSlowPeriod);
+            
+            // Actualizar datasets: Precio, EMA Rápida, EMA Lenta, Max, Min
+            ticksChart.data.datasets[0].data = ticksOrdenados.map(t => Number(t.precio));
+            ticksChart.data.datasets[1].data = emaFast;
+            ticksChart.data.datasets[2].data = emaSlow;
+            
             // Agregar líneas de máximo y mínimo si están disponibles
             if (max50 !== null && max50 !== undefined) {
-              ticksChart.data.datasets[1].data = ticksOrdenados.map(() => Number(max50));
+              ticksChart.data.datasets[3].data = ticksOrdenados.map(() => Number(max50));
             } else {
-              ticksChart.data.datasets[1].data = [];
+              ticksChart.data.datasets[3].data = [];
             }
             
             if (min50 !== null && min50 !== undefined) {
-              ticksChart.data.datasets[2].data = ticksOrdenados.map(() => Number(min50));
+              ticksChart.data.datasets[4].data = ticksOrdenados.map(() => Number(min50));
             } else {
-              ticksChart.data.datasets[2].data = [];
+              ticksChart.data.datasets[4].data = [];
+            }
+            
+            // Actualizar volatilidad si está disponible
+            const contribMap = _contribMap(cuentaData.senal_top_contribuciones || []);
+            const volatilidad = contribMap.volatilidad_100 || cuentaData.volatilidad_100;
+            if (volatilidad !== null && volatilidad !== undefined && volatilidad > 0) {
+              setText("volatilidad_current", volatilidad.toFixed(6));
+              actualizarGraficoVolatilidad(ticksOrdenados, volatilidad);
             }
             
             ticksChart.update('none'); // 'none' para animación más rápida (tiempo real)
@@ -777,6 +854,8 @@
               ticksChart.data.datasets[0].data = [];
               ticksChart.data.datasets[1].data = [];
               ticksChart.data.datasets[2].data = [];
+              ticksChart.data.datasets[3].data = [];
+              ticksChart.data.datasets[4].data = [];
               ticksChart.update('none');
             }
           }
@@ -784,6 +863,150 @@
           console.error("[TICKS] Error actualizando gráfico:", e);
         }
       }
+
+      // Función para calcular EMA
+      function calcularEMA(precios, periodo) {
+        if (precios.length < periodo) return precios.map(() => null);
+        const alpha = 2.0 / (periodo + 1.0);
+        const ema = [];
+        let emaAnterior = precios[0];
+        for (let i = 0; i < precios.length; i++) {
+          if (i < periodo - 1) {
+            ema.push(null);
+          } else if (i === periodo - 1) {
+            // Primera EMA: promedio simple de los primeros N valores
+            const suma = precios.slice(0, periodo).reduce((a, b) => a + b, 0);
+            emaAnterior = suma / periodo;
+            ema.push(emaAnterior);
+          } else {
+            emaAnterior = (alpha * precios[i]) + ((1.0 - alpha) * emaAnterior);
+            ema.push(emaAnterior);
+          }
+        }
+        return ema;
+      }
+
+      // ===== GRÁFICA VOLATILIDAD =====
+      let volatilidadChart = null;
+
+      function ensureVolatilidadChart() {
+        const ctx = document.getElementById("volatilidad_chart");
+        if (!ctx) return;
+        if (volatilidadChart) return;
+        volatilidadChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [{
+              label: "Volatilidad",
+              data: [],
+              borderColor: "#ec4899",
+              backgroundColor: "rgba(236,72,153,0.1)",
+              fill: true,
+              tension: 0.1,
+              pointRadius: 2,
+              pointHoverRadius: 4,
+              borderWidth: 2,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+              duration: 300,
+            },
+            plugins: {
+              legend: { 
+                display: true,
+                position: 'top',
+                labels: {
+                  boxWidth: 12,
+                  padding: 8,
+                  font: { size: 11 }
+                }
+              },
+              tooltip: {
+                mode: "index",
+                intersect: false,
+              },
+            },
+            interaction: { mode: "index", intersect: false },
+            scales: {
+              x: {
+                ticks: {
+                  maxTicksLimit: 10,
+                  autoSkip: true,
+                },
+                grid: { display: false },
+              },
+              y: {
+                grid: { color: "rgba(0,0,0,0.06)" },
+                ticks: {
+                  callback: function(value) {
+                    return Number(value).toFixed(6);
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function actualizarGraficoVolatilidad(ticks, volatilidadActual) {
+        try {
+          ensureVolatilidadChart();
+          if (!volatilidadChart) return;
+          
+          // Calcular volatilidad histórica (últimos 100 ticks)
+          const volatilidades = [];
+          for (let i = 0; i < ticks.length; i++) {
+            if (i < 100) {
+              volatilidades.push(null);
+            } else {
+              // Calcular retornos de los últimos 100 ticks
+              const retornos = [];
+              for (let j = i - 99; j <= i; j++) {
+                if (j > 0 && ticks[j-1].precio > 0) {
+                  const ret = (ticks[j].precio - ticks[j-1].precio) / ticks[j-1].precio;
+                  retornos.push(ret);
+                }
+              }
+              if (retornos.length >= 2) {
+                const mean = retornos.reduce((a, b) => a + b, 0) / retornos.length;
+                const variance = retornos.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / retornos.length;
+                const std = Math.sqrt(variance);
+                volatilidades.push(std);
+              } else {
+                volatilidades.push(null);
+              }
+            }
+          }
+          
+          volatilidadChart.data.labels = ticks.map((t, i) => i + 1);
+          volatilidadChart.data.datasets[0].data = volatilidades;
+          volatilidadChart.update('none');
+        } catch (e) {
+          console.error("[VOLATILIDAD] Error actualizando gráfico:", e);
+        }
+      }
+
+      // Event listeners para controles de EMAs
+      document.getElementById("ema_update_btn")?.addEventListener("click", () => {
+        emaFastPeriod = parseInt(document.getElementById("ema_fast_period")?.value || "50", 10);
+        emaSlowPeriod = parseInt(document.getElementById("ema_slow_period")?.value || "100", 10);
+        // Recalcular EMAs con los nuevos periodos
+        if (window.lastTicksData) {
+          actualizarGraficoTicks(window.lastTicksData);
+        }
+      });
+
+      // Guardar ticks para recalcular EMAs cuando cambien los periodos
+      window.lastTicksData = null;
+      const originalActualizarGraficoTicks = actualizarGraficoTicks;
+      actualizarGraficoTicks = function(ticks) {
+        window.lastTicksData = ticks;
+        originalActualizarGraficoTicks(ticks);
+      };
 
       refrescar();
       setInterval(refrescar, 1000); // Actualiza señal Y ticks cada 1 segundo

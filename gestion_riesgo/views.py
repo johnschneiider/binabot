@@ -176,7 +176,7 @@ def dashboard(request):
             "cuenta": cuenta,
             "operaciones_deriv": operaciones_deriv,
             "winrate_ult15": _winrate_ultimas_deriv(n=15),
-            "extremos_ventana_ticks": int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100),
+            "extremos_ventana_ticks": 200,  # Ventana de 200 ticks
             "hora_local_actual": hora_local_actual,
             "horario_bloqueado": horario_bloqueado,
             "horas_bloqueadas": sorted(list(horas_bloqueadas)),
@@ -269,19 +269,22 @@ def estado_json(request):
             "senal_top_contribuciones": cuenta.senal_top_contribuciones if cuenta.senal_top_contribuciones else [],
             "updated_at": cuenta.updated_at.isoformat() if cuenta.updated_at else None,
             "winrate_ult15": _winrate_ultimas_deriv(n=15),
-            "extremos_ventana_ticks": int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100),
+            "extremos_ventana_ticks": 200,  # Ventana de 200 ticks
             "hora_local_actual": hora_local_actual,
             "horario_bloqueado": horario_bloqueado,
             "horas_bloqueadas": sorted(list(horas_bloqueadas)),
-            # Extraer max_50 y min_50 de senal_top_contribuciones para la gráfica
+            # Extraer max_50, min_50, volatilidad y EMAs de senal_top_contribuciones para la gráfica
             "max_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "max_50"), None),
             "min_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "min_50"), None),
+            "volatilidad_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "volatilidad_100"), None),
+            "ema_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_50"), None),
+            "ema_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_100"), None),
         }
     
     # Incluir últimos ticks para el gráfico en tiempo real
     ticks_list = []
     if cuenta:
-        ticks_window = int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100)
+        ticks_window = 200  # Guardar últimos 200 ticks
         if ticks_window < 10:
             ticks_window = 10
         ticks_qs = (
@@ -369,7 +372,7 @@ def ticks_json(request):
     if not cuenta:
         return JsonResponse({"cuenta_id": None, "ticks": []})
     
-    ticks_window = int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100)
+    ticks_window = 200  # Guardar últimos 200 ticks
     if ticks_window < 10:
         ticks_window = 10
     # Obtener todos los ticks ordenados por epoch descendente, luego tomar los últimos N

@@ -163,7 +163,7 @@ class Command(BaseCommand):
         # ===== INICIALIZACIÓN DE CAPAS =====
         if usar_extremos:
             constructor_extremos = ConstructorVectorExtremos(
-                ventana_ticks=int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100)
+                ventana_ticks=200  # Ventana de 200 ticks
             )
             constructor = None  # No se usa en estrategia de extremos
             gestor_pesos = None  # No se usa en estrategia de extremos
@@ -775,7 +775,7 @@ class Command(BaseCommand):
                         try:
                             precio_guardar = tick_deriv.precio
                             epoch_guardar = tick_deriv.epoch
-                            ticks_window = int(getattr(settings, "EXTREMOS_VENTANA_TICKS", 100) or 100)
+                            ticks_window = 200  # Guardar últimos 200 ticks
                             if ticks_window < 10:
                                 ticks_window = 10
                             # Crear nuevo tick
@@ -824,21 +824,13 @@ class Command(BaseCommand):
                                 constructor_extremos.decrementar_cooldown()
                                 estado_extremos = constructor_extremos.obtener_estado()
                             
-                            # Evaluar señal de extremos
-                            resultado_extremos = evaluar_senal_extremos(
-                                vector_extremos=vector_extremos,
-                                estado_actual=estado_extremos.estado,
-                                tick_actual=ticks_procesados,
-                                tick_entrada=estado_extremos.tick_entrada,
-                                ref_extremo_tick=estado_extremos.ref_extremo_tick,
-                                ref_extremo_precio=estado_extremos.ref_extremo_precio,
-                                umbral_rango_minimo=getattr(
-                                    settings,
-                                    "EXTREMOS_UMBRAL_RANGO_MINIMO",
-                                    getattr(settings, "ESTRATEGIA_EXTREMOS_UMBRAL_RANGO", 0.5),
-                                ),
-                                permitir_put=("PUT" in contract_types_permitidos),
-                                permitir_call=("CALL" in contract_types_permitidos),
+                            # DESACTIVADO: No evaluar señales, solo monitoreo
+                            # resultado_extremos = evaluar_senal_extremos(...)
+                            # Crear resultado falso para mantener compatibilidad
+                            from vector_pesos.senal_extremos import ResultadoSenalExtremos
+                            resultado_extremos = ResultadoSenalExtremos(
+                                decision="NO_OPERAR",
+                                razon="Modo monitoreo: entradas desactivadas"
                             )
 
                             # Debug de por qué entra/no entra (para investigar “debería operar”)
@@ -908,6 +900,61 @@ class Command(BaseCommand):
                                 contribuciones=None,
                             )
                             
+                            # Calcular volatilidad de 100 ticks y EMAs
+                            volatilidad_100 = 0.0
+                            ema_50 = None
+                            ema_100 = None
+                            try:
+                                # Obtener últimos 200 ticks para cálculos
+                                ticks_para_calc = await sync_to_async(
+                                    lambda: list(
+                                        TickDerivSnapshot.objects.filter(cuenta_id=cuenta.id)
+                                        .order_by("-epoch")[:200]
+                                        .values_list("precio", flat=True)
+                                    ),
+                                    thread_sensitive=True,
+                                )()
+                                
+                                if len(ticks_para_calc) >= 2:
+                                    # Calcular retornos para volatilidad
+                                    retornos = []
+                                    for i in range(1, min(101, len(ticks_para_calc))):  # Últimos 100 retornos
+                                        if ticks_para_calc[i-1] > 0:
+                                            ret = (ticks_para_calc[i] - ticks_para_calc[i-1]) / ticks_para_calc[i-1]
+                                            retornos.append(ret)
+                                    
+                                    if len(retornos) >= 2:
+                                        from vector_variables.variables.volatilidad_local import volatilidad_local
+                                        volatilidad_100 = float(volatilidad_local(retornos))
+                                    
+                                    # Calcular EMAs (necesitamos los últimos N precios en orden cronológico)
+                                    from vector_variables.variables.ema_rapida import ema_rapida
+                                    
+                                    # EMA 50: usar todos los precios disponibles (orden cronológico: más antiguo primero)
+                                    if len(ticks_para_calc) >= 50:
+                                        precios_ordenados = list(reversed(ticks_para_calc))  # Más antiguo primero
+                                        # Inicializar EMA con promedio simple de los primeros 50 valores
+                                        suma_inicial_50 = sum(float(p) for p in precios_ordenados[:50])
+                                        ema_50_temp = suma_inicial_50 / 50.0
+                                        # Calcular EMA iterativamente desde el tick 50
+                                        for p in precios_ordenados[50:]:
+                                            ema_50_temp = ema_rapida(float(p), ema_50_temp, 50)
+                                        ema_50 = float(ema_50_temp) if ema_50_temp is not None else None
+                                    
+                                    # EMA 100: usar todos los precios disponibles (orden cronológico: más antiguo primero)
+                                    if len(ticks_para_calc) >= 100:
+                                        precios_ordenados = list(reversed(ticks_para_calc))  # Más antiguo primero
+                                        # Inicializar EMA con promedio simple de los primeros 100 valores
+                                        suma_inicial_100 = sum(float(p) for p in precios_ordenados[:100])
+                                        ema_100_temp = suma_inicial_100 / 100.0
+                                        # Calcular EMA iterativamente desde el tick 100
+                                        for p in precios_ordenados[100:]:
+                                            ema_100_temp = ema_rapida(float(p), ema_100_temp, 100)
+                                        ema_100 = float(ema_100_temp) if ema_100_temp is not None else None
+                            except Exception as e:
+                                # Si hay error en los cálculos, continuar sin ellos
+                                pass
+                            
                             # Para dashboard: crear contribuciones simplificadas
                             top_contrib = [
                                 {
@@ -926,6 +973,24 @@ class Command(BaseCommand):
                                     "variable": "rango_50",
                                     "contribucion": vector_extremos.get("rango_50", 0.0),
                                     "x": vector_extremos.get("rango_50", 0.0),
+                                    "w": 1.0,
+                                },
+                                {
+                                    "variable": "volatilidad_100",
+                                    "contribucion": volatilidad_100,
+                                    "x": volatilidad_100,
+                                    "w": 1.0,
+                                },
+                                {
+                                    "variable": "ema_50",
+                                    "contribucion": ema_50 if ema_50 is not None else 0.0,
+                                    "x": ema_50 if ema_50 is not None else 0.0,
+                                    "w": 1.0,
+                                },
+                                {
+                                    "variable": "ema_100",
+                                    "contribucion": ema_100 if ema_100 is not None else 0.0,
+                                    "x": ema_100 if ema_100 is not None else 0.0,
                                     "w": 1.0,
                                 },
                                 {
@@ -1103,6 +1168,21 @@ class Command(BaseCommand):
                         senal_valor_dash = resultado.valor if hasattr(resultado, 'valor') else 0.0
                         senal_decision_dash = resultado.decision
                         
+                        # Extraer volatilidad y EMAs de top_contrib (ya calculados arriba)
+                        volatilidad_100 = 0.0
+                        ema_50 = None
+                        ema_100 = None
+                        if top_contrib:
+                            for item in top_contrib:
+                                if item.get("variable") == "volatilidad_100":
+                                    volatilidad_100 = float(item.get("x", 0.0))
+                                elif item.get("variable") == "ema_50":
+                                    ema_50_val = item.get("x", 0.0)
+                                    ema_50 = float(ema_50_val) if ema_50_val else None
+                                elif item.get("variable") == "ema_100":
+                                    ema_100_val = item.get("x", 0.0)
+                                    ema_100 = float(ema_100_val) if ema_100_val else None
+                        
                         # Log de diagnóstico cada 50 ticks
                         if ticks_procesados % 50 == 0:
                             if usar_extremos:
@@ -1198,7 +1278,8 @@ class Command(BaseCommand):
                                 if estado_actual_ext.estado == "COOLDOWN":
                                     continue  # No operar durante cooldown
                             
-                            if resultado.decision in {"COMPRA", "VENTA"} and not gestor_riesgo.bloqueado:
+                            # DESACTIVADO: No hacer entradas, solo monitoreo
+                            if False and resultado.decision in {"COMPRA", "VENTA"} and not gestor_riesgo.bloqueado:
                                 # STAKE:
                                 # - Calculado como 1% del balance actual (crece proporcionalmente con el capital)
                                 # - Mínimo: 0.35 USD (si el 1% es menor, usar 0.35)
