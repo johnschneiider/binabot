@@ -385,7 +385,7 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    print(f"[{symbol}] [WS] Conectando a Deriv | intento={intentos} | symbol={symbol} | app_id={settings.DERIV_APP_ID}")
+                    f"[{symbol}] [WS] Conectando a Deriv | intento={intentos} | symbol={symbol} | app_id={settings.DERIV_APP_ID}"
                 )
             )
             try:
@@ -393,10 +393,10 @@ class Command(BaseCommand):
                     # BALANCE REAL SOLO SI HAY TOKEN (AUTORIZACIÓN).
                     incluir_balance = bool(settings.DERIV_API_TOKEN)
                     if incluir_balance:
-                        self.stdout.write(self.style.SUCCESS("[WS] Suscrito (ticks + balance). Esperando eventos..."))
+                        self.stdout.write(self.style.SUCCESS(f"[{symbol}] [WS] Suscrito (ticks + balance). Esperando eventos..."))
                     else:
-                        self.stderr.write(self.style.WARNING("[WS] Sin DERIV_API_TOKEN: no se puede suscribir a balance."))
-                        self.stdout.write(self.style.SUCCESS("[WS] Suscrito (solo ticks). Esperando ticks..."))
+                        self.stderr.write(self.style.WARNING(f"[{symbol}] [WS] Sin DERIV_API_TOKEN: no se puede suscribir a balance."))
+                        self.stdout.write(self.style.SUCCESS(f"[{symbol}] [WS] Suscrito (solo ticks). Esperando ticks..."))
 
                     # Forzar refresh de balance (one-shot) para evitar quedarse bloqueado por pausas vencidas
                     # cuando Deriv no emite updates de balance por stream.
@@ -415,7 +415,7 @@ class Command(BaseCommand):
                         except Exception as e:
                             self.stderr.write(f"[TRADING] Falló re-suscripción open_contract: {e}")
 
-                    print(f"[{symbol}] [WS] Conexión establecida, iniciando stream de eventos...")
+                    self.stdout.write(self.style.SUCCESS(f"[{symbol}] [WS] Conexión establecida, iniciando stream de eventos..."))
                     async for ev in cliente.stream_eventos(symbol, incluir_balance=incluir_balance):
                         # Balance poll periódico (one-shot). Esto garantiza recalcular ciclos/drawdown aunque
                         # Deriv no envíe mensajes `balance` cuando el monto no cambia.
