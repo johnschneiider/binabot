@@ -1476,21 +1476,88 @@ class Command(BaseCommand):
 
         def _actualizar_solo_existentes() -> None:
             from django.utils import timezone as django_timezone
+            import time as time_module
 
             # REGLA: NO IMPORTAR HISTÓRICO COMPLETO DE DERIV.
             # SOLO ACTUALIZAR OPERACIONES YA CREADAS POR ESTE BOT (ENTRADAS REALES).
+            # PERO: si encontramos una operación que no existe pero es reciente y del símbolo correcto,
+            # la creamos (para recuperar operaciones perdidas tras reinicios).
             existentes = set(
                 OperacionDeriv.objects.filter(cuenta_id=int(cuenta_id), creada_por_bot=True).values_list(
                     "contract_id", flat=True
                 )
             )
+            
+            # Obtener el símbolo de la cuenta para validar
+            cuenta_obj = Cuenta.objects.filter(id=int(cuenta_id)).first()
+            simbolo_cuenta = cuenta_obj.simbolo if cuenta_obj else None
+            
+            # Timestamp actual para validar operaciones recientes (últimas 48 horas)
+            ahora_epoch = int(time_module.time())
+            max_edad_segundos = 48 * 3600  # 48 horas
+            
             for t in trans:
                 cid = t.get("contract_id")
                 if cid is None:
                     continue
                 cid_i = int(cid)
+                simbolo_trans = str(t.get("symbol") or "")
+                
+                # Si no existe, intentar crearla si es reciente y del símbolo correcto
                 if cid_i not in existentes:
-                    continue
+                    purchase_time = t.get("purchase_time")
+                    if purchase_time and simbolo_cuenta and simbolo_trans == simbolo_cuenta:
+                        purchase_epoch = int(purchase_time)
+                        edad_segundos = ahora_epoch - purchase_epoch
+                        if 0 <= edad_segundos <= max_edad_segundos:
+                            # Crear la operación que se perdió
+                            buy_price = float(t.get("buy_price")) if t.get("buy_price") is not None else None
+                            sell_price = float(t.get("sell_price")) if t.get("sell_price") is not None else None
+                            entry_spot = float(t.get("entry_spot")) if t.get("entry_spot") is not None else None
+                            exit_spot = float(t.get("exit_spot")) if t.get("exit_spot") is not None else None
+                            if exit_spot is None and t.get("sell_spot") is not None:
+                                try:
+                                    exit_spot = float(t.get("sell_spot"))
+                                except Exception:
+                                    pass
+                            profit = float(t.get("profit")) if t.get("profit") is not None else None
+                            if profit is None and buy_price is not None and sell_price is not None:
+                                profit = float(sell_price) - float(buy_price)
+                            moneda = str(t.get("currency") or "")
+                            if not moneda:
+                                moneda = str(cuenta_obj.moneda_deriv if cuenta_obj else "")
+                            
+                            OperacionDeriv.objects.update_or_create(
+                                contract_id=cid_i,
+                                defaults={
+                                    "cuenta_id": int(cuenta_id),
+                                    "simbolo": simbolo_trans,
+                                    "creada_por_bot": True,
+                                    "transaction_id": int(t["transaction_id"]) if t.get("transaction_id") is not None else None,
+                                    "contract_type": str(t.get("contract_type") or ""),
+                                    "longcode": str(t.get("longcode") or ""),
+                                    "shortcode": str(t.get("shortcode") or ""),
+                                    "estado": OperacionDeriv.Estado.CERRADA if t.get("sell_time") else OperacionDeriv.Estado.ABIERTA,
+                                    "moneda": moneda,
+                                    "buy_price": buy_price,
+                                    "sell_price": sell_price,
+                                    "entry_spot": entry_spot,
+                                    "exit_spot": exit_spot,
+                                    "payout": float(t.get("payout")) if t.get("payout") is not None else None,
+                                    "profit": profit,
+                                    "opened_epoch": purchase_epoch,
+                                    "closed_epoch": int(t.get("sell_time")) if t.get("sell_time") is not None else None,
+                                    "updated_at": django_timezone.now(),
+                                },
+                            )
+                            msg = f"[{simbolo_trans}] [PROFIT_TABLE] Operación {cid_i} RECUPERADA (no existía en BD): profit={profit}"
+                            self.stdout.write(msg)
+                            _append_runtime_log(msg)
+                            # Agregar a existentes para que se actualice en el siguiente paso
+                            existentes.add(cid_i)
+                    else:
+                        # No crear: es muy antigua o símbolo no coincide
+                        continue
                 buy_price = float(t.get("buy_price")) if t.get("buy_price") is not None else None
                 sell_price = float(t.get("sell_price")) if t.get("sell_price") is not None else None
                 # Spot (precio del índice) si Deriv lo entrega en profit_table (no siempre).
@@ -1538,7 +1605,7 @@ class Command(BaseCommand):
 
                 estado_nuevo = update_kwargs.get("estado", "?")
                 profit_val = update_kwargs.get("profit")
-                simbolo_op = update_kwargs.get("simbolo", "?")
+                simbolo_op = update_kwargs.get("simbolo") or simbolo_trans or "?"
                 OperacionDeriv.objects.filter(contract_id=cid_i).update(**update_kwargs)
                 
                 # Log para debug: confirmar que se actualizó correctamente
