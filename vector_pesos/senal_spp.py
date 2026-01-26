@@ -133,7 +133,12 @@ def _estructura_ok(
 def _duracion_por_slope(symbol: str, *, slope_abs: float, slope_threshold: float) -> int:
     """
     Duración recomendada (ticks) según fuerza del impulso.
-    Evita 5 ticks; usa rangos 7–12 (R_10) y 10–15 (R_100).
+    Evita 5 ticks; usa rangos 7–12 (R_10).
+
+    Nota operativa:
+    En la práctica, para el setup actual de Deriv (ticks), hemos observado validaciones
+    que limitan la duración a 10 ticks en algunos offerings. Por eso, para R_100
+    esta función nunca retornará > 10.
     """
     thr = max(1e-9, float(slope_threshold))
     strength = float(slope_abs) / thr
@@ -146,13 +151,15 @@ def _duracion_por_slope(symbol: str, *, slope_abs: float, slope_threshold: float
             return 9
         return 11
     # R_100
+    # Max 10 por compatibilidad con offerings (ver OfferingsValidationError duration).
+    # Mantenerlo simple: el backend ya clampa a 1..10, pero aquí evitamos que "piense" >10.
     if strength >= 2.5:
         return 10
     if strength >= 2.0:
-        return 11
+        return 10
     if strength >= 1.5:
-        return 12
-    return 14
+        return 10
+    return 10
 
 
 def evaluar_senal_spp(

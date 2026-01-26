@@ -1114,16 +1114,29 @@ class Command(BaseCommand):
                                     dur = int(getattr(resultado_spp, "duracion_ticks", 0) or 0)
                                     if dur <= 0:
                                         dur = 11 if symbol == "R_10" else 14
-                                    dur_max = int(getattr(settings, "DERIV_MAX_DURACION_TICKS", 10))
-                                    if dur_max > 0 and dur > dur_max:
+
+                                    # === LÍMITE REAL DE DERIV (ticks) ===
+                                    # En algunos markets/offerings de Deriv, la duración por ticks está limitada a 10.
+                                    # Si enviamos >10, Deriv responde OfferingsValidationError (duration) y tumba el stream.
+                                    dur_abs_max = 10
+
+                                    dur_max_cfg = int(getattr(settings, "DERIV_MAX_DURACION_TICKS", 10) or 10)
+                                    # max efectivo: respeta config pero nunca excede el límite absoluto conocido
+                                    dur_max_eff = dur_abs_max if dur_max_cfg <= 0 else min(int(dur_max_cfg), dur_abs_max)
+
+                                    dur_deseada = int(dur)
+                                    dur = max(1, min(int(dur), int(dur_max_eff)))
+                                    if dur != dur_deseada:
                                         ahora_w = time.monotonic()
                                         if (ahora_w - ultimo_warn_duracion) >= 5.0:
                                             ultimo_warn_duracion = ahora_w
-                                            self.stderr.write(
-                                                f"[TRADING] duration inválida para Deriv: DERIV_DURACION_TICKS={dur} "
-                                                f"(máximo configurado={dur_max}). Ajusta .env o el mercado. No se enviará proposal."
+                                            msg = (
+                                                f"[{symbol}] [TRADING] WARN duration_clamped desired={dur_deseada} "
+                                                f"-> using={dur} (max_cfg={dur_max_cfg}, max_deriv={dur_abs_max})"
                                             )
-                                        continue
+                                            self.stderr.write(msg)
+                                            _append_runtime_log(msg)
+
                                     self.stderr.write(
                                         f"[TRADING] estrategia=spp decision={resultado.decision} stake={float(stake):.2f} "
                                         f"dur={dur} contract_type={contract_type} razon={getattr(resultado_spp,'razon','-')}"
