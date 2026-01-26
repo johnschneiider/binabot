@@ -176,25 +176,28 @@ def evaluar_senal_spp(
     """
     # ===== CONFIG (settings, con defaults razonables) =====
     slope_n = int(getattr(settings, "SPP_SLOPE_N", 7) or 7)
-    pullback_min = int(getattr(settings, "SPP_PULLBACK_MIN_TICKS", 3) or 3)
-    pullback_max = int(getattr(settings, "SPP_PULLBACK_MAX_TICKS", 8) or 8)
-    pullback_dist_factor = float(getattr(settings, "SPP_PULLBACK_DIST_FACTOR", 0.5) or 0.5)
-    cooldown_ticks = int(getattr(settings, "SPP_COOLDOWN_TICKS", 25) or 25)
+    # Defaults más conservadores ("modo banco"): menos trades, más calidad.
+    pullback_min = int(getattr(settings, "SPP_PULLBACK_MIN_TICKS", 4) or 4)
+    pullback_max = int(getattr(settings, "SPP_PULLBACK_MAX_TICKS", 7) or 7)
+    pullback_dist_factor = float(getattr(settings, "SPP_PULLBACK_DIST_FACTOR", 0.45) or 0.45)
+    cooldown_ticks = int(getattr(settings, "SPP_COOLDOWN_TICKS", 40) or 40)
     choppy_window = int(getattr(settings, "SPP_CHOPPY_WINDOW", 20) or 20)
-    choppy_max_flips = int(getattr(settings, "SPP_CHOPPY_MAX_FLIPS", 12) or 12)
+    choppy_max_flips = int(getattr(settings, "SPP_CHOPPY_MAX_FLIPS", 10) or 10)
     estructura_window = int(getattr(settings, "SPP_ESTRUCTURA_WINDOW", 24) or 24)
 
     # thresholds por símbolo
     if symbol == "R_10":
-        slope_threshold = float(getattr(settings, "SPP_SLOPE_THRESHOLD_R10", 0.03) or 0.03)
-        min_ema_gap = float(getattr(settings, "SPP_MIN_EMA_GAP_R10", 0.05) or 0.05)
+        slope_threshold = float(getattr(settings, "SPP_SLOPE_THRESHOLD_R10", 0.04) or 0.04)
+        min_ema_gap = float(getattr(settings, "SPP_MIN_EMA_GAP_R10", 0.08) or 0.08)
         slow_eps = float(getattr(settings, "SPP_SLOW_SLOPE_EPS_R10", 0.0) or 0.0)
-        estructura_min_delta = float(getattr(settings, "SPP_ESTRUCTURA_MIN_DELTA_R10", 0.02) or 0.02)
+        estructura_min_delta = float(getattr(settings, "SPP_ESTRUCTURA_MIN_DELTA_R10", 0.03) or 0.03)
+        retake_min_delta = float(getattr(settings, "SPP_RETAKE_MIN_DELTA_R10", 0.015) or 0.015)
     else:
-        slope_threshold = float(getattr(settings, "SPP_SLOPE_THRESHOLD_R100", 0.15) or 0.15)
-        min_ema_gap = float(getattr(settings, "SPP_MIN_EMA_GAP_R100", 0.25) or 0.25)
+        slope_threshold = float(getattr(settings, "SPP_SLOPE_THRESHOLD_R100", 0.18) or 0.18)
+        min_ema_gap = float(getattr(settings, "SPP_MIN_EMA_GAP_R100", 0.35) or 0.35)
         slow_eps = float(getattr(settings, "SPP_SLOW_SLOPE_EPS_R100", 0.0) or 0.0)
-        estructura_min_delta = float(getattr(settings, "SPP_ESTRUCTURA_MIN_DELTA_R100", 0.10) or 0.10)
+        estructura_min_delta = float(getattr(settings, "SPP_ESTRUCTURA_MIN_DELTA_R100", 0.15) or 0.15)
+        retake_min_delta = float(getattr(settings, "SPP_RETAKE_MIN_DELTA_R100", 0.06) or 0.06)
 
     # ===== UPDATE PRICE/DELTA =====
     precio = float(precio)
@@ -336,8 +339,18 @@ def evaluar_senal_spp(
         estado.pb_toco_fast = False
         return ResultadoSenalSPP(decision="NO_OPERAR", razon="pullback_largo")
 
-    # Disparador: primer tick a favor tras pullback, con pullback válido (duración + tocó EMA fast).
-    if favor and estado.pb_toco_fast and estado.pb_len >= pullback_min:
+    # Disparador: primer tick a favor tras pullback, con pullback válido:
+    # - duración mínima
+    # - tocó EMA fast (proximidad)
+    # - retoma con delta mínimo (evita "micro-retomas" que suelen fallar)
+    # - reclaim de EMA fast (confirmación extra)
+    if (
+        favor
+        and estado.pb_toco_fast
+        and estado.pb_len >= pullback_min
+        and abs(float(delta)) >= float(retake_min_delta)
+        and ((precio >= ema_fast) if bias == "CALL" else (precio <= ema_fast))
+    ):
         dur = _duracion_por_slope(symbol, slope_abs=abs(float(s_fast)), slope_threshold=slope_threshold)
         estado.pb_activo = False
         estado.pb_len = 0

@@ -112,6 +112,31 @@ DERIV_BLOQUEO_HORAS_LOCAL = os.getenv("DERIV_BLOQUEO_HORAS_LOCAL", "").strip()
 # quede pegado bloqueado cuando Deriv no emite updates de balance (p. ej. pausa de ciclo ya vencida).
 DERIV_BALANCE_POLL_CADA_SEG = float(os.getenv("DERIV_BALANCE_POLL_CADA_SEG", "60"))
 
+# ===== ESTRATEGIA SPP (estructura + pendiente + pullback) =====
+# Estos valores se consumen desde `vector_pesos/senal_spp.py`.
+# Defaults conservadores ("modo banco"): menos trades, más selectividad.
+SPP_SLOPE_N = int(os.getenv("SPP_SLOPE_N", "7"))
+SPP_PULLBACK_MIN_TICKS = int(os.getenv("SPP_PULLBACK_MIN_TICKS", "4"))
+SPP_PULLBACK_MAX_TICKS = int(os.getenv("SPP_PULLBACK_MAX_TICKS", "7"))
+SPP_PULLBACK_DIST_FACTOR = float(os.getenv("SPP_PULLBACK_DIST_FACTOR", "0.45"))
+SPP_COOLDOWN_TICKS = int(os.getenv("SPP_COOLDOWN_TICKS", "40"))
+SPP_CHOPPY_WINDOW = int(os.getenv("SPP_CHOPPY_WINDOW", "20"))
+SPP_CHOPPY_MAX_FLIPS = int(os.getenv("SPP_CHOPPY_MAX_FLIPS", "10"))
+SPP_ESTRUCTURA_WINDOW = int(os.getenv("SPP_ESTRUCTURA_WINDOW", "24"))
+
+# Umbrales por activo
+SPP_SLOPE_THRESHOLD_R10 = float(os.getenv("SPP_SLOPE_THRESHOLD_R10", "0.04"))
+SPP_MIN_EMA_GAP_R10 = float(os.getenv("SPP_MIN_EMA_GAP_R10", "0.08"))
+SPP_SLOW_SLOPE_EPS_R10 = float(os.getenv("SPP_SLOW_SLOPE_EPS_R10", "0.0"))
+SPP_ESTRUCTURA_MIN_DELTA_R10 = float(os.getenv("SPP_ESTRUCTURA_MIN_DELTA_R10", "0.03"))
+SPP_RETAKE_MIN_DELTA_R10 = float(os.getenv("SPP_RETAKE_MIN_DELTA_R10", "0.015"))
+
+SPP_SLOPE_THRESHOLD_R100 = float(os.getenv("SPP_SLOPE_THRESHOLD_R100", "0.18"))
+SPP_MIN_EMA_GAP_R100 = float(os.getenv("SPP_MIN_EMA_GAP_R100", "0.35"))
+SPP_SLOW_SLOPE_EPS_R100 = float(os.getenv("SPP_SLOW_SLOPE_EPS_R100", "0.0"))
+SPP_ESTRUCTURA_MIN_DELTA_R100 = float(os.getenv("SPP_ESTRUCTURA_MIN_DELTA_R100", "0.15"))
+SPP_RETAKE_MIN_DELTA_R100 = float(os.getenv("SPP_RETAKE_MIN_DELTA_R100", "0.06"))
+
 # ===== ROBUSTEZ TRADING REAL =====
 # Si Deriv/WS no responde a proposal/buy o se pierde un mensaje, el bot puede quedar "pegado" en estado esperando.
 # Estos timeouts activan un watchdog que resetea el estado y/o re-suscribe el contrato abierto tras reconexión.
