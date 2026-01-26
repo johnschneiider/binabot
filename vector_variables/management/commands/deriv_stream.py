@@ -1532,8 +1532,20 @@ class Command(BaseCommand):
                     update_kwargs["exit_spot"] = float(exit_spot)
                 # Asegura orden correcto en "últimas 50" y visibilidad al cerrar.
                 update_kwargs["updated_at"] = django_timezone.now()
+                # CRÍTICO: Mantener creada_por_bot=True explícitamente para que no se pierda el flag
+                # y la operación siga apareciendo en el dashboard después de cerrarse.
+                update_kwargs["creada_por_bot"] = True
 
+                estado_nuevo = update_kwargs.get("estado", "?")
+                profit_val = update_kwargs.get("profit")
+                simbolo_op = update_kwargs.get("simbolo", "?")
                 OperacionDeriv.objects.filter(contract_id=cid_i).update(**update_kwargs)
+                
+                # Log para debug: confirmar que se actualizó correctamente
+                if estado_nuevo == OperacionDeriv.Estado.CERRADA:
+                    msg = f"[{simbolo_op}] [PROFIT_TABLE] Operación {cid_i} cerrada: profit={profit_val} updated_at={update_kwargs['updated_at']}"
+                    self.stdout.write(msg)
+                    _append_runtime_log(msg)
 
         await sync_to_async(_actualizar_solo_existentes, thread_sensitive=True)()
 
