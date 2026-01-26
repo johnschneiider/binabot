@@ -1588,11 +1588,18 @@ class Command(BaseCommand):
             if exit_spot is None and existente and existente.get("exit_spot") is not None:
                 exit_spot = float(existente.get("exit_spot"))
 
+            # IMPORTANTE:
+            # `proposal_open_contract` solo lo estamos consumiendo para contratos que este proceso abrió
+            # (comprados por el bot o re-suscritos tras reconexión). Si no marcamos creada_por_bot=True,
+            # el dashboard los oculta y parece que "no llegan" operaciones.
+            from django.utils import timezone as django_timezone
+
             OperacionDeriv.objects.update_or_create(
                 contract_id=int(cid),
                 defaults={
                     "cuenta_id": int(cuenta_id),
                     "simbolo": str(simbolo),
+                    "creada_por_bot": True,
                     "contract_type": str(contrato.get("contract_type") or ""),
                     "longcode": str(contrato.get("longcode") or ""),
                     "shortcode": str(contrato.get("shortcode") or ""),
@@ -1606,6 +1613,8 @@ class Command(BaseCommand):
                     "profit": profit,
                     "opened_epoch": int(contrato.get("date_start")) if contrato.get("date_start") is not None else None,
                     "closed_epoch": int(contrato.get("sell_time")) if contrato.get("sell_time") is not None else None,
+                    # Asegura orden correcto en "últimas 50"
+                    "updated_at": django_timezone.now(),
                 },
             )
 
