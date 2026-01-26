@@ -279,7 +279,7 @@
         </div>
       </div>
 
-      <div style="max-height: 520px; overflow: auto; margin-top: 10px; -webkit-overflow-scrolling: touch;">
+      <div id="ops_table_wrap" style="max-height: 520px; overflow: auto; margin-top: 10px; -webkit-overflow-scrolling: touch;">
         <table>
           <thead>
             <tr>
@@ -345,6 +345,7 @@
 
       <div class="log-toolbar">
         <button id="logs_pause_btn" class="btn secondary">Pausar</button>
+        <button id="logs_copy_btn" class="btn">Copiar</button>
         <label class="muted" style="font-size: 12px;">Líneas</label>
         <select id="logs_lines_sel">
           <option value="150">150</option>
@@ -924,8 +925,28 @@
           } else {
             console.warn("[REFRESCAR] No hay datos de cuenta");
           }
-          console.log("[REFRESCAR] operaciones_deriv recibidas:", Array.isArray(data.operaciones_deriv) ? data.operaciones_deriv.length : "no es array", data.operaciones_deriv);
-          renderOpsDeriv(data.operaciones_deriv || []);
+          // ===== Operaciones: evitar re-render si no cambió (evita “parpadeo”/resets) =====
+          const opsArr = Array.isArray(data.operaciones_deriv) ? data.operaciones_deriv : [];
+          const opsKey = opsArr
+            .map(op => `${op.contract_id || ""}|${op.updated_at || ""}|${op.estado || ""}|${op.profit ?? ""}`)
+            .join(";");
+
+          const wrap = document.getElementById("ops_table_wrap");
+          const prevScrollTop = wrap ? wrap.scrollTop : 0;
+          const prevScrollHeight = wrap ? wrap.scrollHeight : 0;
+
+          if (window._lastOpsKey !== opsKey) {
+            window._lastOpsKey = opsKey;
+            renderOpsDeriv(opsArr);
+
+            // conservar scroll (si el usuario está leyendo histórico)
+            if (wrap) {
+              const newScrollHeight = wrap.scrollHeight;
+              const delta = newScrollHeight - prevScrollHeight;
+              // Mantener posición visual: ajusta por el cambio de altura
+              wrap.scrollTop = Math.max(0, prevScrollTop + delta);
+            }
+          }
           
           // Debug panel
           const debugEl = document.getElementById("ops_debug");
@@ -1262,6 +1283,7 @@
 
       function initLogsPanel() {
         const pauseBtn = document.getElementById("logs_pause_btn");
+        const copyBtn = document.getElementById("logs_copy_btn");
         const clearBtn = document.getElementById("logs_clear_btn");
         const filterEl = document.getElementById("logs_filter");
         const linesSel = document.getElementById("logs_lines_sel");
@@ -1276,6 +1298,35 @@
         clearBtn?.addEventListener("click", () => {
           const pre = document.getElementById("logs_pre");
           if (pre) pre.textContent = "";
+        });
+
+        copyBtn?.addEventListener("click", async () => {
+          try {
+            const pre = document.getElementById("logs_pre");
+            const txt = (pre?.textContent || "").trim();
+            if (!txt) {
+              _setLogsStatus(null, "No hay logs para copiar");
+              return;
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(txt);
+            } else {
+              // Fallback (navegadores viejos)
+              const ta = document.createElement("textarea");
+              ta.value = txt;
+              ta.style.position = "fixed";
+              ta.style.left = "-9999px";
+              document.body.appendChild(ta);
+              ta.focus();
+              ta.select();
+              document.execCommand("copy");
+              document.body.removeChild(ta);
+            }
+            _setLogsStatus(true, `Copiado (${txt.split("\\n").length} líneas)`);
+          } catch (e) {
+            console.error("[LOGS] Error copiando:", e);
+            _setLogsStatus(false, "No se pudo copiar");
+          }
         });
 
         // Refrescar al cambiar filtro/líneas (con debounce simple)
