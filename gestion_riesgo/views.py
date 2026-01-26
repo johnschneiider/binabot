@@ -317,7 +317,9 @@ def estado_json(request):
     # Obtener operaciones de ambos activos
     ops_deriv = list(
         OperacionDeriv.objects.order_by("-updated_at")
-        .filter(creada_por_bot=True, simbolo__in=["R_10", "R_100"])
+        # OJO: `profit_table` puede venir sin `symbol`; en ese caso NO queremos perder visibilidad en el dashboard.
+        # Filtramos por la cuenta relacionada (más confiable) en vez del campo `simbolo` del registro.
+        .filter(creada_por_bot=True, cuenta__simbolo__in=["R_10", "R_100"])
         .annotate(duracion_segundos=F("closed_epoch") - F("opened_epoch"))
         .values(
             "id",

@@ -1577,9 +1577,16 @@ class Command(BaseCommand):
                 if not moneda:
                     moneda = str(Cuenta.objects.filter(id=int(cuenta_id)).values_list("moneda_deriv", flat=True).first() or "")
 
+                # Deriv a veces NO envía `symbol` en profit_table. No debemos pisar el símbolo en BD con "".
+                simbolo_payload = str(t.get("symbol") or "").strip()
+                simbolo_existente = (
+                    str(OperacionDeriv.objects.filter(contract_id=cid_i).values_list("simbolo", flat=True).first() or "").strip()
+                )
+                simbolo_final = simbolo_payload or simbolo_existente or (str(simbolo_cuenta or "").strip())
+
                 # Importante: NO pisar entry_spot/exit_spot con NULL si Deriv no lo trae.
                 update_kwargs = {
-                    "simbolo": str(t.get("symbol") or ""),
+                    "simbolo": simbolo_final,
                     "transaction_id": int(t["transaction_id"]) if t.get("transaction_id") is not None else None,
                     "contract_type": str(t.get("contract_type") or ""),
                     "longcode": str(t.get("longcode") or ""),
@@ -1606,10 +1613,13 @@ class Command(BaseCommand):
                 estado_nuevo = update_kwargs.get("estado", "?")
                 profit_val = update_kwargs.get("profit")
                 simbolo_op = update_kwargs.get("simbolo") or simbolo_trans or "?"
+
+                # Evitar spam: loguear cierre solo si antes no tenía closed_epoch y ahora sí.
+                closed_prev = OperacionDeriv.objects.filter(contract_id=cid_i).values_list("closed_epoch", flat=True).first()
                 OperacionDeriv.objects.filter(contract_id=cid_i).update(**update_kwargs)
                 
                 # Log para debug: confirmar que se actualizó correctamente
-                if estado_nuevo == OperacionDeriv.Estado.CERRADA:
+                if estado_nuevo == OperacionDeriv.Estado.CERRADA and closed_prev is None and update_kwargs.get("closed_epoch") is not None:
                     msg = f"[{simbolo_op}] [PROFIT_TABLE] Operación {cid_i} cerrada: profit={profit_val} updated_at={update_kwargs['updated_at']}"
                     self.stdout.write(msg)
                     _append_runtime_log(msg)
