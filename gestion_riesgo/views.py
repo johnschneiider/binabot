@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone as dt_timezone
+import os
 import re
 
 from django.conf import settings
@@ -11,6 +12,43 @@ from django.views.decorators.http import require_http_methods
 from django.db.models import F
 
 from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, TickDerivSnapshot
+
+
+def _tail_lines(path: str, n: int) -> list[str]:
+    """
+    Retorna las últimas N líneas de un archivo (tail eficiente).
+    Si no existe, retorna [].
+    """
+    try:
+        n = max(1, int(n))
+    except Exception:
+        n = 200
+    n = min(n, 2000)
+
+    if not path or not os.path.exists(path):
+        return []
+    if not os.path.isfile(path):
+        return []
+
+    # Leer desde el final en bloques hasta reunir N líneas.
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            end = f.tell()
+            block_size = 8192
+            data = b""
+            pos = end
+            while pos > 0 and data.count(b"\n") <= n:
+                read_size = block_size if pos >= block_size else pos
+                pos -= read_size
+                f.seek(pos, os.SEEK_SET)
+                data = f.read(read_size) + data
+                if pos == 0:
+                    break
+            lines = data.splitlines()[-n:]
+        return [ln.decode("utf-8", errors="replace") for ln in lines]
+    except Exception:
+        return []
 
 
 def _parse_horas_bloqueadas(spec: str) -> set[int]:
@@ -403,4 +441,42 @@ def ticks_json(request):
     ticks_list.sort(key=lambda x: x["epoch"])
     
     return JsonResponse({"cuenta_id": cuenta.id, "ticks": ticks_list})
+
+
+@require_http_methods(["GET", "HEAD"])
+def logs_json(request):
+    """
+    Devuelve las últimas líneas de logs del bot/server para ver "cómo piensa".
+    Lee de un archivo local que el bot va anexando.
+    """
+    try:
+        lines = int(request.GET.get("lines") or 250)
+    except Exception:
+        lines = 250
+    lines = max(50, min(lines, 1000))
+
+    q = (request.GET.get("q") or "").strip()
+
+    # Orden de prioridad: settings -> env -> default dentro del repo
+    path = (
+        str(getattr(settings, "BOT_RUNTIME_LOG_FILE", "") or "").strip()
+        or str(os.environ.get("BOT_RUNTIME_LOG_FILE", "") or "").strip()
+        or os.path.join(getattr(settings, "BASE_DIR", os.getcwd()), "logs", "runtime.log")
+    )
+
+    out = _tail_lines(path, lines)
+    if q:
+        q_low = q.lower()
+        out = [ln for ln in out if q_low in ln.lower()]
+
+    return JsonResponse(
+        {
+            "lines": out[-lines:],
+            "meta": {
+                "lines": int(lines),
+                "filter": q,
+                "file": os.path.basename(path) if path else None,
+            },
+        }
+    )
 

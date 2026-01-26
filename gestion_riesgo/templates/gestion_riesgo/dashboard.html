@@ -20,6 +20,16 @@
       th { font-size: 12px; color: #374151; background: #f9fafb; position: sticky; top: 0; }
       .row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .log-wrap { max-height: 360px; overflow: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e5e7eb; border-radius: 10px; background: #0b1020; color: #e5e7eb; }
+      .log-pre { margin: 0; padding: 12px; font-size: 12px; line-height: 1.4; white-space: pre; }
+      .log-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+      .log-toolbar input[type="text"] { flex: 1 1 220px; min-width: 180px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12px; }
+      .log-toolbar select { padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12px; background: #fff; }
+      .btn { padding: 6px 12px; background: #111827; color: #fff; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; }
+      .btn.secondary { background: #fff; color: #111827; border: 1px solid #e5e7eb; }
+      .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 999px; background: #9ca3af; border: 1px solid rgba(255,255,255,0.25); vertical-align: middle; margin-right: 6px; }
+      .status-dot.ok { background: #10b981; }
+      .status-dot.bad { background: #ef4444; }
 
       .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
       .tab { cursor: pointer; user-select: none; padding: 6px 10px; border-radius: 999px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; }
@@ -312,6 +322,38 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Panel de logs (para ver "cómo piensa" el bot) -->
+    <div class="card" style="margin-top: 14px;">
+      <div class="row">
+        <div>
+          <div class="big">Logs del bot / servidor (tiempo real)</div>
+          <div class="muted">Se refresca cada ~2s desde <span class="mono">/api/logs/</span> · Útil para ver razones de NO_OPERAR, pullbacks, reconexiones WS, etc.</div>
+        </div>
+        <div class="muted">
+          <span id="logs_status_dot" class="status-dot"></span>
+          <span id="logs_status_text">—</span>
+        </div>
+      </div>
+
+      <div class="log-toolbar">
+        <button id="logs_pause_btn" class="btn secondary">Pausar</button>
+        <label class="muted" style="font-size: 12px;">Líneas</label>
+        <select id="logs_lines_sel">
+          <option value="150">150</option>
+          <option value="250" selected>250</option>
+          <option value="400">400</option>
+          <option value="700">700</option>
+          <option value="1000">1000</option>
+        </select>
+        <input id="logs_filter" type="text" placeholder="Filtrar (ej: [DIAG], [TRADING], razon=, [WS], R_10, R_100)" />
+        <button id="logs_clear_btn" class="btn secondary">Limpiar</button>
+      </div>
+
+      <div class="log-wrap" style="margin-top: 10px;">
+        <pre id="logs_pre" class="log-pre">Cargando logs…</pre>
       </div>
     </div>
 
@@ -1150,6 +1192,86 @@
         }
       }
 
+      // ===== LOGS PANEL =====
+      let logsPaused = false;
+      let logsTimer = null;
+      let logsLastOk = null;
+
+      function _setLogsStatus(ok, text) {
+        const dot = document.getElementById("logs_status_dot");
+        const t = document.getElementById("logs_status_text");
+        if (dot) {
+          dot.className = "status-dot" + (ok === true ? " ok" : (ok === false ? " bad" : ""));
+        }
+        if (t) t.textContent = text || "—";
+      }
+
+      function _logsShouldStickToBottom(el) {
+        if (!el) return true;
+        const threshold = 40;
+        return (el.scrollTop + el.clientHeight) >= (el.scrollHeight - threshold);
+      }
+
+      async function refrescarLogs() {
+        if (logsPaused) return;
+        const pre = document.getElementById("logs_pre");
+        const wrap = pre ? pre.parentElement : null;
+        const stick = _logsShouldStickToBottom(wrap);
+
+        const lines = document.getElementById("logs_lines_sel")?.value || "250";
+        const q = (document.getElementById("logs_filter")?.value || "").trim();
+        const url = `/api/logs/?lines=${encodeURIComponent(lines)}&q=${encodeURIComponent(q)}`;
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) {
+            _setLogsStatus(false, `Error ${res.status}`);
+            return;
+          }
+          const data = await res.json();
+          const arr = Array.isArray(data.lines) ? data.lines : [];
+          const text = arr.join("\n");
+          if (pre) pre.textContent = text || "—";
+          logsLastOk = Date.now();
+          _setLogsStatus(true, "OK");
+          if (wrap && stick) {
+            wrap.scrollTop = wrap.scrollHeight;
+          }
+        } catch (e) {
+          _setLogsStatus(false, "Sin conexión");
+        }
+      }
+
+      function initLogsPanel() {
+        const pauseBtn = document.getElementById("logs_pause_btn");
+        const clearBtn = document.getElementById("logs_clear_btn");
+        const filterEl = document.getElementById("logs_filter");
+        const linesSel = document.getElementById("logs_lines_sel");
+
+        pauseBtn?.addEventListener("click", () => {
+          logsPaused = !logsPaused;
+          pauseBtn.textContent = logsPaused ? "Reanudar" : "Pausar";
+          _setLogsStatus(null, logsPaused ? "Pausado" : "—");
+          if (!logsPaused) refrescarLogs();
+        });
+
+        clearBtn?.addEventListener("click", () => {
+          const pre = document.getElementById("logs_pre");
+          if (pre) pre.textContent = "";
+        });
+
+        // Refrescar al cambiar filtro/líneas (con debounce simple)
+        let debounce = null;
+        const onChange = () => {
+          if (debounce) clearTimeout(debounce);
+          debounce = setTimeout(() => refrescarLogs(), 250);
+        };
+        filterEl?.addEventListener("input", onChange);
+        linesSel?.addEventListener("change", () => refrescarLogs());
+
+        refrescarLogs();
+        logsTimer = setInterval(refrescarLogs, 2000);
+      }
+
       // Event listeners para controles de EMAs (R_10)
       document.getElementById("ema_update_btn_r10")?.addEventListener("click", () => {
         charts["R_10"].emaFast = parseInt(document.getElementById("ema_fast_period_r10")?.value || "50", 10);
@@ -1189,6 +1311,9 @@
 
       // Pintar el modo correcto (extremos vs wᵀx) desde el primer render, sin esperar el polling.
       aplicarEstadoInicialSenal();
+
+      // Inicializar panel de logs
+      initLogsPanel();
     </script>
   </body>
 </html>

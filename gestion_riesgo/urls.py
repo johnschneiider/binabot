@@ -11,6 +11,7 @@ urlpatterns = [
     path("api/estado/", views.estado_json, name="estado_json"),
     path("api/balance/", views.balance_json, name="balance_json"),
     path("api/ticks/", views.ticks_json, name="ticks_json"),
+    path("api/logs/", views.logs_json, name="logs_json"),
 ]
 
 

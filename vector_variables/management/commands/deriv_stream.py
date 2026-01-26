@@ -19,6 +19,63 @@ from quant_deriv_bot.infra.deriv_ws import ClienteDerivWS, dormir_segundos
 from vector_pesos.senal_spp import EstadoSPP, ResultadoSenalSPP, evaluar_senal_spp
 
 
+def _runtime_log_path() -> str:
+    """
+    Archivo "tail-friendly" para el dashboard (panel de logs).
+    """
+    # Prioridad: settings -> env -> default dentro del proyecto
+    try:
+        from django.conf import settings as _settings  # local import (evita problemas en import-time)
+
+        p = str(getattr(_settings, "BOT_RUNTIME_LOG_FILE", "") or "").strip()
+    except Exception:
+        p = ""
+    if not p:
+        p = str(os.environ.get("BOT_RUNTIME_LOG_FILE", "") or "").strip()
+    if not p:
+        p = os.path.join(os.getcwd(), "logs", "runtime.log")
+    return p
+
+
+def _append_runtime_log(line: str) -> None:
+    """
+    Anexa una línea a un archivo de log local para poder verla en el dashboard.
+    Diseñado para ser ultra-resistente (nunca debe tumbar el bot).
+    """
+    try:
+        p = _runtime_log_path()
+        d = os.path.dirname(p)
+        if d:
+            os.makedirs(d, exist_ok=True)
+
+        # Rotación ultra-simple por tamaño (evita crecimiento infinito).
+        # Mantiene solo ~2MB finales si supera ~10MB.
+        try:
+            if os.path.exists(p) and os.path.getsize(p) > (10 * 1024 * 1024):
+                with open(p, "rb") as rf:
+                    rf.seek(0, os.SEEK_END)
+                    end = rf.tell()
+                    keep = 2 * 1024 * 1024
+                    start = max(0, end - keep)
+                    rf.seek(start, os.SEEK_SET)
+                    data = rf.read()
+                with open(p, "wb") as wf:
+                    wf.write(data)
+                    if not data.endswith(b"\n"):
+                        wf.write(b"\n")
+        except Exception:
+            pass
+
+        s = str(line or "")
+        if not s.endswith("\n"):
+            s += "\n"
+        with open(p, "a", encoding="utf-8", errors="replace") as f:
+            f.write(s)
+    except Exception:
+        # No romper el bot por logging.
+        return
+
+
 @dataclass
 class PosicionPaper:
     """
@@ -257,6 +314,7 @@ class Command(BaseCommand):
         # ===== CONTEXTO DE ARRANQUE (DB/CUENTA/HORA) =====
         # Log de inicio para identificar qué símbolo está procesando
         print(f"[{symbol}] Iniciando bot para símbolo {symbol}")
+        _append_runtime_log(f"[{symbol}] Iniciando bot para símbolo {symbol}")
         try:
             db_name = settings.DATABASES.get("default", {}).get("NAME", "<desconocido>")
         except Exception:
@@ -266,11 +324,13 @@ class Command(BaseCommand):
             hora_local_now = int(self._hora_local(ahora_epoch))
         except Exception:
             hora_local_now = -1
-        self.stdout.write(
+        _cfg_line = (
             "[CFG] "
             f"db={db_name} cuenta_id={int(cuenta.id)} "
             f"hora_local={hora_local_now} horas_bloqueadas={sorted(list(horas_bloqueadas))}"
         )
+        self.stdout.write(_cfg_line)
+        _append_runtime_log(f"[{symbol}] {_cfg_line}")
 
         # ===== AUTO-INICIALIZAR CICLO SI FALTA (modo real) =====
         # Si Deriv no emite updates de balance por un rato, `ciclo_balance_inicio` puede quedarse en None.
@@ -300,7 +360,7 @@ class Command(BaseCommand):
         # ===== CONFIG EFECTIVA (LOG 1 VEZ) =====
         # Nota: stdout sin style para que quede grepeable en `journalctl | grep`.
         stake_fijo_cfg = getattr(settings, "DERIV_STAKE_FIJO", None)
-        self.stdout.write(
+        _cfg_line2 = (
             "[CFG] "
             f"modo_real={modo_real} symbol={symbol} "
             f"estrategia={estrategia_tipo} "
@@ -312,6 +372,8 @@ class Command(BaseCommand):
             f"contract_types={','.join(sorted(contract_types_permitidos))} "
             f"horas_bloqueadas={','.join(str(h) for h in sorted(horas_bloqueadas)) if horas_bloqueadas else '-'} "
         )
+        self.stdout.write(_cfg_line2)
+        _append_runtime_log(f"[{symbol}] {_cfg_line2}")
 
         def _limite_alcanzado() -> bool:
             if ilimitado:
@@ -331,20 +393,24 @@ class Command(BaseCommand):
             if not ilimitado and max_reintentos > 0 and intentos > max_reintentos:
                 raise CommandError("[WS] Se alcanzó el máximo de reintentos. Abortando para evitar ejecución ilimitada.")
 
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"[{symbol}] [WS] Conectando a Deriv | intento={intentos} | symbol={symbol} | app_id={settings.DERIV_APP_ID}"
-                )
-            )
+            _ws_line = f"[{symbol}] [WS] Conectando a Deriv | intento={intentos} | symbol={symbol} | app_id={settings.DERIV_APP_ID}"
+            self.stdout.write(self.style.SUCCESS(_ws_line))
+            _append_runtime_log(_ws_line)
             try:
                 async with ClienteDerivWS(token=settings.DERIV_API_TOKEN) as cliente:
                     # BALANCE REAL SOLO SI HAY TOKEN (AUTORIZACIÓN).
                     incluir_balance = bool(settings.DERIV_API_TOKEN)
                     if incluir_balance:
-                        self.stdout.write(self.style.SUCCESS(f"[{symbol}] [WS] Suscrito (ticks + balance). Esperando eventos..."))
+                        _ws_line2 = f"[{symbol}] [WS] Suscrito (ticks + balance). Esperando eventos..."
+                        self.stdout.write(self.style.SUCCESS(_ws_line2))
+                        _append_runtime_log(_ws_line2)
                     else:
-                        self.stderr.write(self.style.WARNING(f"[{symbol}] [WS] Sin DERIV_API_TOKEN: no se puede suscribir a balance."))
-                        self.stdout.write(self.style.SUCCESS(f"[{symbol}] [WS] Suscrito (solo ticks). Esperando ticks..."))
+                        _ws_warn = f"[{symbol}] [WS] Sin DERIV_API_TOKEN: no se puede suscribir a balance."
+                        self.stderr.write(self.style.WARNING(_ws_warn))
+                        _append_runtime_log(_ws_warn)
+                        _ws_line3 = f"[{symbol}] [WS] Suscrito (solo ticks). Esperando ticks..."
+                        self.stdout.write(self.style.SUCCESS(_ws_line3))
+                        _append_runtime_log(_ws_line3)
 
                     # Forzar refresh de balance (one-shot) para evitar quedarse bloqueado por pausas vencidas
                     # cuando Deriv no emite updates de balance por stream.
@@ -363,7 +429,9 @@ class Command(BaseCommand):
                         except Exception as e:
                             self.stderr.write(f"[TRADING] Falló re-suscripción open_contract: {e}")
 
-                    self.stdout.write(self.style.SUCCESS(f"[{symbol}] [WS] Conexión establecida, iniciando stream de eventos..."))
+                    _ws_line4 = f"[{symbol}] [WS] Conexión establecida, iniciando stream de eventos..."
+                    self.stdout.write(self.style.SUCCESS(_ws_line4))
+                    _append_runtime_log(_ws_line4)
                     async for ev in cliente.stream_eventos(symbol, incluir_balance=incluir_balance):
                         # Balance poll periódico (one-shot). Esto garantiza recalcular ciclos/drawdown aunque
                         # Deriv no envíe mensajes `balance` cuando el monto no cambia.
@@ -913,10 +981,12 @@ class Command(BaseCommand):
                         
                         # Log de diagnóstico cada 50 ticks
                         if ticks_procesados % 50 == 0:
-                            self.stdout.write(
-                                f"[DIAG] Tick #{ticks_procesados} estrategia=spp precio={precio_actual_dash:.5f} "
+                            _diag = (
+                                f"[{symbol}] [DIAG] Tick #{ticks_procesados} estrategia=spp precio={precio_actual_dash:.5f} "
                                 f"dec={senal_decision_dash} razon={getattr(resultado_spp,'razon', '-')}"
                             )
+                            self.stdout.write(_diag)
+                            _append_runtime_log(_diag)
                         
                         if tiempo_desde_ultimo_persist >= 1.0:
                             ultimo_persist = ahora
@@ -1058,6 +1128,10 @@ class Command(BaseCommand):
                                         f"[TRADING] estrategia=spp decision={resultado.decision} stake={float(stake):.2f} "
                                         f"dur={dur} contract_type={contract_type} razon={getattr(resultado_spp,'razon','-')}"
                                     )
+                                    _append_runtime_log(
+                                        f"[{symbol}] [TRADING] estrategia=spp decision={resultado.decision} stake={float(stake):.2f} "
+                                        f"dur={dur} contract_type={contract_type} razon={getattr(resultado_spp,'razon','-')}"
+                                    )
                                     
                                     await cliente.enviar(
                                         {
@@ -1105,6 +1179,11 @@ class Command(BaseCommand):
                             precio_log = tick.precio if tick is not None else precio_actual_dash
                             self.stdout.write(
                                 f"t={epoch_log} p={precio_log:.5f} s={resultado.valor:.4f} dec={resultado.decision} "
+                                f"cap={gestor_riesgo.capital_actual:.2f} bloqueado={gestor_riesgo.bloqueado} "
+                                f"n={ticks_procesados}{top_txt}"
+                            )
+                            _append_runtime_log(
+                                f"[{symbol}] t={epoch_log} p={precio_log:.5f} s={resultado.valor:.4f} dec={resultado.decision} "
                                 f"cap={gestor_riesgo.capital_actual:.2f} bloqueado={gestor_riesgo.bloqueado} "
                                 f"n={ticks_procesados}{top_txt}"
                             )
@@ -1203,7 +1282,9 @@ class Command(BaseCommand):
 
             except asyncio.TimeoutError:
                 # SI NO LLEGAN MENSAJES EN 60s, SE ASUME PROBLEMA DE RED/PROXY Y SE REINTENTA.
-                self.stderr.write(self.style.WARNING("[WS] Timeout sin ticks (60s). Reintentando..."))
+                _ws_to = f"[{symbol}] [WS] Timeout sin ticks (60s). Reintentando..."
+                self.stderr.write(self.style.WARNING(_ws_to))
+                _append_runtime_log(_ws_to)
                 # IMPORTANTE: no conservar estados de órdenes a través de reconexión (evita quedar pegado).
                 esperando = None
                 esperando_desde = 0.0
@@ -1212,8 +1293,11 @@ class Command(BaseCommand):
             except Exception as e:
                 import traceback
                 error_traceback = traceback.format_exc()
-                self.stderr.write(self.style.ERROR(f"[WS] Error: {e}. Reintentando en 3s..."))
-                self.stderr.write(f"[WS] Traceback: {error_traceback}")
+                _ws_err = f"[{symbol}] [WS] Error: {e}. Reintentando en 3s..."
+                self.stderr.write(self.style.ERROR(_ws_err))
+                self.stderr.write(f"[{symbol}] [WS] Traceback: {error_traceback}")
+                _append_runtime_log(_ws_err)
+                _append_runtime_log(f"[{symbol}] [WS] Traceback: {error_traceback}")
                 # IMPORTANTE: no conservar estados de órdenes a través de reconexión (evita quedar pegado).
                 esperando = None
                 esperando_desde = 0.0
