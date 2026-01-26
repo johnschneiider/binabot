@@ -344,12 +344,21 @@ def estado_json(request):
     # Mantener compatibilidad: cuenta principal es R_10
     cuenta_dict = cuentas_dict.get("R_10")
     
+    # Debug: contar total de operaciones (con y sin filtro)
+    total_ops_sin_filtro = OperacionDeriv.objects.filter(simbolo__in=["R_10", "R_100"]).count()
+    total_ops_con_filtro = OperacionDeriv.objects.filter(creada_por_bot=True, simbolo__in=["R_10", "R_100"]).count()
+    
     return JsonResponse({
         "cuenta": cuenta_dict,  # Compatibilidad con código existente
         "cuentas": cuentas_dict,  # Nuevo: datos de todos los activos
         "operaciones_deriv": ops_deriv,
         "ticks": ticks_dict.get("R_10", []),  # Compatibilidad
         "ticks_por_activo": ticks_dict,  # Nuevo: ticks por activo
+        "_debug": {
+            "ops_total_sin_filtro": total_ops_sin_filtro,
+            "ops_total_con_filtro_creada_por_bot": total_ops_con_filtro,
+            "ops_enviadas": len(ops_deriv),
+        },
     })
 
 

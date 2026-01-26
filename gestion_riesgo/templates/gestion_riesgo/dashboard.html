@@ -318,10 +318,13 @@
                 </td>
               </tr>
             {% empty %}
-              <tr><td colspan="7" class="muted">Aún no hay operaciones Deriv.</td></tr>
+              <tr><td colspan="8" class="muted">Aún no hay operaciones Deriv.</td></tr>
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div id="ops_debug" class="muted" style="margin-top: 8px; font-size: 11px; padding: 8px; background: #f9fafb; border-radius: 6px; display: none;">
+        <strong>Debug:</strong> <span id="ops_debug_text">—</span>
       </div>
     </div>
 
@@ -580,9 +583,10 @@
         const tbody = document.getElementById("tabla_operaciones_deriv");
         if (!tbody) return;
         if (!ops || ops.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="muted">Aún no hay operaciones Deriv.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8" class="muted">Aún no hay operaciones Deriv.</td></tr>';
           return;
         }
+        console.log("[RENDER OPS] Recibidas:", ops.length, "operaciones");
         tbody.innerHTML = ops.map(op => {
           const dur = (op.duracion_segundos !== null && op.duracion_segundos !== undefined)
             ? `${Number(op.duracion_segundos)}s`
@@ -916,7 +920,18 @@
           } else {
             console.warn("[REFRESCAR] No hay datos de cuenta");
           }
+          console.log("[REFRESCAR] operaciones_deriv recibidas:", Array.isArray(data.operaciones_deriv) ? data.operaciones_deriv.length : "no es array", data.operaciones_deriv);
           renderOpsDeriv(data.operaciones_deriv || []);
+          
+          // Debug panel
+          const debugEl = document.getElementById("ops_debug");
+          const debugText = document.getElementById("ops_debug_text");
+          if (debugEl && debugText && data._debug) {
+            debugEl.style.display = "block";
+            debugText.textContent = `Total en BD (sin filtro): ${data._debug.ops_total_sin_filtro || 0} | Con filtro (creada_por_bot=True): ${data._debug.ops_total_con_filtro_creada_por_bot || 0} | Enviadas al frontend: ${data._debug.ops_enviadas || 0}`;
+          } else if (debugEl) {
+            debugEl.style.display = "none";
+          }
           
           // Actualizar gráficos de ticks para ambos activos
           console.log("[REFRESCAR] ticksPorActivo:", ticksPorActivo);
