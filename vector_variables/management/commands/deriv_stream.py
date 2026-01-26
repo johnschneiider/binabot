@@ -1475,6 +1475,8 @@ class Command(BaseCommand):
         trans = tabla.get("transactions") or []
 
         def _actualizar_solo_existentes() -> None:
+            from django.utils import timezone as django_timezone
+
             # REGLA: NO IMPORTAR HISTÓRICO COMPLETO DE DERIV.
             # SOLO ACTUALIZAR OPERACIONES YA CREADAS POR ESTE BOT (ENTRADAS REALES).
             existentes = set(
@@ -1528,6 +1530,8 @@ class Command(BaseCommand):
                     update_kwargs["entry_spot"] = float(entry_spot)
                 if exit_spot is not None:
                     update_kwargs["exit_spot"] = float(exit_spot)
+                # Asegura orden correcto en "últimas 50" y visibilidad al cerrar.
+                update_kwargs["updated_at"] = django_timezone.now()
 
                 OperacionDeriv.objects.filter(contract_id=cid_i).update(**update_kwargs)
 
