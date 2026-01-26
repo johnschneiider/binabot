@@ -204,7 +204,10 @@
       <div class="chart-wrap" style="margin-top: 10px;">
         <canvas id="balance_chart"></canvas>
       </div>
-      <div class="muted" style="margin-top: 8px;">Fuente: snapshots (muestreo) · Config: <span class="mono">BALANCE_SNAPSHOT_CADA_SEG</span></div>
+      <div class="muted" style="margin-top: 8px;">
+        Fuente: snapshots (muestreo) · Config: <span class="mono">BALANCE_SNAPSHOT_CADA_SEG</span>
+        <span id="balance_status" class="mono" style="margin-left: 10px;"></span>
+      </div>
     </div>
 
     <!-- Gráfico R_10 -->
@@ -705,6 +708,16 @@
           if (!res.ok) return;
           const data = await res.json();
           const pts = Array.isArray(data.points) ? data.points : [];
+          const st = document.getElementById("balance_status");
+          if (st) {
+            if (data && data.error) {
+              st.textContent = `· ${String(data.error)}`;
+            } else if (!pts || pts.length === 0) {
+              st.textContent = "· Sin datos aún (esperando snapshots de balance)";
+            } else {
+              st.textContent = "";
+            }
+          }
           // Conservamos fecha+hora en labels para tooltip, pero el eje X solo renderiza DD via ticks.callback.
           balanceChart.data.labels = pts.map(p => labelFullFromT(p.t)); // MM-DD HH:MM (si es posible)
           balanceChart.data.datasets[0].data = pts.map(p => Number(p.balance));

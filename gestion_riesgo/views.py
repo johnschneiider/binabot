@@ -10,6 +10,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from django.db.models import F
+from django.db.utils import OperationalError
 
 from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, TickDerivSnapshot
 
@@ -400,11 +401,23 @@ def balance_json(request):
     if not cuenta:
         return JsonResponse({"cuenta_id": None, "points": []})
 
-    qs = (
-        BalanceDerivSnapshot.objects.filter(cuenta_id=cuenta.id, created_at__gte=desde)
-        .order_by("created_at")
-        .values("created_at", "balance", "moneda")
-    )
+    try:
+        qs = (
+            BalanceDerivSnapshot.objects.filter(cuenta_id=cuenta.id, created_at__gte=desde)
+            .order_by("created_at")
+            .values("created_at", "balance", "moneda")
+        )
+    except OperationalError:
+        # Si faltan migraciones / tabla no existe, no tumbar el dashboard.
+        return JsonResponse(
+            {
+                "cuenta_id": cuenta.id,
+                "range": rango,
+                "points": [],
+                "error": "BalanceDerivSnapshot no está disponible (¿faltan migraciones? Ejecuta: python manage.py migrate).",
+            },
+            status=200,
+        )
 
     points = []
     for row in qs:
