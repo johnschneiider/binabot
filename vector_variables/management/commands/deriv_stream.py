@@ -235,7 +235,16 @@ class Command(BaseCommand):
             tasks.append(task)
         
         # Ejecutar todas las tareas en paralelo
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # No ocultar errores: si no, systemd entra en loop y nunca se entiende el motivo.
+        for sym, res in zip(symbols, results):
+            if isinstance(res, Exception):
+                msg = f"[{sym}] [FATAL] Stream terminó con error: {res!r}"
+                try:
+                    self.stderr.write(msg)
+                except Exception:
+                    pass
+                _append_runtime_log(msg)
 
     async def _run(
         self,

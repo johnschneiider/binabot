@@ -9,6 +9,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from quant_deriv_bot.infra.dashboard_server import iniciar_dashboard
 from vector_variables.management.commands.deriv_stream import Command as DerivStreamCommand
+from vector_variables.management.commands.deriv_stream import _append_runtime_log
 
 
 class Command(BaseCommand):
@@ -68,6 +69,26 @@ class Command(BaseCommand):
         stream.stdout = self.stdout
         stream.stderr = self.stderr
 
+        # ===== MODO REAL (ROBUSTEZ EN PRODUCCIÓN) =====
+        # En systemd es común dejar `--real` fijo en el ExecStart, pero alternar la confirmación
+        # (DERIV_CONFIRMAR_REAL) desde .env para pausar trading real.
+        # Si NO está confirmado, NO tumbar el servicio (eso rompe el dashboard y genera 502).
+        want_real = bool(options.get("real"))
+        real_confirmado = bool(getattr(settings, "DERIV_MODO_REAL", False)) and (
+            str(getattr(settings, "DERIV_CONFIRMAR_REAL", "") or "").strip().upper() == "SI"
+        )
+        tiene_token = bool(getattr(settings, "DERIV_API_TOKEN", "") or "")
+        ejecutar_real = bool(want_real and real_confirmado and tiene_token)
+        if want_real and not ejecutar_real:
+            msg = (
+                "[BOOT] --real solicitado pero NO confirmado; iniciando en modo MONITOREO (sin órdenes). "
+                f"DERIV_MODO_REAL={getattr(settings,'DERIV_MODO_REAL', None)} "
+                f"DERIV_CONFIRMAR_REAL={getattr(settings,'DERIV_CONFIRMAR_REAL', None)!r} "
+                f"token={'OK' if tiene_token else 'MISSING'}"
+            )
+            self.stderr.write(msg)
+            _append_runtime_log(msg)
+
         asyncio.run(
             stream._run_multiple_symbols(
                 symbols=symbols,
@@ -75,7 +96,7 @@ class Command(BaseCommand):
                 max_segundos=int(options.get("max_segundos")),
                 max_reintentos=int(options.get("max_reintentos")),
                 ilimitado=bool(options.get("ilimitado")),
-                ejecutar_real=bool(options.get("real")),
+                ejecutar_real=ejecutar_real,
             )
         )
 
