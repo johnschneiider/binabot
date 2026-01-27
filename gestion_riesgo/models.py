@@ -123,8 +123,9 @@ class TickDerivHistorico(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["cuenta", "-epoch"]),
-            models.Index(fields=["-epoch"]),
+            # Nombres explícitos para que coincidan con la migración 0013 en producción.
+            models.Index(fields=["cuenta", "-epoch"], name="gestion_rie_cuenta__tch_idx"),
+            models.Index(fields=["-epoch"], name="gestion_rie_epoch_tch_idx"),
         ]
         ordering = ["-epoch"]
 
