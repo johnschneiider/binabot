@@ -13,9 +13,10 @@ from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.models import F
 
 from gestion_riesgo.gestor_riesgo import GestorRiesgo
-from gestion_riesgo.models import BalanceDerivSnapshot, Cuenta, Operacion, OperacionDeriv, TickDerivSnapshot
+from gestion_riesgo.models import BalanceDerivSnapshot, Cuenta, Operacion, OperacionDeriv, TickDerivHistorico, TickDerivSnapshot
 from quant_deriv_bot.infra.deriv_ws import ClienteDerivWS, dormir_segundos
 from vector_pesos.senal_spp import EstadoSPP, ResultadoSenalSPP, evaluar_senal_spp
 
@@ -882,6 +883,43 @@ class Command(BaseCommand):
                             self.stderr.write(error_msg)
                             # También escribir a stdout para que aparezca en logs
                             self.stdout.write(self.style.ERROR(error_msg))
+
+                        # ===== COLECTOR DE TICKS (HISTÓRICO) =====
+                        # Guarda ticks “para investigación” por días (NO se limpia), controlado desde dashboard.
+                        # Nota: usamos bulk_create por batches para no saturar SQLite.
+                        if getattr(cuenta, "ticks_colector_activo", False):
+                            try:
+                                if "ticks_hist_buffer" not in locals():
+                                    ticks_hist_buffer = []  # type: ignore[var-annotated]
+                                    ticks_hist_last_flush = time.monotonic()  # type: ignore[var-annotated]
+
+                                ticks_hist_buffer.append(
+                                    TickDerivHistorico(
+                                        cuenta_id=int(cuenta.id),
+                                        precio=float(tick_deriv.precio),
+                                        epoch=int(tick_deriv.epoch),
+                                    )
+                                )
+
+                                flush_every = int(getattr(settings, "TICKS_HIST_FLUSH_EVERY", 25) or 25)
+                                flush_secs = float(getattr(settings, "TICKS_HIST_FLUSH_SECS", 5.0) or 5.0)
+                                now_m = time.monotonic()
+                                if len(ticks_hist_buffer) >= flush_every or (now_m - ticks_hist_last_flush) >= flush_secs:
+                                    batch = ticks_hist_buffer
+                                    ticks_hist_buffer = []  # type: ignore[var-annotated]
+                                    ticks_hist_last_flush = now_m  # type: ignore[var-annotated]
+
+                                    def _flush() -> None:
+                                        TickDerivHistorico.objects.bulk_create(batch, batch_size=1000)
+                                        Cuenta.objects.filter(id=int(cuenta.id)).update(
+                                            ticks_colector_total=F("ticks_colector_total") + int(len(batch)),
+                                            ticks_colector_ultimo_epoch=int(tick_deriv.epoch),
+                                        )
+
+                                    await sync_to_async(_flush, thread_sensitive=True)()
+                            except Exception:
+                                # Nunca tumbar el bot por el colector.
+                                pass
                         
                         # ===== PROCESAMIENTO =====
                         # La estrategia SPP se evalúa más abajo (sección “EVALUACIÓN DE SEÑAL (SPP)”).

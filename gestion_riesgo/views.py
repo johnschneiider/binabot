@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.db.models import F
 from django.db.utils import OperationalError
 from django.db.models import Value
@@ -190,6 +191,7 @@ def _riesgo_motivo_ui(riesgo_motivo: str | None) -> dict:
     return {"label": rm, "pausa_hasta_epoch": None}
 
 
+@ensure_csrf_cookie
 @require_http_methods(["GET", "HEAD"])
 def dashboard(request):
     """
@@ -299,6 +301,10 @@ def estado_json(request):
                 "volatilidad_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "volatilidad_100"), None),
                 "ema_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_50"), None),
                 "ema_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_100"), None),
+                # Colector de ticks (histórico)
+                "ticks_colector_activo": bool(getattr(cuenta, "ticks_colector_activo", False)),
+                "ticks_colector_total": int(getattr(cuenta, "ticks_colector_total", 0) or 0),
+                "ticks_colector_ultimo_epoch": int(getattr(cuenta, "ticks_colector_ultimo_epoch", 0) or 0) or None,
             }
             
             # Obtener ticks para este activo
@@ -373,6 +379,46 @@ def estado_json(request):
             "ops_enviadas": len(ops_deriv),
         },
     })
+
+
+@require_http_methods(["POST"])
+def ticks_colector_toggle(request):
+    """
+    Pausar / reanudar el colector de ticks (histórico) por símbolo.
+    Body JSON:
+      - simbolo: "R_10" | "R_100"
+      - activo: true|false (opcional; si no viene, hace toggle)
+    """
+    try:
+        import json
+
+        payload = json.loads((request.body or b"{}").decode("utf-8"))
+    except Exception:
+        payload = {}
+
+    simbolo = str(payload.get("simbolo") or "").strip()
+    if simbolo not in {"R_10", "R_100"}:
+        return JsonResponse({"ok": False, "error": "simbolo inválido"}, status=400)
+
+    cuenta = Cuenta.objects.filter(simbolo=simbolo).order_by("-ultimo_tick_epoch", "-updated_at").first()
+    if not cuenta:
+        return JsonResponse({"ok": False, "error": "no hay cuenta"}, status=404)
+
+    if "activo" in payload:
+        nuevo = bool(payload.get("activo"))
+    else:
+        nuevo = not bool(getattr(cuenta, "ticks_colector_activo", False))
+
+    Cuenta.objects.filter(id=cuenta.id).update(ticks_colector_activo=nuevo)
+
+    cuenta_ref = Cuenta.objects.filter(id=cuenta.id).values(
+        "id",
+        "simbolo",
+        "ticks_colector_activo",
+        "ticks_colector_total",
+        "ticks_colector_ultimo_epoch",
+    ).first()
+    return JsonResponse({"ok": True, "cuenta": cuenta_ref})
 
 
 @require_http_methods(["GET", "HEAD"])

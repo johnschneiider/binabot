@@ -210,6 +210,44 @@
       </div>
     </div>
 
+    <!-- Colector de ticks (histórico) -->
+    <div class="card" style="margin-top: 14px;">
+      <div class="row">
+        <div>
+          <div class="big">Recolector de ticks (histórico)</div>
+          <div class="muted">Guarda ticks por días para investigación · Puedes pausarlo/reanudarlo</div>
+        </div>
+        <div class="muted mono" id="ticks_collector_status_global">—</div>
+      </div>
+      <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+        <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px;">
+          <div class="row">
+            <div class="mono" style="font-weight: 700;">R_10</div>
+            <div class="badge neutral mono" id="ticks_collector_badge_r10">—</div>
+          </div>
+          <div class="muted" style="margin-top: 8px;">Ticks archivados: <span class="mono" id="ticks_collector_total_r10">0</span></div>
+          <div class="muted">Último epoch: <span class="mono" id="ticks_collector_last_epoch_r10">—</span></div>
+          <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn" id="ticks_collector_toggle_r10">Pausar</button>
+          </div>
+        </div>
+        <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px;">
+          <div class="row">
+            <div class="mono" style="font-weight: 700;">R_100</div>
+            <div class="badge neutral mono" id="ticks_collector_badge_r100">—</div>
+          </div>
+          <div class="muted" style="margin-top: 8px;">Ticks archivados: <span class="mono" id="ticks_collector_total_r100">0</span></div>
+          <div class="muted">Último epoch: <span class="mono" id="ticks_collector_last_epoch_r100">—</span></div>
+          <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn" id="ticks_collector_toggle_r100">Pausar</button>
+          </div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top: 10px;">
+        Nota: esto NO detiene el bot ni el gráfico en tiempo real; solo controla el archivado para backtesting.
+      </div>
+    </div>
+
     <!-- Gráfico R_10 -->
     <div class="card" style="margin-top: 14px;">
       <div class="row">
@@ -886,6 +924,75 @@
         });
       }
 
+      function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(";").shift();
+        return null;
+      }
+
+      async function toggleTickCollector(simbolo) {
+        try {
+          const csrf = getCookie("csrftoken");
+          const res = await fetch("/api/ticks_colector/toggle/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(csrf ? { "X-CSRFToken": csrf } : {}),
+            },
+            body: JSON.stringify({ simbolo }),
+          });
+          const data = await res.json();
+          if (!data || !data.ok) {
+            console.warn("[TICKS_COLECTOR] Error:", data);
+            return;
+          }
+          // Refrescar UI en el próximo polling (o de inmediato si viene cuenta)
+          if (data.cuenta) {
+            const cuentas = window._lastCuentas || {};
+            cuentas[simbolo] = { ...(cuentas[simbolo] || {}), ...(data.cuenta || {}) };
+            window._lastCuentas = cuentas;
+            actualizarTicksCollectorUI(cuentas);
+          }
+        } catch (e) {
+          console.error("[TICKS_COLECTOR] Error:", e);
+        }
+      }
+
+      function actualizarTicksCollectorUI(cuentas) {
+        const map = { "R_10": "r10", "R_100": "r100" };
+        let activos = 0;
+        let total = 0;
+        for (const simbolo of ["R_10", "R_100"]) {
+          const key = map[simbolo];
+          const c = (cuentas && cuentas[simbolo]) ? cuentas[simbolo] : null;
+          const activo = Boolean(c && c.ticks_colector_activo);
+          const n = Number((c && c.ticks_colector_total) || 0);
+          const lastEp = (c && c.ticks_colector_ultimo_epoch) ? Number(c.ticks_colector_ultimo_epoch) : null;
+
+          total += n;
+          if (activo) activos += 1;
+
+          const badge = document.getElementById(`ticks_collector_badge_${key}`);
+          if (badge) {
+            badge.className = "badge mono " + (activo ? "ok" : "warn");
+            badge.textContent = activo ? "ACTIVO" : "PAUSADO";
+          }
+          setText(`ticks_collector_total_${key}`, String(n));
+          setText(`ticks_collector_last_epoch_${key}`, lastEp ? String(lastEp) : "—");
+
+          const btn = document.getElementById(`ticks_collector_toggle_${key}`);
+          if (btn) {
+            btn.textContent = activo ? "Pausar" : "Reanudar";
+            btn.onclick = () => toggleTickCollector(simbolo);
+          }
+        }
+        const global = document.getElementById("ticks_collector_status_global");
+        if (global) {
+          global.textContent = `Activos: ${activos}/2 · Total ticks archivados: ${total}`;
+        }
+      }
+
       async function refrescar() {
         try {
           const res = await fetch("/api/estado/", { cache: "no-store" });
@@ -897,6 +1004,7 @@
           const c = data.cuenta; // Mantener compatibilidad con código existente
           const cuentas = data.cuentas || {}; // Nuevo: datos de todos los activos
           const ticksPorActivo = data.ticks_por_activo || {}; // Nuevo: ticks por activo
+          window._lastCuentas = cuentas || {};
           
           // Guardar datos de cuenta principal para usar en otras partes
           window.lastCuentaData = c || {};
@@ -974,6 +1082,7 @@
           // Actualizar gráficos de ticks para ambos activos
           console.log("[REFRESCAR] ticksPorActivo:", ticksPorActivo);
           console.log("[REFRESCAR] cuentas:", cuentas);
+          actualizarTicksCollectorUI(cuentas);
           for (const simbolo of ["R_10", "R_100"]) {
             const ticks = ticksPorActivo[simbolo] || [];
             const cuentaData = cuentas[simbolo];

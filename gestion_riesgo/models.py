@@ -46,6 +46,13 @@ class Cuenta(models.Model):
     senal_decision = models.CharField(max_length=16, blank=True, default="")
     senal_top_contribuciones = models.JSONField(null=True, blank=True)
 
+    # ===== COLECTOR DE TICKS (HISTÓRICO) =====
+    # Permite dejar el bot en modo “recopilar ticks” por días sin operar necesariamente.
+    # El bot sigue recibiendo ticks, pero solo los ARCHIVA si este flag está activo.
+    ticks_colector_activo = models.BooleanField(default=True)
+    ticks_colector_total = models.BigIntegerField(default=0)
+    ticks_colector_ultimo_epoch = models.BigIntegerField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -98,6 +105,31 @@ class TickDerivSnapshot(models.Model):
     
     def __str__(self) -> str:
         return f"TickSnapshot(cuenta={self.cuenta_id} precio={self.precio:.5f} epoch={self.epoch})"
+
+
+class TickDerivHistorico(models.Model):
+    """
+    HISTÓRICO DE TICKS PARA INVESTIGACIÓN/BACKTEST.
+
+    Nota:
+    - A diferencia de `TickDerivSnapshot`, NO se limpia; puede crecer por días.
+    - Se controla con `Cuenta.ticks_colector_activo` (pausar/reanudar desde dashboard).
+    """
+
+    cuenta = models.ForeignKey(Cuenta, on_delete=models.CASCADE, related_name="ticks_historicos")
+    precio = models.FloatField()
+    epoch = models.BigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["cuenta", "-epoch"]),
+            models.Index(fields=["-epoch"]),
+        ]
+        ordering = ["-epoch"]
+
+    def __str__(self) -> str:
+        return f"TickHistorico(cuenta={self.cuenta_id} precio={self.precio:.5f} epoch={self.epoch})"
 
 
 class Operacion(models.Model):
