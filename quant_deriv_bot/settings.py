@@ -253,4 +253,18 @@ CICLO_STOPLOSS_PCT = float(os.getenv("CICLO_STOPLOSS_PCT", "0.010"))
 CICLO_PAUSA_TP_SEG = int(os.getenv("CICLO_PAUSA_TP_SEG", "86400"))
 CICLO_PAUSA_SL_SEG = int(os.getenv("CICLO_PAUSA_SL_SEG", "3600"))
 
+# ===== EDGE GUARD (modo institucional) =====
+# Circuit breaker basado en performance reciente: si la expectativa estimada es negativa,
+# el bot se pausa automáticamente un tiempo para evitar “tilt loops”.
+EDGE_GUARD_HABILITADO = (os.getenv("EDGE_GUARD_HABILITADO", "True").strip().lower() in {"1", "true", "yes", "y"})
+EDGE_GUARD_WINDOW_N = int(os.getenv("EDGE_GUARD_WINDOW_N", "200"))          # ventana de trades cerrados
+EDGE_GUARD_MIN_TRADES = int(os.getenv("EDGE_GUARD_MIN_TRADES", "60"))       # no actuar con poca data
+EDGE_GUARD_MARGIN_WR = float(os.getenv("EDGE_GUARD_MARGIN_WR", "0.015"))    # margen vs breakeven
+EDGE_GUARD_PAUSA_SEG = int(os.getenv("EDGE_GUARD_PAUSA_SEG", "3600"))       # 1h
+EDGE_GUARD_MIN_LOSS_STREAK = int(os.getenv("EDGE_GUARD_MIN_LOSS_STREAK", "5"))
+
+# ===== LIMITADOR DE SESIÓN (anti-overtrading) =====
+RISK_MAX_TRADES_PER_HOUR = int(os.getenv("RISK_MAX_TRADES_PER_HOUR", "0"))  # 0=deshabilitado
+RISK_MAX_TRADES_PER_DAY = int(os.getenv("RISK_MAX_TRADES_PER_DAY", "0"))    # 0=deshabilitado
+
 

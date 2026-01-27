@@ -154,6 +154,11 @@ def _riesgo_motivo_ui(riesgo_motivo: str | None) -> dict:
     if m:
         return {"label": "PAUSA (ciclo)", "pausa_hasta_epoch": int(m.group(1))}
 
+    # PAUSA_EDGE_HASTA_<epoch>
+    m = re.match(r"^PAUSA_EDGE_HASTA_(\d+)$", rm)
+    if m:
+        return {"label": "PAUSA (edge guard)", "pausa_hasta_epoch": int(m.group(1))}
+
     # TAKE_PROFIT_<tp>_PAUSA_<secs>s
     m = re.match(r"^TAKE_PROFIT_([0-9.]+)_PAUSA_(\d+)s$", rm)
     if m:

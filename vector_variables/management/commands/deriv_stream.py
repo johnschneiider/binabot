@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -483,6 +484,13 @@ class Command(BaseCommand):
                                     ciclo_sl = float(getattr(settings, "CICLO_STOPLOSS_PCT", 0.010))
                                     pausa_tp = int(getattr(settings, "CICLO_PAUSA_TP_SEG", 86400))
                                     pausa_sl = int(getattr(settings, "CICLO_PAUSA_SL_SEG", 3600))
+                                    # ===== EDGE GUARD (OPCIONAL) =====
+                                    edge_habil = bool(getattr(settings, "EDGE_GUARD_HABILITADO", True))
+                                    edge_n = int(getattr(settings, "EDGE_GUARD_WINDOW_N", 200) or 200)
+                                    edge_min_trades = int(getattr(settings, "EDGE_GUARD_MIN_TRADES", 60) or 60)
+                                    edge_margin = float(getattr(settings, "EDGE_GUARD_MARGIN_WR", 0.015) or 0.015)
+                                    edge_pausa_seg = int(getattr(settings, "EDGE_GUARD_PAUSA_SEG", 3600) or 3600)
+                                    edge_min_streak = int(getattr(settings, "EDGE_GUARD_MIN_LOSS_STREAK", 5) or 5)
 
                                     ciclo_balance_inicio = float(prev.get("ciclo_balance_inicio")) if (prev and prev.get("ciclo_balance_inicio") is not None) else None
                                     ciclo_pausa_hasta = int(prev.get("ciclo_pausa_hasta_epoch")) if (prev and prev.get("ciclo_pausa_hasta_epoch") is not None) else None
@@ -493,6 +501,63 @@ class Command(BaseCommand):
                                     nuevo_ciclo_balance_inicio = ciclo_balance_inicio
                                     nuevo_ciclo_inicio_epoch = int(prev.get("ciclo_inicio_epoch")) if (prev and prev.get("ciclo_inicio_epoch") is not None) else None
                                     nuevo_ciclo_pausa_hasta = ciclo_pausa_hasta
+
+                                    # ===== EDGE PAUSE (persistida en riesgo_motivo) =====
+                                    edge_bloqueado = False
+                                    rm_prev = str(prev.get("riesgo_motivo") or "").strip() if prev else ""
+                                    m_edge = re.match(r"^PAUSA_EDGE_HASTA_(\d+)$", rm_prev)
+                                    edge_hasta_epoch = int(m_edge.group(1)) if m_edge else None
+                                    if edge_hasta_epoch and ahora_epoch < int(edge_hasta_epoch):
+                                        edge_bloqueado = True
+                                        riesgo_motivo = f"PAUSA_EDGE_HASTA_{int(edge_hasta_epoch)}"
+                                        ciclo_evento = "EDGE_GUARD_PAUSA"
+                                    elif edge_hasta_epoch and ahora_epoch >= int(edge_hasta_epoch):
+                                        # pausa expirada: limpiar para que pueda re-evaluar
+                                        edge_hasta_epoch = None
+                                        edge_bloqueado = False
+
+                                    # Si no está ya en pausa, evaluar edge guard (circuit breaker).
+                                    if edge_habil and (not edge_bloqueado):
+                                        try:
+                                            profits = list(
+                                                OperacionDeriv.objects.filter(
+                                                    cuenta_id=int(cuenta.id),
+                                                    creada_por_bot=True,
+                                                    estado=OperacionDeriv.Estado.CERRADA,
+                                                    profit__isnull=False,
+                                                )
+                                                .order_by("-closed_epoch")
+                                                .values_list("profit", flat=True)[: max(1, edge_n)]
+                                            )
+                                            profits_f = [float(p) for p in profits]
+                                            if len(profits_f) >= int(edge_min_trades):
+                                                wins = [p for p in profits_f if p > 0.0]
+                                                losses = [-p for p in profits_f if p <= 0.0]
+                                                avg_win = (sum(wins) / len(wins)) if wins else 0.0
+                                                avg_loss = (sum(losses) / len(losses)) if losses else 0.0
+                                                wr = (len(wins) / len(profits_f)) if profits_f else 0.0
+                                                profit_total = sum(profits_f)
+                                                breakeven_wr = (avg_loss / (avg_loss + avg_win)) if (avg_loss > 0 and avg_win > 0) else 1.0
+
+                                                k = max(1, int(edge_min_streak))
+                                                last_k = profits_f[:k]
+                                                loss_streak = sum(1 for p in last_k if p <= 0.0)
+
+                                                if profit_total < 0.0 and (wr + float(edge_margin)) < breakeven_wr and loss_streak >= k:
+                                                    edge_hasta_epoch = int(ahora_epoch + max(0, int(edge_pausa_seg)))
+                                                    edge_bloqueado = True
+                                                    riesgo_motivo = f"PAUSA_EDGE_HASTA_{int(edge_hasta_epoch)}"
+                                                    ciclo_evento = "EDGE_GUARD_TRIGGER"
+                                                    self.stderr.write(
+                                                        f"[RISK] EDGE_GUARD: wr={wr*100:.1f}% breakeven≈{breakeven_wr*100:.1f}% "
+                                                        f"profit_total={profit_total:.2f} last{k}_losses={loss_streak}/{k} pausa={edge_pausa_seg}s"
+                                                    )
+                                                    _append_runtime_log(
+                                                        f"[{symbol}] [RISK] EDGE_GUARD: wr={wr*100:.1f}% breakeven≈{breakeven_wr*100:.1f}% "
+                                                        f"profit_total={profit_total:.2f} last{k}_losses={loss_streak}/{k} pausa={edge_pausa_seg}s"
+                                                    )
+                                        except Exception:
+                                            pass
 
                                     # Si ciclos están deshabilitados, limpiamos cualquier pausa previa para evitar
                                     # quedar bloqueados por estado viejo en BD.
@@ -583,7 +648,7 @@ class Command(BaseCommand):
                                     else:
                                         bloqueado_dd = False
 
-                                    bloqueado_real = bool(ciclo_bloqueado or bloqueado_dd)
+                                    bloqueado_real = bool(edge_bloqueado or ciclo_bloqueado or bloqueado_dd)
                                     if not riesgo_motivo:
                                         riesgo_motivo = "DRAWDOWN" if bloqueado_dd else "OK"
 
@@ -1042,6 +1107,44 @@ class Command(BaseCommand):
                                 # No enviar órdenes en modo monitoreo o si riesgo bloquea.
                                 pass
                             elif resultado.decision in {"COMPRA", "VENTA"}:
+                                # ===== LIMITADOR DE SESIÓN (anti-overtrading) =====
+                                try:
+                                    max_h = int(getattr(settings, "RISK_MAX_TRADES_PER_HOUR", 0) or 0)
+                                    max_d = int(getattr(settings, "RISK_MAX_TRADES_PER_DAY", 0) or 0)
+                                    now_ep = int(getattr(tick_deriv, "epoch", 0) or 0)
+                                    if now_ep > 0 and (max_h > 0 or max_d > 0):
+                                        if max_h > 0:
+                                            desde_h = now_ep - 3600
+                                            cnt_h = (
+                                                OperacionDeriv.objects.filter(
+                                                    cuenta_id=int(cuenta.id),
+                                                    creada_por_bot=True,
+                                                    opened_epoch__gte=int(desde_h),
+                                                ).count()
+                                            )
+                                            if cnt_h >= max_h:
+                                                msg = f"[{symbol}] [RISK] RATE_LIMIT hora: {cnt_h}/{max_h} (no abrir más)"
+                                                self.stderr.write(msg)
+                                                _append_runtime_log(msg)
+                                                continue
+                                        if max_d > 0:
+                                            desde_d = now_ep - 86400
+                                            cnt_d = (
+                                                OperacionDeriv.objects.filter(
+                                                    cuenta_id=int(cuenta.id),
+                                                    creada_por_bot=True,
+                                                    opened_epoch__gte=int(desde_d),
+                                                ).count()
+                                            )
+                                            if cnt_d >= max_d:
+                                                msg = f"[{symbol}] [RISK] RATE_LIMIT día: {cnt_d}/{max_d} (no abrir más)"
+                                                self.stderr.write(msg)
+                                                _append_runtime_log(msg)
+                                                continue
+                                except Exception:
+                                    # Nunca tumbar el bot por un limitador.
+                                    pass
+
                                 # STAKE:
                                 # - Calculado como 1% del balance actual (crece proporcionalmente con el capital)
                                 # - Mínimo: 0.35 USD (si el 1% es menor, usar 0.35)
