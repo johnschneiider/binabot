@@ -1604,8 +1604,6 @@ class Command(BaseCommand):
                     update_kwargs["entry_spot"] = float(entry_spot)
                 if exit_spot is not None:
                     update_kwargs["exit_spot"] = float(exit_spot)
-                # Asegura orden correcto en "últimas 50" y visibilidad al cerrar.
-                update_kwargs["updated_at"] = django_timezone.now()
                 # CRÍTICO: Mantener creada_por_bot=True explícitamente para que no se pierda el flag
                 # y la operación siga apareciendo en el dashboard después de cerrarse.
                 update_kwargs["creada_por_bot"] = True
@@ -1614,12 +1612,53 @@ class Command(BaseCommand):
                 profit_val = update_kwargs.get("profit")
                 simbolo_op = update_kwargs.get("simbolo") or simbolo_trans or "?"
 
-                # Evitar spam: loguear cierre solo si antes no tenía closed_epoch y ahora sí.
-                closed_prev = OperacionDeriv.objects.filter(contract_id=cid_i).values_list("closed_epoch", flat=True).first()
-                OperacionDeriv.objects.filter(contract_id=cid_i).update(**update_kwargs)
+                # Evitar “parpadeo” en dashboard:
+                # No tocar updated_at si no cambió nada relevante (si no, el top-50 oscila entre días).
+                existente_row = OperacionDeriv.objects.filter(contract_id=cid_i).values(
+                    "simbolo",
+                    "transaction_id",
+                    "contract_type",
+                    "longcode",
+                    "shortcode",
+                    "estado",
+                    "moneda",
+                    "buy_price",
+                    "sell_price",
+                    "payout",
+                    "profit",
+                    "opened_epoch",
+                    "closed_epoch",
+                    "entry_spot",
+                    "exit_spot",
+                    "creada_por_bot",
+                ).first()
+                if not existente_row:
+                    # No debería pasar porque filtramos por existentes/recuperadas, pero por seguridad:
+                    update_kwargs["updated_at"] = django_timezone.now()
+                    OperacionDeriv.objects.filter(contract_id=cid_i).update(**update_kwargs)
+                    continue
+
+                # Comparar solo campos que realmente queremos mantener sincronizados.
+                changed = False
+                for k, v in update_kwargs.items():
+                    # si Deriv no trae el campo (p. ej. entry_spot), no lo incluimos en update_kwargs
+                    prev_v = existente_row.get(k)
+                    if prev_v != v:
+                        changed = True
+                        break
+
+                closed_prev = existente_row.get("closed_epoch")
+                if changed:
+                    update_kwargs["updated_at"] = django_timezone.now()
+                    OperacionDeriv.objects.filter(contract_id=cid_i).update(**update_kwargs)
                 
                 # Log para debug: confirmar que se actualizó correctamente
-                if estado_nuevo == OperacionDeriv.Estado.CERRADA and closed_prev is None and update_kwargs.get("closed_epoch") is not None:
+                if (
+                    changed
+                    and estado_nuevo == OperacionDeriv.Estado.CERRADA
+                    and closed_prev is None
+                    and update_kwargs.get("closed_epoch") is not None
+                ):
                     msg = f"[{simbolo_op}] [PROFIT_TABLE] Operación {cid_i} cerrada: profit={profit_val} updated_at={update_kwargs['updated_at']}"
                     self.stdout.write(msg)
                     _append_runtime_log(msg)

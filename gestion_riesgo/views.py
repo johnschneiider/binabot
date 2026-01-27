@@ -11,6 +11,8 @@ from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from django.db.models import F
 from django.db.utils import OperationalError
+from django.db.models import Value
+from django.db.models.functions import Coalesce
 
 from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, TickDerivSnapshot
 
@@ -317,7 +319,10 @@ def estado_json(request):
     ).first()
     # Obtener operaciones de ambos activos
     ops_deriv = list(
-        OperacionDeriv.objects.order_by("-updated_at")
+        # Orden estable por “tiempo real” del contrato (no por updated_at),
+        # para evitar que el top-50 oscile si el bot vuelve a tocar operaciones viejas.
+        OperacionDeriv.objects.annotate(epoch_ref=Coalesce("closed_epoch", "opened_epoch", Value(0)))
+        .order_by("-epoch_ref", "-updated_at")
         # OJO: `profit_table` puede venir sin `symbol`; en ese caso NO queremos perder visibilidad en el dashboard.
         # Filtramos por la cuenta relacionada (más confiable) en vez del campo `simbolo` del registro.
         .filter(creada_por_bot=True, cuenta__simbolo__in=["R_10", "R_100"])
@@ -348,8 +353,8 @@ def estado_json(request):
     cuenta_dict = cuentas_dict.get("R_10")
     
     # Debug: contar total de operaciones (con y sin filtro)
-    total_ops_sin_filtro = OperacionDeriv.objects.filter(simbolo__in=["R_10", "R_100"]).count()
-    total_ops_con_filtro = OperacionDeriv.objects.filter(creada_por_bot=True, simbolo__in=["R_10", "R_100"]).count()
+    total_ops_sin_filtro = OperacionDeriv.objects.filter(cuenta__simbolo__in=["R_10", "R_100"]).count()
+    total_ops_con_filtro = OperacionDeriv.objects.filter(creada_por_bot=True, cuenta__simbolo__in=["R_10", "R_100"]).count()
     
     return JsonResponse({
         "cuenta": cuenta_dict,  # Compatibilidad con código existente
