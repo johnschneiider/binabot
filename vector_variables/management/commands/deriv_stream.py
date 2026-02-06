@@ -1358,13 +1358,16 @@ class Command(BaseCommand):
 
                         # ===== PAPER TRADING + RIESGO (SÓLO PARA DEMOSTRAR GOBERNANZA) =====
                         # STOP DISTANCIA BASADA EN VOLATILIDAD LOCAL (PROPORCIONAL AL PRECIO).
-                        vol = float(x.get("volatilidad_local", 0.0))
-                        stop_min = float(settings.STOP_MIN_PORCENTAJE) * float(tick.precio)
-                        stop_dist = max(stop_min, 2.0 * vol * tick.precio)  # 2-sigma aproximado (simplificado)
+                        # Nota: `x` no existe aquí. La volatilidad ya se calcula arriba como `volatilidad_100`
+                        # (std de deltas de precio en ventana ~100). Usamos eso como proxy de vol local.
+                        precio_mtm = float(getattr(tick, "precio", None) or precio_actual_dash or tick_deriv.precio)
+                        vol = float(volatilidad_100 or 0.0)
+                        stop_min = float(settings.STOP_MIN_PORCENTAJE) * float(precio_mtm)
+                        stop_dist = max(stop_min, 2.0 * vol * precio_mtm)  # 2-sigma aproximado (simplificado)
 
                         # ACTUALIZAR EQUITY POR POSICIÓN ABIERTA (MARK-TO-MARKET SIMPLE CON STOP/TP).
                         if posicion is not None:
-                            pnl = self._pnl_actual(posicion, tick.precio)
+                            pnl = self._pnl_actual(posicion, precio_mtm)
                             capital_mtm = gestor_riesgo.capital_actual + pnl
                             gestor_riesgo.registrar_equity(capital_mtm)
 
@@ -1431,7 +1434,7 @@ class Command(BaseCommand):
                             ultimo_persist = ahora2
                             cap_vista = float(gestor_riesgo.capital_actual)
                             if posicion is not None:
-                                cap_vista = float(gestor_riesgo.capital_actual + self._pnl_actual(posicion, tick.precio))
+                                cap_vista = float(gestor_riesgo.capital_actual + self._pnl_actual(posicion, precio_mtm))
                             await sync_to_async(
                                 lambda: Cuenta.objects.filter(id=cuenta.id).update(
                                     capital_actual=cap_vista,
