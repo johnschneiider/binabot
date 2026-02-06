@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import datetime as dt
 from pathlib import Path
 from typing import Iterable, List, Tuple
 
@@ -88,13 +89,15 @@ class Command(BaseCommand):
         plt.figure(figsize=(12, 6))
         plotted = 0
 
+        import matplotlib.dates as mdates
+
         for sym in symbols:
             xs_epoch, ys_price, total = _sample_ticks(sym, max_points)
             if not xs_epoch:
                 self.stdout.write(f"[{sym}] Sin datos en TickDerivHistorico.")
                 continue
             # Convertir epoch a datetime para eje X legible
-            xs_dt = [matplotlib.dates.epoch2num(x) for x in xs_epoch]
+            xs_dt = [mdates.date2num(dt.datetime.utcfromtimestamp(x)) for x in xs_epoch]
             plt.scatter(xs_dt, ys_price, s=2, alpha=0.5, label=f"{sym} (n={len(xs_epoch)}/{total})")
             self.stdout.write(f"[{sym}] total={total} graficados={len(xs_epoch)} step≈{max(1, math.ceil(total/max_points))}")
             plotted += len(xs_epoch)
