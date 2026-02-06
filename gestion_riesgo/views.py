@@ -6,7 +6,7 @@ import re
 
 from django.conf import settings
 from django.utils import timezone
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -229,6 +229,25 @@ def dashboard(request):
             "horas_bloqueadas": sorted(list(horas_bloqueadas)),
         },
     )
+
+
+@require_http_methods(["GET"])
+def scatter_ticks_png(request):
+    """
+    Devuelve el PNG generado por el comando `graficar_ticks`.
+    Ruta esperada: BASE_DIR/plots/scatter_ticks.png
+    """
+    try:
+        base = Path(getattr(settings, "BASE_DIR", Path(".")))
+    except Exception:
+        base = Path(".")
+    png_path = (base / "plots" / "scatter_ticks.png").resolve()
+    if not png_path.exists() or not png_path.is_file():
+        return HttpResponseNotFound("No se encontró scatter_ticks.png. Genera primero con manage.py graficar_ticks.")
+    try:
+        return FileResponse(open(png_path, "rb"), content_type="image/png")
+    except Exception:
+        return HttpResponseNotFound("No se pudo leer scatter_ticks.png.")
 
 
 @require_http_methods(["GET", "HEAD"])

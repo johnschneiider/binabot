@@ -86,6 +86,14 @@
         <div class="muted">Equity interna (paper): <span class="mono" id="capital_actual">{{ cuenta.capital_actual|default:"—" }}</span></div>
       </div>
       <div class="card">
+        <div class="muted" style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Scatter de ticks (histórico)</div>
+        <div class="muted" style="margin-bottom: 8px; font-size: 12px;">Generado con <span class="mono">manage.py graficar_ticks</span>.</div>
+        <div style="border:1px solid #e5e7eb; border-radius: 8px; padding: 6px; background: #f9fafb;">
+          <img src="{% url 'gestion_riesgo:scatter_ticks_png' %}" alt="Scatter ticks" style="width: 100%; height: auto; border-radius: 6px; background: #fff;" onerror="this.style.display='none'; document.getElementById('scatter_error').style.display='block';">
+          <div id="scatter_error" class="muted" style="display:none; font-size: 12px; margin-top: 6px;">No se encontró <span class="mono">scatter_ticks.png</span>. Ejecútalo en la VPS.</div>
+        </div>
+      </div>
+      <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
           <div class="muted" style="font-size: 13px; font-weight: 600;">Estado del Bot</div>
           {% if cuenta and cuenta.bloqueado %}
