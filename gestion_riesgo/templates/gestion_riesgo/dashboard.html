@@ -63,6 +63,8 @@
     </style>
   </head>
   <body>
+    <!-- Plotly para zoom/pan en el scatter interactivo -->
+    <script src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
     <div class="row">
       <div>
         <div class="big">Dashboard (tiempo real)</div>
@@ -91,7 +93,7 @@
         <div style="border:1px solid #e5e7eb; border-radius: 8px; padding: 6px; background: #f9fafb;">
           <img src="{% url 'gestion_riesgo:scatter_ticks_png' %}" alt="Scatter ticks" style="width: 100%; height: auto; border-radius: 6px; background: #fff;" onerror="this.style.display='none'; document.getElementById('scatter_error').style.display='block';">
           <div id="scatter_error" class="muted" style="display:none; font-size: 12px; margin-top: 6px;">No se encontró <span class="mono">scatter_ticks.png</span>. Ejecútalo en la VPS.</div>
-          <div style="margin-top: 8px; display: flex; justify-content: flex-end;">
+          <div style="margin-top: 8px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
             <a class="btn secondary" style="text-decoration: none; padding: 6px 10px; font-size: 12px;"
                href="{% url 'gestion_riesgo:scatter_ticks_png' %}?download=1" target="_blank" rel="noreferrer">
               Descargar PNG
@@ -200,6 +202,24 @@
 
     {# Datos iniciales para que la UI se pinte bien sin esperar el primer polling #}
     {{ cuenta.senal_top_contribuciones|default:"[]"|json_script:"initial_senal_top_contribuciones" }}
+
+    <!-- Scatter interactivo con Plotly -->
+    <div class="card" style="margin-top: 16px; border: 1px solid #e5e7eb; border-radius: 12px;">
+      <div class="row" style="margin-bottom: 8px;">
+        <div>
+          <div class="muted" style="font-size: 13px; font-weight: 600;">Scatter interactivo (zoom/pan)</div>
+          <div class="muted" style="font-size: 12px;">Eje X: tiempo (UTC). Eje Y: precio.</div>
+        </div>
+        <div>
+          <a class="btn secondary" style="text-decoration: none; padding: 6px 10px; font-size: 12px;"
+             href="{% url 'gestion_riesgo:scatter_ticks_png' %}?download=1" target="_blank" rel="noreferrer">
+            Descargar PNG
+          </a>
+        </div>
+      </div>
+      <div id="scatter_interactivo" style="width: 100%; height: 420px; border:1px solid #e5e7eb; border-radius: 10px; background: #fff;"></div>
+      <div id="scatter_msg" class="muted" style="font-size: 12px; margin-top: 6px;"></div>
+    </div>
 
     <div class="card" style="margin-top: 14px;">
       <div class="row">
@@ -1478,6 +1498,43 @@
         logsTimer = setInterval(refrescarLogs, 2000);
       }
 
+      // ===== Scatter interactivo (Plotly) =====
+      async function cargarScatterInteractivo() {
+        const msg = document.getElementById("scatter_msg");
+        const div = document.getElementById("scatter_interactivo");
+        if (msg) msg.textContent = "Cargando puntos…";
+        try {
+          const resp = await fetch("{% url 'gestion_riesgo:ticks_scatter_json' %}?max=20000");
+          if (!resp.ok) throw new Error("HTTP " + resp.status);
+          const data = await resp.json();
+          const traces = [];
+          (data.symbols || []).forEach((s) => {
+            const xs = (s.points || []).map(pt => new Date(pt.t));
+            const ys = (s.points || []).map(pt => pt.p);
+            traces.push({
+              x: xs,
+              y: ys,
+              mode: "markers",
+              type: "scattergl",
+              marker: { size: 3, opacity: 0.5 },
+              name: `${s.symbol} (n=${s.sampled}/${s.total})`,
+            });
+          });
+          const layout = {
+            title: "Scatter ticks (interactivo)",
+            xaxis: { title: "Tiempo (UTC)", type: "date" },
+            yaxis: { title: "Precio" },
+            margin: { l: 60, r: 20, t: 40, b: 50 },
+            showlegend: true,
+          };
+          Plotly.newPlot(div, traces, layout, { responsive: true, displaylogo: false });
+          if (msg) msg.textContent = "Tip: usa scroll/drag para zoom y doble clic para resetear.";
+        } catch (e) {
+          console.error(e);
+          if (msg) msg.textContent = "No se pudo cargar el scatter interactivo. Asegúrate de tener ticks históricos.";
+        }
+      }
+
       // Event listeners para controles de EMAs (R_10)
       document.getElementById("ema_update_btn_r10")?.addEventListener("click", () => {
         charts["R_10"].emaFast = parseInt(document.getElementById("ema_fast_period_r10")?.value || "50", 10);
@@ -1499,6 +1556,9 @@
           actualizarGraficoTicks("R_100", charts["R_100"].lastTicks, null);
         }
       });
+
+      // Render inicial del scatter interactivo
+      cargarScatterInteractivo();
 
       refrescar();
       setInterval(refrescar, 1000); // Actualiza señal Y ticks cada 1 segundo

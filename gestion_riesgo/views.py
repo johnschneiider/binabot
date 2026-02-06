@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone as dt_timezone
 import os
 import re
+import math
 from pathlib import Path
 
 from django.conf import settings
@@ -16,7 +17,7 @@ from django.db.utils import OperationalError
 from django.db.models import Value
 from django.db.models.functions import Coalesce
 
-from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, TickDerivSnapshot
+from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, TickDerivSnapshot, TickDerivHistorico
 
 
 def _tail_lines(path: str, n: int) -> list[str]:
@@ -255,6 +256,47 @@ def scatter_ticks_png(request):
         )
     except Exception:
         return HttpResponseNotFound("No se pudo leer scatter_ticks.png.")
+
+
+@require_http_methods(["GET"])
+def ticks_scatter_json(request):
+    """
+    Devuelve puntos de ticks downsampleados para scatter interactivo.
+    Parámetros opcionales:
+      - max: máximo de puntos por símbolo (default 20000)
+      - symbols: lista separada por coma (default: R_10,R_100)
+    """
+    try:
+        max_points = max(1000, min(100_000, int(request.GET.get("max", 20000))))
+    except Exception:
+        max_points = 20000
+
+    raw_symbols = str(request.GET.get("symbols") or "R_10,R_100")
+    symbols = [s.strip() for s in raw_symbols.split(",") if s.strip()]
+    if not symbols:
+        symbols = ["R_10", "R_100"]
+
+    payload = []
+    for sym in symbols:
+        qs = (
+            TickDerivHistorico.objects.filter(cuenta__simbolo=sym)
+            .order_by("epoch")
+            .values_list("epoch", "precio")
+        )
+        total = qs.count()
+        if total == 0:
+            payload.append({"symbol": sym, "total": 0, "sampled": 0, "points": []})
+            continue
+        step = max(1, math.ceil(total / max_points))
+        pts = []
+        idx = 0
+        for epoch, precio in qs.iterator(chunk_size=5000):
+            if idx % step == 0:
+                pts.append({"t": int(epoch) * 1000, "p": float(precio)})
+            idx += 1
+        payload.append({"symbol": sym, "total": total, "sampled": len(pts), "points": pts, "step": step})
+
+    return JsonResponse({"symbols": payload})
 
 
 @require_http_methods(["GET", "HEAD"])
