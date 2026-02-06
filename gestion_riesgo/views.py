@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone as dt_timezone
 import os
 import re
+from pathlib import Path
 
 from django.conf import settings
 from django.utils import timezone
@@ -245,7 +246,13 @@ def scatter_ticks_png(request):
     if not png_path.exists() or not png_path.is_file():
         return HttpResponseNotFound("No se encontró scatter_ticks.png. Genera primero con manage.py graficar_ticks.")
     try:
-        return FileResponse(open(png_path, "rb"), content_type="image/png")
+        download = str(request.GET.get("download", "")).strip().lower() in {"1", "true", "yes", "y", "download"}
+        return FileResponse(
+            open(png_path, "rb"),
+            content_type="image/png",
+            as_attachment=download,
+            filename="scatter_ticks.png",
+        )
     except Exception:
         return HttpResponseNotFound("No se pudo leer scatter_ticks.png.")
 

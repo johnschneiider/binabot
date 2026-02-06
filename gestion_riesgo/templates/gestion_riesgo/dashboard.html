@@ -91,6 +91,12 @@
         <div style="border:1px solid #e5e7eb; border-radius: 8px; padding: 6px; background: #f9fafb;">
           <img src="{% url 'gestion_riesgo:scatter_ticks_png' %}" alt="Scatter ticks" style="width: 100%; height: auto; border-radius: 6px; background: #fff;" onerror="this.style.display='none'; document.getElementById('scatter_error').style.display='block';">
           <div id="scatter_error" class="muted" style="display:none; font-size: 12px; margin-top: 6px;">No se encontró <span class="mono">scatter_ticks.png</span>. Ejecútalo en la VPS.</div>
+          <div style="margin-top: 8px; display: flex; justify-content: flex-end;">
+            <a class="btn secondary" style="text-decoration: none; padding: 6px 10px; font-size: 12px;"
+               href="{% url 'gestion_riesgo:scatter_ticks_png' %}?download=1" target="_blank" rel="noreferrer">
+              Descargar PNG
+            </a>
+          </div>
         </div>
       </div>
       <div class="card">
