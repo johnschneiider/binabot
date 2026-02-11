@@ -200,6 +200,10 @@ ADAPTATIVO_UMBRALES = [
     for x in os.getenv("ADAPTATIVO_UMBRALES", "0.05,0.07,0.09,0.11,0.13,0.15").split(",")
     if x.strip()
 ]
+
+# ===== MODELOS ML (LightGBM) =====
+LGBM_MODEL_R10 = os.getenv("LGBM_MODEL_R10", "").strip()
+LGBM_MODEL_R100 = os.getenv("LGBM_MODEL_R100", "").strip()
 # Guardrails del adaptador (conservadores por defecto)
 ADAPTATIVO_MIN_TRADES = int(os.getenv("ADAPTATIVO_MIN_TRADES", "60"))
 ADAPTATIVO_EDGE_MARGIN = float(os.getenv("ADAPTATIVO_EDGE_MARGIN", "0.02"))

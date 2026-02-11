@@ -5,6 +5,10 @@ import os
 import re
 import sys
 import time
+import pickle
+import math
+from pathlib import Path
+import numpy as np
 from datetime import datetime
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
@@ -20,6 +24,110 @@ from gestion_riesgo.models import BalanceDerivSnapshot, Cuenta, Operacion, Opera
 from quant_deriv_bot.infra.deriv_ws import ClienteDerivWS, dormir_segundos
 from vector_pesos.senal_spp import EstadoSPP, ResultadoSenalSPP, evaluar_senal_spp
 
+
+def _ema(series, span):
+    if len(series) == 0:
+        return []
+    alpha = 2.0 / (span + 1.0)
+    out = [series[0]]
+    for x in series[1:]:
+        out.append(alpha * x + (1 - alpha) * out[-1])
+    return out
+
+
+def _features_from_precios(precios: list[float]) -> dict | None:
+    """
+    Calcula features ligeras (mismas que el entrenamiento LightGBM).
+    Requiere al menos 200 puntos para tener ema200 estable.
+    """
+    if not precios or len(precios) < 220:
+        return None
+    xs = list(precios)
+    ema50 = _ema(xs, 50)
+    ema100 = _ema(xs, 100)
+    ema200 = _ema(xs, 200)
+    price = xs
+    gap = [a - b for a, b in zip(ema50, ema100)]
+    slope50_10 = []
+    for i in range(len(ema50)):
+        prev = ema50[i - 10] if i >= 10 else ema50[0]
+        slope50_10.append(ema50[i] - prev)
+    returns = [0.0]
+    for i in range(1, len(price)):
+        returns.append(price[i] - price[i - 1])
+    ret_std_50 = []
+    for i in range(len(price)):
+        win = returns[max(0, i - 49) : i + 1]
+        if len(win) == 0:
+            ret_std_50.append(0.0)
+        else:
+            m = sum(win) / len(win)
+            var = sum((r - m) ** 2 for r in win) / len(win)
+            ret_std_50.append(math.sqrt(var))
+    z_price_ema50 = []
+    for p, e50, s in zip(price, ema50, ret_std_50):
+        z_price_ema50.append((p - e50) / (s + 1e-8))
+
+    sign_rel = [1 if (p - e50) >= 0 else -1 for p, e50 in zip(price, ema50)]
+    flips = [0]
+    for i in range(1, len(sign_rel)):
+        flips.append(1 if sign_rel[i] != sign_rel[i - 1] else 0)
+    flips40 = []
+    for i in range(len(flips)):
+        win = flips[max(0, i - 39) : i + 1]
+        flips40.append(sum(win))
+
+    feats = {
+        "price": price[-1],
+        "ema50": ema50[-1],
+        "ema100": ema100[-1],
+        "ema200": ema200[-1],
+        "gap": gap[-1],
+        "slope50_10": slope50_10[-1],
+        "ret_std_50": ret_std_50[-1],
+        "z_price_ema50": z_price_ema50[-1],
+        "flips40": flips40[-1],
+    }
+    return feats
+
+
+class LightGBMPredictor:
+    def __init__(self):
+        self.models: dict[str, dict] = {}
+
+    def load_from_env(self):
+        for sym, env_key in (("R_10", "LGBM_MODEL_R10"), ("R_100", "LGBM_MODEL_R100")):
+            path = str(getattr(settings, env_key, "") or "").strip()
+            if not path:
+                continue
+            p = Path(path)
+            if not p.exists():
+                _append_runtime_log(f"[ML] Modelo {env_key} no encontrado en {p}")
+                continue
+            try:
+                with open(p, "rb") as f:
+                    artifact = pickle.load(f)
+                if not isinstance(artifact, dict) or "model" not in artifact or "threshold" not in artifact:
+                    _append_runtime_log(f"[ML] Modelo {env_key} inválido: falta model/threshold")
+                    continue
+                self.models[sym] = artifact
+                _append_runtime_log(f"[ML] Modelo {env_key} cargado (thr={artifact.get('threshold')})")
+            except Exception as e:
+                _append_runtime_log(f"[ML] Error cargando {env_key}: {e}")
+
+    def predict(self, sym: str, feats: dict) -> tuple[float, float] | None:
+        art = self.models.get(sym)
+        if not art:
+            return None
+        model = art.get("model")
+        thr = float(art.get("threshold", 0.5))
+        try:
+            X = np.array([[feats.get(k, 0.0) for k in art.get("meta", {}).get("features", [])]], dtype=float)
+            prob = float(model.predict_proba(X)[0, 1])
+            return prob, thr
+        except Exception as e:
+            _append_runtime_log(f"[ML] predict error {sym}: {e}")
+            return None
 
 def _runtime_log_path() -> str:
     """
@@ -195,6 +303,10 @@ class Command(BaseCommand):
             raise CommandError("Debes definir `--max-ticks` y/o `--max-segundos` (no se permite ilimitado por defecto).")
 
         ejecutar_real = bool(options.get("real"))
+
+        # Cargar modelos ML (opcional)
+        self.ml = LightGBMPredictor()
+        self.ml.load_from_env()
         
         # Ejecutar para todos los símbolos en paralelo
         asyncio.run(
@@ -1191,6 +1303,20 @@ class Command(BaseCommand):
                                 except Exception:
                                     # Nunca tumbar el bot por un limitador.
                                     pass
+
+                                # ===== FILTRO ML (LightGBM) =====
+                                if getattr(self, "ml", None):
+                                    feats = _features_from_precios(list(getattr(estado_spp, "precios", []) or []))
+                                    pred = self.ml.predict(symbol, feats) if feats else None
+                                    if pred:
+                                        prob, thr_ml = pred
+                                        if prob < thr_ml:
+                                            msg = f"[{symbol}] [ML] prob={prob:.3f} < thr={thr_ml:.3f} => SKIP entrada"
+                                            self.stderr.write(msg)
+                                            _append_runtime_log(msg)
+                                            continue
+                                        else:
+                                            _append_runtime_log(f"[{symbol}] [ML] prob={prob:.3f} OK (thr={thr_ml:.3f})")
 
                                 # STAKE:
                                 # - Calculado como 1% del balance actual (crece proporcionalmente con el capital)
