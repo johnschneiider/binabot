@@ -18,6 +18,7 @@ from django.db.models import Value
 from django.db.models.functions import Coalesce
 
 from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, TickDerivSnapshot, TickDerivHistorico
+import subprocess
 
 
 def _tail_lines(path: str, n: int) -> list[str]:
@@ -318,6 +319,30 @@ def train_status_json(request):
         return JsonResponse(data)
     except Exception:
         return JsonResponse({"status": "error", "progress": 0.0, "message": "No se pudo leer estado"})
+
+
+@require_http_methods(["GET"])
+def train_start(request):
+    """
+    Lanza entrenamiento en background (nohup) para el símbolo indicado.
+    Params: ?symbol=R_10|R_100
+    """
+    sym = str(request.GET.get("symbol") or "R_10").strip().upper()
+    if sym not in {"R_10", "R_100"}:
+        return JsonResponse({"status": "error", "message": "Símbolo no soportado"}, status=400)
+    try:
+        base = Path(getattr(settings, "BASE_DIR", Path("."))).resolve()
+    except Exception:
+        base = Path(".").resolve()
+
+    cmd = f"cd {base} && nohup {base}/.venv/bin/python manage.py entrenar_lightgbm --symbol {sym} --horizon 10 --max-points 400000 --outdir models > /tmp/train_{sym}.log 2>&1 & echo $!"
+    try:
+        proc = subprocess.Popen(["/bin/bash", "-lc", cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        out, _ = proc.communicate(timeout=5)
+        pid = out.strip()
+        return JsonResponse({"status": "started", "pid": pid, "symbol": sym})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
 
 @require_http_methods(["GET", "HEAD"])
