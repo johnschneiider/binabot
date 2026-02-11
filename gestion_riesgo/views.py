@@ -299,6 +299,27 @@ def ticks_scatter_json(request):
     return JsonResponse({"symbols": payload})
 
 
+@require_http_methods(["GET"])
+def train_status_json(request):
+    """
+    Lee el estado del entrenamiento escrito por entrenar_lightgbm (train_status_<symbol>.json).
+    """
+    sym = str(request.GET.get("symbol") or "R_10").strip()
+    try:
+        base = Path(getattr(settings, "BASE_DIR", Path(".")))
+    except Exception:
+        base = Path(".")
+    status_path = (base / "models" / f"train_status_{sym}.json").resolve()
+    if not status_path.exists():
+        return JsonResponse({"status": "unknown", "progress": 0.0, "message": "Sin estado"})
+    try:
+        with open(status_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return JsonResponse(data)
+    except Exception:
+        return JsonResponse({"status": "error", "progress": 0.0, "message": "No se pudo leer estado"})
+
+
 @require_http_methods(["GET", "HEAD"])
 def estado_json(request):
     """

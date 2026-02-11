@@ -132,24 +132,38 @@ class Command(BaseCommand):
         max_points = max(10000, int(opts.get("max_points") or 400000))
         outdir = Path(str(opts.get("outdir") or "models")).resolve()
         outdir.mkdir(parents=True, exist_ok=True)
+        status_path = outdir / f"train_status_{symbol}.json"
+
+        def write_status(status: str, progress: float, message: str = "") -> None:
+            try:
+                with open(status_path, "w", encoding="utf-8") as f:
+                    json.dump({"status": status, "progress": progress, "message": message}, f)
+            except Exception:
+                pass
 
         self.stdout.write(f"[TRAIN] symbol={symbol} horizon={horizon} ticks")
+        write_status("running", 0.05, "Iniciando...")
 
         # stride para limitar puntos
         total = TickDerivHistorico.objects.filter(cuenta__simbolo=symbol).count()
         if total == 0:
             self.stdout.write(self.style.ERROR(f"Sin datos para {symbol}"))
+            write_status("error", 1.0, "Sin datos")
             return
         step = max(1, math.ceil(total / max_points))
         self.stdout.write(f"[DATA] total={total} usando stride={step} => ~{int(total/step)} puntos")
+        write_status("running", 0.15, f"Leyendo datos (stride={step})")
 
         df = _load_ticks(symbol, step)
+        write_status("running", 0.3, "Construyendo features")
         df_feat, y = _build_features(df, horizon)
+        write_status("running", 0.45, "Split train/val")
         X_train, y_train, X_val, y_val = _split_train_valid(df_feat, y, frac_train=0.8)
 
         self.stdout.write(f"[SPLIT] train={len(X_train)} val={len(X_val)}")
         if len(X_train) < 1000 or len(X_val) < 500:
             self.stdout.write(self.style.ERROR("Muy pocos datos después del muestreo. Ajusta max-points o revisa la BD."))
+            write_status("error", 1.0, "Datos insuficientes")
             return
 
         model = LGBMClassifier(
@@ -162,9 +176,11 @@ class Command(BaseCommand):
             random_state=42,
             n_jobs=-1,
         )
+        write_status("running", 0.6, "Entrenando LightGBM")
         model.fit(X_train, y_train)
         prob_val = model.predict_proba(X_val)[:, 1]
 
+        write_status("running", 0.8, "Buscando umbral por EV")
         thr, ev_best, wr_best, n_pred = _search_threshold(y_val, prob_val, payout)
         self.stdout.write(
             f"[THR] best_thr={thr:.3f} ev={ev_best:.4f} wr={wr_best*100:.2f}% n_pred={n_pred} payout={payout}"
@@ -200,4 +216,5 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"Guardado: {out_pkl}"))
         self.stdout.write(f"Meta: {out_meta}")
+        write_status("done", 1.0, f"Listo: {out_pkl.name}")
 

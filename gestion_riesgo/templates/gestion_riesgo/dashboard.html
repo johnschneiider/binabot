@@ -5,19 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dashboard · Bot Deriv</title>
     <style>
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
+      :root {
+        --aqua: #16c7c7;
+        --aqua-dark: #0f9a9a;
+        --bg: #f7fbfc;
+        --text: #0f172a;
+      }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: var(--text); background: var(--bg); }
       .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-      .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; background: #fff; }
+      .card { border: 1px solid #e0f2f2; border-radius: 12px; padding: 14px; background: #fff; box-shadow: 0 4px 12px rgba(22, 199, 199, 0.08); }
       .muted { color: #6b7280; font-size: 12px; }
       .big { font-size: 22px; font-weight: 700; }
       .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #e5e7eb; }
       .ok { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
       .bad { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
-      .neutral { background: #eff6ff; border-color: #bfdbfe; color: #1e3a8a; }
+      .neutral { background: #e0f7fa; border-color: #b2ebf2; color: #0f172a; }
       .warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
       table { width: 100%; border-collapse: collapse; margin-top: 12px; }
       th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
-      th { font-size: 12px; color: #374151; background: #f9fafb; position: sticky; top: 0; }
+      th { font-size: 12px; color: #374151; background: #f0fdfd; position: sticky; top: 0; }
       .row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
       .log-wrap { max-height: 360px; overflow: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e5e7eb; border-radius: 10px; background: #0b1020; color: #e5e7eb; }
@@ -25,20 +31,20 @@
       .log-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
       .log-toolbar input[type="text"] { flex: 1 1 220px; min-width: 180px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12px; }
       .log-toolbar select { padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12px; background: #fff; }
-      .btn { padding: 6px 12px; background: #111827; color: #fff; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; }
-      .btn.secondary { background: #fff; color: #111827; border: 1px solid #e5e7eb; }
+      .btn { padding: 6px 12px; background: var(--aqua); color: #fff; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; }
+      .btn.secondary { background: #fff; color: var(--aqua-dark); border: 1px solid #b2ebf2; }
       .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 999px; background: #9ca3af; border: 1px solid rgba(255,255,255,0.25); vertical-align: middle; margin-right: 6px; }
       .status-dot.ok { background: #10b981; }
       .status-dot.bad { background: #ef4444; }
-
       .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
       .tab { cursor: pointer; user-select: none; padding: 6px 10px; border-radius: 999px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; }
-      .tab.active { background: #111827; color: #fff; border-color: #111827; }
+      .tab.active { background: var(--aqua); color: #fff; border-color: var(--aqua); }
       .chart-wrap { position: relative; height: 260px; }
-      /* Cursor tipo "cruz" al pasar sobre las gráficas */
       .chart-wrap canvas { cursor: crosshair; }
+      .progress { width: 100%; background: #e0f7fa; border-radius: 10px; overflow: hidden; height: 12px; }
+      .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #16c7c7, #0ea5e9); transition: width 0.3s ease; }
 
-      /* ===== RESPONSIVE (MÓVIL) ===== */
+      /* ===== RESPONSIVE ===== */
       @media (max-width: 980px) {
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
@@ -86,20 +92,6 @@
         <div class="big mono" id="balance_deriv">{% if cuenta and cuenta.balance_deriv != None %}{{ cuenta.balance_deriv }}{% else %}—{% endif %}</div>
         <div class="muted">Moneda: <span class="mono" id="moneda_deriv">{{ cuenta.moneda_deriv|default:"—" }}</span></div>
         <div class="muted">Equity interna (paper): <span class="mono" id="capital_actual">{{ cuenta.capital_actual|default:"—" }}</span></div>
-      </div>
-      <div class="card">
-        <div class="muted" style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Scatter de ticks (histórico)</div>
-        <div class="muted" style="margin-bottom: 8px; font-size: 12px;">Generado con <span class="mono">manage.py graficar_ticks</span>.</div>
-        <div style="border:1px solid #e5e7eb; border-radius: 8px; padding: 6px; background: #f9fafb;">
-          <img src="{% url 'gestion_riesgo:scatter_ticks_png' %}" alt="Scatter ticks" style="width: 100%; height: auto; border-radius: 6px; background: #fff;" onerror="this.style.display='none'; document.getElementById('scatter_error').style.display='block';">
-          <div id="scatter_error" class="muted" style="display:none; font-size: 12px; margin-top: 6px;">No se encontró <span class="mono">scatter_ticks.png</span>. Ejecútalo en la VPS.</div>
-          <div style="margin-top: 8px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
-            <a class="btn secondary" style="text-decoration: none; padding: 6px 10px; font-size: 12px;"
-               href="{% url 'gestion_riesgo:scatter_ticks_png' %}?download=1" target="_blank" rel="noreferrer">
-              Descargar PNG
-            </a>
-          </div>
-        </div>
       </div>
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
@@ -210,15 +202,26 @@
           <div class="muted" style="font-size: 13px; font-weight: 600;">Scatter interactivo (zoom/pan)</div>
           <div class="muted" style="font-size: 12px;">Eje X: tiempo (UTC). Eje Y: precio.</div>
         </div>
-        <div>
-          <a class="btn secondary" style="text-decoration: none; padding: 6px 10px; font-size: 12px;"
-             href="{% url 'gestion_riesgo:scatter_ticks_png' %}?download=1" target="_blank" rel="noreferrer">
-            Descargar PNG
-          </a>
-        </div>
       </div>
       <div id="scatter_interactivo" style="width: 100%; height: 420px; border:1px solid #e5e7eb; border-radius: 10px; background: #fff;"></div>
       <div id="scatter_msg" class="muted" style="font-size: 12px; margin-top: 6px;"></div>
+    </div>
+
+    <!-- Barra de progreso entrenamiento LightGBM -->
+    <div class="card" style="margin-top: 14px; border: 1px solid #e5e7eb; border-radius: 12px;">
+      <div class="row" style="margin-bottom: 8px;">
+        <div>
+          <div class="muted" style="font-size: 13px; font-weight: 600;">Entrenamiento LightGBM</div>
+          <div class="muted" style="font-size: 12px;">Progreso de entrenamiento en la VPS.</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn secondary" type="button" onclick="actualizarTrainStatus()">Refrescar</button>
+        </div>
+      </div>
+      <div class="progress">
+        <div id="train_progress_bar" class="progress-bar"></div>
+      </div>
+      <div id="train_progress_text" class="muted" style="margin-top: 8px; font-size: 12px;">Esperando estado…</div>
     </div>
 
     <div class="card" style="margin-top: 14px;">
@@ -1535,6 +1538,24 @@
         }
       }
 
+      // ===== Progreso entrenamiento LightGBM =====
+      async function actualizarTrainStatus(sym = "R_10") {
+        const bar = document.getElementById("train_progress_bar");
+        const txt = document.getElementById("train_progress_text");
+        if (txt) txt.textContent = "Consultando estado…";
+        try {
+          const res = await fetch(`/api/train_status/?symbol=${encodeURIComponent(sym)}`, { cache: "no-store" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const data = await res.json();
+          const p = Math.max(0, Math.min(1, parseFloat(data.progress || 0)));
+          if (bar) bar.style.width = `${(p * 100).toFixed(0)}%`;
+          const msg = data.message || data.status || "—";
+          if (txt) txt.textContent = `${(p * 100).toFixed(0)}% · ${msg}`;
+        } catch (e) {
+          if (txt) txt.textContent = "No se pudo leer estado de entrenamiento.";
+        }
+      }
+
       // Event listeners para controles de EMAs (R_10)
       document.getElementById("ema_update_btn_r10")?.addEventListener("click", () => {
         charts["R_10"].emaFast = parseInt(document.getElementById("ema_fast_period_r10")?.value || "50", 10);
@@ -1559,6 +1580,7 @@
 
       // Render inicial del scatter interactivo
       cargarScatterInteractivo();
+      actualizarTrainStatus();
 
       refrescar();
       setInterval(refrescar, 1000); // Actualiza señal Y ticks cada 1 segundo
