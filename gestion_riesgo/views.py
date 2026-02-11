@@ -335,12 +335,30 @@ def train_start(request):
     except Exception:
         base = Path(".").resolve()
 
-    cmd = f"cd {base} && nohup {base}/.venv/bin/python manage.py entrenar_lightgbm --symbol {sym} --horizon 10 --max-points 400000 --outdir models > /tmp/train_{sym}.log 2>&1 & echo $!"
     try:
-        proc = subprocess.Popen(["/bin/bash", "-lc", cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        out, _ = proc.communicate(timeout=5)
-        pid = out.strip()
-        return JsonResponse({"status": "started", "pid": pid, "symbol": sym})
+        logs_dir = base / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        log_file = logs_dir / f"train_{sym}.log"
+        # Lanzamos en background y devolvemos el PID
+        proc = subprocess.Popen(
+            [
+                str(base / ".venv" / "bin" / "python"),
+                "manage.py",
+                "entrenar_lightgbm",
+                "--symbol",
+                sym,
+                "--horizon",
+                "10",
+                "--max-points",
+                "400000",
+                "--outdir",
+                "models",
+            ],
+            cwd=base,
+            stdout=open(log_file, "a"),
+            stderr=subprocess.STDOUT,
+        )
+        return JsonResponse({"status": "started", "pid": proc.pid, "symbol": sym, "log": str(log_file)})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
