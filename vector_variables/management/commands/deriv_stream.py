@@ -35,7 +35,7 @@ def _ema(series, span):
     return out
 
 
-def _features_from_precios(precios: list[float]) -> dict | None:
+def _features_from_precios(precios: list[float], epoch_actual: int | None = None) -> dict | None:
     """
     Calcula features ligeras (mismas que el entrenamiento LightGBM).
     Requiere al menos 200 puntos para tener ema200 estable.
@@ -83,11 +83,27 @@ def _features_from_precios(precios: list[float]) -> dict | None:
         "ema100": ema100[-1],
         "ema200": ema200[-1],
         "gap": gap[-1],
+        "gap_rel": gap[-1] / (abs(ema100[-1]) + 1e-6),
         "slope50_10": slope50_10[-1],
+        "ret1": price[-1] - price[-2],
+        "ret5": price[-1] - price[-6] if len(price) > 6 else price[-1] - price[0],
+        "ret20": price[-1] - price[-21] if len(price) > 21 else price[-1] - price[0],
         "ret_std_50": ret_std_50[-1],
         "z_price_ema50": z_price_ema50[-1],
         "flips40": flips40[-1],
     }
+    # Hora del día (si tenemos epoch)
+    if epoch_actual:
+        try:
+            h = datetime.utcfromtimestamp(int(epoch_actual)).hour
+            feats["hour_sin"] = math.sin(2 * math.pi * h / 24.0)
+            feats["hour_cos"] = math.cos(2 * math.pi * h / 24.0)
+        except Exception:
+            feats["hour_sin"] = 0.0
+            feats["hour_cos"] = 0.0
+    else:
+        feats["hour_sin"] = 0.0
+        feats["hour_cos"] = 0.0
     return feats
 
 
@@ -1304,9 +1320,13 @@ class Command(BaseCommand):
                                     # Nunca tumbar el bot por un limitador.
                                     pass
 
+                                dur_ml = None
                                 # ===== FILTRO ML (LightGBM) =====
                                 if getattr(self, "ml", None):
-                                    feats = _features_from_precios(list(getattr(estado_spp, "precios", []) or []))
+                                    feats = _features_from_precios(
+                                        list(getattr(estado_spp, "precios", []) or []),
+                                        epoch_actual_dash,
+                                    )
                                     pred = self.ml.predict(symbol, feats) if feats else None
                                     if pred:
                                         prob, thr_ml = pred
@@ -1317,6 +1337,14 @@ class Command(BaseCommand):
                                             continue
                                         else:
                                             _append_runtime_log(f"[{symbol}] [ML] prob={prob:.3f} OK (thr={thr_ml:.3f})")
+                                        # Duración: usar horizonte del modelo si viene en meta
+                                        try:
+                                            meta = self.ml.models.get(symbol, {}).get("meta", {})
+                                            hor = int(meta.get("horizon_ticks") or meta.get("horizon") or 10)
+                                            dur = max(1, min(hor, int(getattr(settings, "DERIV_MAX_DURACION_TICKS", 10) or 10)))
+                                        except Exception:
+                                            dur = int(getattr(settings, "DERIV_DURACION_TICKS", 5) or 5)
+                                        dur_ml = dur
 
                                 # STAKE:
                                 # - Calculado como 1% del balance actual (crece proporcionalmente con el capital)
@@ -1386,10 +1414,13 @@ class Command(BaseCommand):
                                         )
                                         continue
 
-                                    # Duración dinámica por estrategia (7-15 ticks)
-                                    dur = int(getattr(resultado_spp, "duracion_ticks", 0) or 0)
-                                    if dur <= 0:
-                                        dur = 11 if symbol == "R_10" else 14
+                                    # Duración: usar ML si está disponible, si no la estrategia base (7-15 ticks)
+                                    if dur_ml is not None:
+                                        dur = int(dur_ml)
+                                    else:
+                                        dur = int(getattr(resultado_spp, "duracion_ticks", 0) or 0)
+                                        if dur <= 0:
+                                            dur = 11 if symbol == "R_10" else 14
 
                                     # === LÍMITE REAL DE DERIV (ticks) ===
                                     # En algunos markets/offerings de Deriv, la duración por ticks está limitada a 10.

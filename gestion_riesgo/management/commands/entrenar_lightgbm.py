@@ -53,16 +53,21 @@ def _load_ticks(symbol: str, step: int) -> pd.DataFrame:
 
 def _build_features(df: pd.DataFrame, horizon: int) -> Tuple[pd.DataFrame, np.ndarray]:
     price = df["price"]
-    # EMAs
     df_feat = pd.DataFrame(index=df.index)
+
+    # EMAs
     df_feat["price"] = price
     df_feat["ema50"] = price.ewm(span=50, adjust=False).mean()
     df_feat["ema100"] = price.ewm(span=100, adjust=False).mean()
     df_feat["ema200"] = price.ewm(span=200, adjust=False).mean()
     df_feat["gap"] = df_feat["ema50"] - df_feat["ema100"]
+    df_feat["gap_rel"] = df_feat["gap"] / (df_feat["ema100"].abs() + 1e-6)
     df_feat["slope50_10"] = df_feat["ema50"] - df_feat["ema50"].shift(10)
 
     returns = price.diff()
+    df_feat["ret1"] = returns
+    df_feat["ret5"] = price.diff(5)
+    df_feat["ret20"] = price.diff(20)
     df_feat["ret_std_50"] = returns.rolling(50).std()
     df_feat["z_price_ema50"] = (price - df_feat["ema50"]) / (df_feat["ret_std_50"] + 1e-8)
 
@@ -95,7 +100,7 @@ def _search_threshold(y_true: np.ndarray, prob: np.ndarray, payout: float) -> Tu
     best_ev = -1e9
     best_wr = 0.0
     best_n = 0
-    for thr in np.linspace(0.5, 0.8, 16):
+    for thr in np.linspace(0.5, 0.85, 20):
         mask = prob >= thr
         n_pred = int(mask.sum())
         if n_pred < 100:
