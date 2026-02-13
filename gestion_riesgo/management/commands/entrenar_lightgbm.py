@@ -95,29 +95,52 @@ def _split_train_valid(dfX: pd.DataFrame, y: np.ndarray, frac_train: float = 0.8
     return X_train, y_train, X_val, y_val
 
 
-def _search_threshold(y_true: np.ndarray, prob: np.ndarray, payout: float) -> Tuple[float, float, float, int]:
+def _metrics_at_threshold(y_true: np.ndarray, prob: np.ndarray, thr: float, payout: float):
+    mask = prob >= thr
+    n_pred = int(mask.sum())
+    tp = int(((y_true == 1) & mask).sum())
+    fp = int(((y_true == 0) & mask).sum())
+    fn = int(((y_true == 1) & ~mask).sum())
+    tn = int(((y_true == 0) & ~mask).sum())
+    wr = (tp / n_pred) if n_pred > 0 else 0.0
+    ev = (wr * payout) - (1 - wr)
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    accuracy = (tp + tn) / len(y_true) if len(y_true) > 0 else 0.0
+    return {
+        "thr": float(thr),
+        "ev": float(ev),
+        "wr": float(wr),
+        "n_pred": n_pred,
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "tn": tn,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "accuracy": accuracy,
+    }
+
+
+def _search_threshold(y_true: np.ndarray, prob: np.ndarray, payout: float) -> Tuple[float, dict]:
     best_thr = 0.5
     best_ev = -1e9
-    best_wr = 0.0
-    best_n = 0
+    best_metrics = {}
     for thr in np.linspace(0.5, 0.85, 20):
-        mask = prob >= thr
-        n_pred = int(mask.sum())
-        if n_pred < 100:
+        m = _metrics_at_threshold(y_true, prob, thr, payout)
+        if m["n_pred"] < 100:
             continue
-        wins = int(((y_true == 1) & mask).sum())
-        wr = wins / n_pred
-        ev = (wr * payout) - (1 - wr)
-        if ev > best_ev:
-            best_ev = ev
+        if m["ev"] > best_ev:
+            best_ev = m["ev"]
             best_thr = float(thr)
-            best_wr = wr
-            best_n = n_pred
-    if best_n == 0:
-        best_n = int(len(prob))
-        best_wr = float((prob >= 0.5).mean())
-        best_ev = (best_wr * payout) - (1 - best_wr)
-    return best_thr, best_ev, best_wr, best_n
+            best_metrics = m
+    if not best_metrics:
+        m = _metrics_at_threshold(y_true, prob, 0.5, payout)
+        best_thr = m["thr"]
+        best_metrics = m
+    return best_thr, best_metrics
 
 
 class Command(BaseCommand):
@@ -186,29 +209,40 @@ class Command(BaseCommand):
         prob_val = model.predict_proba(X_val)[:, 1]
 
         write_status("running", 0.8, "Buscando umbral por EV")
-        thr, ev_best, wr_best, n_pred = _search_threshold(y_val, prob_val, payout)
+        thr, best_metrics = _search_threshold(y_val, prob_val, payout)
+        ev_best = best_metrics.get("ev", 0.0)
+        wr_best = best_metrics.get("wr", 0.0)
+        n_pred = best_metrics.get("n_pred", 0)
         self.stdout.write(
             f"[THR] best_thr={thr:.3f} ev={ev_best:.4f} wr={wr_best*100:.2f}% n_pred={n_pred} payout={payout}"
+        )
+        self.stdout.write(
+            f"[METRIC] precision={best_metrics.get('precision',0):.3f} recall={best_metrics.get('recall',0):.3f} "
+            f"f1={best_metrics.get('f1',0):.3f} acc={best_metrics.get('accuracy',0):.3f} "
+            f"tp={best_metrics.get('tp',0)} fp={best_metrics.get('fp',0)} fn={best_metrics.get('fn',0)} tn={best_metrics.get('tn',0)}"
         )
 
         artifact = {
             "model": model,
             "threshold": thr,
-            "meta": asdict(
-                TrainMeta(
-                    symbol=symbol,
-                    horizon_ticks=horizon,
-                    payout_win=payout,
-                    threshold=thr,
-                    features=list(df_feat.columns),
-                    n_train=len(X_train),
-                    n_valid=len(X_val),
-                    ev_best=ev_best,
-                    wr_best=wr_best,
-                    n_pred_best=n_pred,
-                    step=step,
-                )
-            ),
+            "meta": {
+                **asdict(
+                    TrainMeta(
+                        symbol=symbol,
+                        horizon_ticks=horizon,
+                        payout_win=payout,
+                        threshold=thr,
+                        features=list(df_feat.columns),
+                        n_train=len(X_train),
+                        n_valid=len(X_val),
+                        ev_best=ev_best,
+                        wr_best=wr_best,
+                        n_pred_best=n_pred,
+                        step=step,
+                    )
+                ),
+                "metrics": best_metrics,
+            },
         }
 
         out_pkl = outdir / f"lgbm_{symbol}_h{horizon}_ticks.pkl"
