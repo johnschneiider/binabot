@@ -55,7 +55,7 @@ class Command(BaseCommand):
         # Compatibilidad:
         # - Si se pasa --symbol => corre SOLO ese
         # - Si se pasa --symbols => corre esa lista
-        # - Si no se pasa nada => corre R_10 y R_100
+        # - Si no se pasa nada => usa DERIV_SYMBOLS de .env o DERIV_SYMBOL
         symbol = (options.get("symbol") or "").strip()
         symbols_raw = (options.get("symbols") or "").strip()
         if symbol:
@@ -63,7 +63,18 @@ class Command(BaseCommand):
         elif symbols_raw:
             symbols = [s.strip() for s in symbols_raw.split(",") if s.strip()]
         else:
-            symbols = ["R_10", "R_100"]
+            # Usar símbolos de configuración
+            deriv_symbols = str(getattr(settings, "DERIV_SYMBOLS", "") or "").strip()
+            if deriv_symbols:
+                symbols = [s.strip() for s in deriv_symbols.split(",") if s.strip()]
+            else:
+                # Fallback a DERIV_SYMBOL único
+                deriv_symbol = str(getattr(settings, "DERIV_SYMBOL", "") or "").strip()
+                if deriv_symbol:
+                    symbols = [deriv_symbol]
+                else:
+                    # Último fallback
+                    symbols = ["frxEURUSD"]
 
         stream = DerivStreamCommand()
         stream.stdout = self.stdout

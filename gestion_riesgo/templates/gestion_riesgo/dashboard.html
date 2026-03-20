@@ -5,25 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dashboard · Bot Deriv</title>
     <style>
-      :root {
-        --aqua: #16c7c7;
-        --aqua-dark: #0f9a9a;
-        --bg: #f7fbfc;
-        --text: #0f172a;
-      }
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: var(--text); background: var(--bg); }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
       .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-      .card { border: 1px solid #e0f2f2; border-radius: 12px; padding: 14px; background: #fff; box-shadow: 0 4px 12px rgba(22, 199, 199, 0.08); }
+      .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; background: #fff; }
       .muted { color: #6b7280; font-size: 12px; }
       .big { font-size: 22px; font-weight: 700; }
       .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #e5e7eb; }
       .ok { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
       .bad { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
-      .neutral { background: #e0f7fa; border-color: #b2ebf2; color: #0f172a; }
+      .neutral { background: #eff6ff; border-color: #bfdbfe; color: #1e3a8a; }
       .warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
       table { width: 100%; border-collapse: collapse; margin-top: 12px; }
       th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
-      th { font-size: 12px; color: #374151; background: #f0fdfd; position: sticky; top: 0; }
+      th { font-size: 12px; color: #374151; background: #f9fafb; position: sticky; top: 0; }
       .row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
       .log-wrap { max-height: 360px; overflow: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e5e7eb; border-radius: 10px; background: #0b1020; color: #e5e7eb; }
@@ -31,20 +25,20 @@
       .log-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
       .log-toolbar input[type="text"] { flex: 1 1 220px; min-width: 180px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12px; }
       .log-toolbar select { padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12px; background: #fff; }
-      .btn { padding: 6px 12px; background: var(--aqua); color: #fff; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; }
-      .btn.secondary { background: #fff; color: var(--aqua-dark); border: 1px solid #b2ebf2; }
+      .btn { padding: 6px 12px; background: #111827; color: #fff; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; }
+      .btn.secondary { background: #fff; color: #111827; border: 1px solid #e5e7eb; }
       .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 999px; background: #9ca3af; border: 1px solid rgba(255,255,255,0.25); vertical-align: middle; margin-right: 6px; }
       .status-dot.ok { background: #10b981; }
       .status-dot.bad { background: #ef4444; }
+
       .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
       .tab { cursor: pointer; user-select: none; padding: 6px 10px; border-radius: 999px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; }
-      .tab.active { background: var(--aqua); color: #fff; border-color: var(--aqua); }
+      .tab.active { background: #111827; color: #fff; border-color: #111827; }
       .chart-wrap { position: relative; height: 260px; }
+      /* Cursor tipo "cruz" al pasar sobre las gráficas */
       .chart-wrap canvas { cursor: crosshair; }
-      .progress { width: 100%; background: #e0f7fa; border-radius: 10px; overflow: hidden; height: 12px; }
-      .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #16c7c7, #0ea5e9); transition: width 0.3s ease; }
 
-      /* ===== RESPONSIVE ===== */
+      /* ===== RESPONSIVE (MÓVIL) ===== */
       @media (max-width: 980px) {
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
@@ -69,8 +63,6 @@
     </style>
   </head>
   <body>
-    <!-- Plotly para zoom/pan en el scatter interactivo -->
-    <script src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
     <div class="row">
       <div>
         <div class="big">Dashboard (tiempo real)</div>
@@ -195,37 +187,6 @@
     {# Datos iniciales para que la UI se pinte bien sin esperar el primer polling #}
     {{ cuenta.senal_top_contribuciones|default:"[]"|json_script:"initial_senal_top_contribuciones" }}
 
-    <!-- Scatter interactivo con Plotly -->
-    <div class="card" style="margin-top: 16px; border: 1px solid #e5e7eb; border-radius: 12px;">
-      <div class="row" style="margin-bottom: 8px;">
-        <div>
-          <div class="muted" style="font-size: 13px; font-weight: 600;">Scatter interactivo (zoom/pan)</div>
-          <div class="muted" style="font-size: 12px;">Eje X: tiempo (UTC). Eje Y: precio.</div>
-        </div>
-      </div>
-      <div id="scatter_interactivo" style="width: 100%; height: 420px; border:1px solid #e5e7eb; border-radius: 10px; background: #fff;"></div>
-      <div id="scatter_msg" class="muted" style="font-size: 12px; margin-top: 6px;"></div>
-    </div>
-
-    <!-- Barra de progreso entrenamiento LightGBM -->
-    <div class="card" style="margin-top: 14px; border: 1px solid #e5e7eb; border-radius: 12px;">
-      <div class="row" style="margin-bottom: 8px;">
-        <div>
-          <div class="muted" style="font-size: 13px; font-weight: 600;">Entrenamiento LightGBM</div>
-          <div class="muted" style="font-size: 12px;">Progreso de entrenamiento en la VPS.</div>
-        </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="btn secondary" type="button" onclick="startTrain('R_10')">Entrenar R_10</button>
-          <button class="btn secondary" type="button" onclick="startTrain('R_100')">Entrenar R_100</button>
-          <button class="btn secondary" type="button" onclick="actualizarTrainStatus()">Refrescar</button>
-        </div>
-      </div>
-      <div class="progress">
-        <div id="train_progress_bar" class="progress-bar"></div>
-      </div>
-      <div id="train_progress_text" class="muted" style="margin-top: 8px; font-size: 12px;">Esperando estado…</div>
-    </div>
-
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
@@ -261,24 +222,25 @@
       <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
         <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px;">
           <div class="row">
-            <div class="mono" style="font-weight: 700;">R_10</div>
-            <div class="badge neutral mono" id="ticks_collector_badge_r10">—</div>
+            <div class="mono" style="font-weight: 700;">EURUSD</div>
+            <div class="badge neutral mono" id="ticks_collector_badge_forex">—</div>
           </div>
-          <div class="muted" style="margin-top: 8px;">Ticks archivados: <span class="mono" id="ticks_collector_total_r10">0</span></div>
-          <div class="muted">Último epoch: <span class="mono" id="ticks_collector_last_epoch_r10">—</span></div>
+          <div class="muted" style="margin-top: 8px;">Ticks archivados: <span class="mono" id="ticks_collector_total_forex">0</span></div>
+          <div class="muted">Último epoch: <span class="mono" id="ticks_collector_last_epoch_forex">—</span></div>
           <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="btn" id="ticks_collector_toggle_r10">Pausar</button>
+            <button class="btn" id="ticks_collector_toggle_forex">Pausar</button>
           </div>
         </div>
+        <!-- Segundo símbolo forex -->
         <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px;">
           <div class="row">
-            <div class="mono" style="font-weight: 700;">R_100</div>
-            <div class="badge neutral mono" id="ticks_collector_badge_r100">—</div>
+            <div class="mono" style="font-weight: 700;">GBPUSD</div>
+            <div class="badge neutral mono" id="ticks_collector_badge_forex2">—</div>
           </div>
-          <div class="muted" style="margin-top: 8px;">Ticks archivados: <span class="mono" id="ticks_collector_total_r100">0</span></div>
-          <div class="muted">Último epoch: <span class="mono" id="ticks_collector_last_epoch_r100">—</span></div>
+          <div class="muted" style="margin-top: 8px;">Ticks archivados: <span class="mono" id="ticks_collector_total_forex2">0</span></div>
+          <div class="muted">Último epoch: <span class="mono" id="ticks_collector_last_epoch_forex2">—</span></div>
           <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="btn" id="ticks_collector_toggle_r100">Pausar</button>
+            <button class="btn" id="ticks_collector_toggle_forex2">Pausar</button>
           </div>
         </div>
       </div>
@@ -287,66 +249,34 @@
       </div>
     </div>
 
-    <!-- Gráfico R_10 -->
+    <!-- Gráfico EURUSD -->
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
-          <div class="big">Precio en Tiempo Real (últimos 200 ticks) - <span id="simbolo_r10" class="mono">R_10</span></div>
+          <div class="big">Precio en Tiempo Real (últimos 200 ticks) - <span id="simbolo_forex" class="mono">EURUSD</span></div>
           <div class="muted">Eje X: ticks · Eje Y: precio</div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="muted" style="font-size: 11px;" id="ticks_count_r10">0 ticks</div>
-          <div class="muted mono" style="font-size: 13px; font-weight: 600;" id="ticks_current_price_r10">—</div>
+          <div class="muted" style="font-size: 11px;" id="ticks_count_forex">0 ticks</div>
+          <div class="muted mono" style="font-size: 13px; font-weight: 600;" id="ticks_current_price_forex">—</div>
         </div>
       </div>
       
-      <!-- Controles de EMAs R_10 -->
+      <!-- Controles de EMAs EURUSD -->
       <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <label style="font-size: 12px; color: #6b7280; font-weight: 500;">EMA Rápida:</label>
-          <input type="number" id="ema_fast_period_r10" value="50" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
+          <input type="number" id="ema_fast_period_forex" value="9" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <label style="font-size: 12px; color: #6b7280; font-weight: 500;">EMA Lenta:</label>
-          <input type="number" id="ema_slow_period_r10" value="100" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
+          <input type="number" id="ema_slow_period_forex" value="21" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
         </div>
-        <button id="ema_update_btn_r10" style="padding: 6px 12px; background: #111827; color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Actualizar EMAs</button>
+        <button id="ema_update_btn_forex" style="padding: 6px 12px; background: #111827; color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Actualizar EMAs</button>
       </div>
       
       <div class="chart-wrap" style="margin-top: 10px;">
-        <canvas id="ticks_chart_r10"></canvas>
-      </div>
-      <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos 200 ticks recibidos</div>
-    </div>
-
-    <!-- Gráfico R_100 -->
-    <div class="card" style="margin-top: 14px;">
-      <div class="row">
-        <div>
-          <div class="big">Precio en Tiempo Real (últimos 200 ticks) - <span id="simbolo_r100" class="mono">R_100</span></div>
-          <div class="muted">Eje X: ticks · Eje Y: precio</div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="muted" style="font-size: 11px;" id="ticks_count_r100">0 ticks</div>
-          <div class="muted mono" style="font-size: 13px; font-weight: 600;" id="ticks_current_price_r100">—</div>
-        </div>
-      </div>
-      
-      <!-- Controles de EMAs R_100 -->
-      <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <label style="font-size: 12px; color: #6b7280; font-weight: 500;">EMA Rápida:</label>
-          <input type="number" id="ema_fast_period_r100" value="50" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <label style="font-size: 12px; color: #6b7280; font-weight: 500;">EMA Lenta:</label>
-          <input type="number" id="ema_slow_period_r100" value="100" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
-        </div>
-        <button id="ema_update_btn_r100" style="padding: 6px 12px; background: #111827; color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Actualizar EMAs</button>
-      </div>
-      
-      <div class="chart-wrap" style="margin-top: 10px;">
-        <canvas id="ticks_chart_r100"></canvas>
+        <canvas id="ticks_chart_forex"></canvas>
       </div>
       <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos 200 ticks recibidos</div>
     </div>
@@ -434,7 +364,7 @@
           <option value="700">700</option>
           <option value="1000">1000</option>
         </select>
-        <input id="logs_filter" type="text" placeholder="Filtrar (ej: [DIAG], [TRADING], razon=, [WS], R_10, R_100)" />
+        <input id="logs_filter" type="text" placeholder="Filtrar (ej: [DIAG], [TRADING], razon=, [WS], EURUSD, GBPUSD)" />
         <button id="logs_clear_btn" class="btn secondary">Limpiar</button>
       </div>
 
@@ -804,10 +734,8 @@
         }
       }
 
-      // ===== GRÁFICAS TICKS (R_10 y R_100) =====
-      const charts = {
-        "R_10": { chart: null, emaFast: 50, emaSlow: 100, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null },
-        "R_100": { chart: null, emaFast: 50, emaSlow: 100, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null }
+      // ===== GRÁFICAS TICKS (FOREX) =====
+        "EURUSD": { chart: null, emaFast: 9, emaSlow: 21, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null }
       };
 
       function resetEmaCache(simbolo) {
@@ -999,10 +927,10 @@
       }
 
       function actualizarTicksCollectorUI(cuentas) {
-        const map = { "R_10": "r10", "R_100": "r100" };
+        const map = { "frxEURUSD": "forex", "frxGBPUSD": "forex2" };
         let activos = 0;
         let total = 0;
-        for (const simbolo of ["R_10", "R_100"]) {
+        for (const simbolo of ["frxEURUSD", "frxGBPUSD"]) {
           const key = map[simbolo];
           const c = (cuentas && cuentas[simbolo]) ? cuentas[simbolo] : null;
           const activo = Boolean(c && c.ticks_colector_activo);
@@ -1118,11 +1046,11 @@
             debugEl.style.display = "none";
           }
           
-          // Actualizar gráficos de ticks para ambos activos
+          // Actualizar gráficos de ticks para forex
           console.log("[REFRESCAR] ticksPorActivo:", ticksPorActivo);
           console.log("[REFRESCAR] cuentas:", cuentas);
           actualizarTicksCollectorUI(cuentas);
-          for (const simbolo of ["R_10", "R_100"]) {
+          for (const simbolo of ["frxEURUSD"]) {
             const ticks = ticksPorActivo[simbolo] || [];
             const cuentaData = cuentas[simbolo];
             console.log(`[REFRESCAR] ${simbolo}: ${ticks.length} ticks, cuenta:`, cuentaData ? "existe" : "no existe");
@@ -1503,110 +1431,164 @@
         logsTimer = setInterval(refrescarLogs, 2000);
       }
 
-      // ===== Scatter interactivo (Plotly) =====
-      async function cargarScatterInteractivo() {
-        const msg = document.getElementById("scatter_msg");
-        const div = document.getElementById("scatter_interactivo");
-        if (msg) msg.textContent = "Cargando puntos…";
-        try {
-          const resp = await fetch("{% url 'gestion_riesgo:ticks_scatter_json' %}?max=20000");
-          if (!resp.ok) throw new Error("HTTP " + resp.status);
-          const data = await resp.json();
-          const traces = [];
-          (data.symbols || []).forEach((s) => {
-            const xs = (s.points || []).map(pt => new Date(pt.t));
-            const ys = (s.points || []).map(pt => pt.p);
-            traces.push({
-              x: xs,
-              y: ys,
-              mode: "markers",
-              type: "scattergl",
-              marker: { size: 3, opacity: 0.5 },
-              name: `${s.symbol} (n=${s.sampled}/${s.total})`,
-            });
-          });
-          const layout = {
-            title: "Scatter ticks (interactivo)",
-            xaxis: { title: "Tiempo (UTC)", type: "date" },
-            yaxis: { title: "Precio" },
-            margin: { l: 60, r: 20, t: 40, b: 50 },
-            showlegend: true,
-          };
-          Plotly.newPlot(div, traces, layout, { responsive: true, displaylogo: false });
-          if (msg) msg.textContent = "Tip: usa scroll/drag para zoom y doble clic para resetear.";
-        } catch (e) {
-          console.error(e);
-          if (msg) msg.textContent = "No se pudo cargar el scatter interactivo. Asegúrate de tener ticks históricos.";
-        }
-      }
-
-      // ===== Progreso entrenamiento LightGBM =====
-      let trainSymbol = "R_10";
-
-      async function startTrain(sym) {
-        trainSymbol = sym || "R_10";
-        const txt = document.getElementById("train_progress_text");
-        if (txt) txt.textContent = `Lanzando entrenamiento ${trainSymbol}...`;
-        try {
-          const res = await fetch(`/api/train/start/?symbol=${encodeURIComponent(trainSymbol)}`, { cache: "no-store" });
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          const data = await res.json();
-          if (txt) txt.textContent = `Entrenamiento iniciado (${data.symbol}), pid=${data.pid || "?"}`;
-        } catch (e) {
-          if (txt) txt.textContent = "No se pudo iniciar entrenamiento.";
-        }
-        actualizarTrainStatus(trainSymbol);
-      }
-
-      async function actualizarTrainStatus(sym = null) {
-        const symbol = sym || trainSymbol || "R_10";
-        const bar = document.getElementById("train_progress_bar");
-        const txt = document.getElementById("train_progress_text");
-        if (txt) txt.textContent = "Consultando estado…";
-        try {
-          const res = await fetch(`/api/train_status/?symbol=${encodeURIComponent(symbol)}`, { cache: "no-store" });
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          const data = await res.json();
-          const p = Math.max(0, Math.min(1, parseFloat(data.progress || 0)));
-          if (bar) bar.style.width = `${(p * 100).toFixed(0)}%`;
-          const msg = data.message || data.status || "—";
-          if (txt) txt.textContent = `${symbol}: ${(p * 100).toFixed(0)}% · ${msg}`;
-        } catch (e) {
-          if (txt) txt.textContent = "No se pudo leer estado de entrenamiento.";
-        }
-      }
-
-      // Event listeners para controles de EMAs (R_10)
-      document.getElementById("ema_update_btn_r10")?.addEventListener("click", () => {
-        charts["R_10"].emaFast = parseInt(document.getElementById("ema_fast_period_r10")?.value || "50", 10);
-        charts["R_10"].emaSlow = parseInt(document.getElementById("ema_slow_period_r10")?.value || "100", 10);
-        resetEmaCache("R_10");
+      // Event listeners para controles de EMAs (EURUSD)
+      document.getElementById("ema_update_btn_forex")?.addEventListener("click", () => {
+        charts["EURUSD"].emaFast = parseInt(document.getElementById("ema_fast_period_forex")?.value || "9", 10);
+        charts["EURUSD"].emaSlow = parseInt(document.getElementById("ema_slow_period_forex")?.value || "21", 10);
+        resetEmaCache("EURUSD");
         // Recalcular EMAs con los nuevos periodos
-        if (charts["R_10"].lastTicks) {
-          actualizarGraficoTicks("R_10", charts["R_10"].lastTicks, null);
+        if (charts["EURUSD"].lastTicks) {
+          actualizarGraficoTicks("EURUSD", charts["EURUSD"].lastTicks, null);
         }
       });
+
+      // ===== SSE (Server-Sent Events) para actualizaciones en tiempo real =====
+      let sseConnection = null;
+      let sseReconnectTimeout = null;
       
-      // Event listeners para controles de EMAs (R_100)
-      document.getElementById("ema_update_btn_r100")?.addEventListener("click", () => {
-        charts["R_100"].emaFast = parseInt(document.getElementById("ema_fast_period_r100")?.value || "50", 10);
-        charts["R_100"].emaSlow = parseInt(document.getElementById("ema_slow_period_r100")?.value || "100", 10);
-        resetEmaCache("R_100");
-        // Recalcular EMAs con los nuevos periodos
-        if (charts["R_100"].lastTicks) {
-          actualizarGraficoTicks("R_100", charts["R_100"].lastTicks, null);
+      function connectSSE() {
+        if (sseConnection) {
+          sseConnection.close();
         }
-      });
-
-      // Render inicial del scatter interactivo
-      cargarScatterInteractivo();
-      actualizarTrainStatus();
-      setInterval(() => actualizarTrainStatus(), 5000);
-
-      refrescar();
-      setInterval(refrescar, 1000); // Actualiza señal Y ticks cada 1 segundo
-
-      // Tabs + refresh balance (actualizar cada 5 segundos para tiempo real)
+        
+        try {
+          sseConnection = new EventSource("/api/sse/");
+          
+          sseConnection.onopen = function() {
+            console.log("[SSE] Conectado");
+            document.getElementById("ultima_actualizacion").textContent = "SSE: Conectado";
+            if (sseReconnectTimeout) {
+              clearTimeout(sseReconnectTimeout);
+              sseReconnectTimeout = null;
+            }
+          };
+          
+          sseConnection.onmessage = function(event) {
+            try {
+              const data = JSON.parse(event.data);
+              
+              if (data.type === "state") {
+                // Actualizar cuenta
+                if (data.cuenta) {
+                  actualizarEstadoCuenta(data.cuenta);
+                }
+                
+                // Actualizar ticks
+                if (data.ticks) {
+                  actualizarTicksGrafico(data.ticks);
+                }
+                
+                // Actualizar operaciones solo si cambiaron
+                if (data.ops_changed && data.operaciones) {
+                  renderOpsDeriv(data.operaciones);
+                }
+                
+                // Actualizar logs solo si cambiaron
+                if (data.logs_changed && data.logs) {
+                  const pre = document.getElementById("logs_pre");
+                  if (pre && !logsPaused) {
+                    const wrap = pre.parentElement;
+                    const stick = _logsShouldStickToBottom(wrap);
+                    pre.textContent = data.logs.join("\n");
+                    if (wrap && stick) {
+                      wrap.scrollTop = wrap.scrollHeight;
+                    }
+                  }
+                }
+                
+                document.getElementById("ultima_actualizacion").textContent = 
+                  "Actualizado: " + new Date().toLocaleTimeString();
+              }
+            } catch (e) {
+              console.error("[SSE] Error procesando mensaje:", e);
+            }
+          };
+          
+          sseConnection.onerror = function(error) {
+            console.error("[SSE] Error:", error);
+            sseConnection.close();
+            sseConnection = null;
+            
+            // Reconectar después de 3 segundos
+            sseReconnectTimeout = setTimeout(connectSSE, 3000);
+          };
+        } catch (e) {
+          console.error("[SSE] Error creando conexión:", e);
+          // Fallback a polling si SSE no está disponible
+          refrescar();
+          setInterval(refrescar, 1000);
+        }
+      }
+      
+      function actualizarEstadoCuenta(c) {
+        setText("simbolo", c.simbolo);
+        
+        const wr = c.winrate_ult15;
+        if (wr && wr.winrate !== null && wr.winrate !== undefined) {
+          setText("winrate_ult15", `${Number(wr.winrate).toFixed(1)}% (${wr.wins}/${wr.n})`);
+        } else {
+          setText("winrate_ult15", "—");
+        }
+        
+        setText("balance_deriv", c.balance_deriv === null || c.balance_deriv === undefined ? "—" : fmt2(c.balance_deriv));
+        setText("moneda_deriv", c.moneda_deriv || "—");
+        setText("capital_actual", fmt2(c.capital_actual));
+        setBloqueado(c.bloqueado);
+        setRiesgoMotivo(c.riesgo_motivo_ui || "—");
+        
+        // Actualizar info de pausa
+        const elInfo = document.getElementById("ciclo_pausa_info");
+        if (elInfo) {
+          if (c.ciclo_pausa_hasta_local && c.ciclo_pausa_restante_hhmmss) {
+            elInfo.style.display = "block";
+            setText("ciclo_pausa_fecha", c.ciclo_pausa_hasta_local);
+            setText("ciclo_pausa_countdown", `(faltan ${c.ciclo_pausa_restante_hhmmss})`);
+          } else {
+            elInfo.style.display = "none";
+          }
+        }
+        
+        // Horario bloqueado
+        const elHorario = document.getElementById("horario_bloqueado_info");
+        if (elHorario) {
+          elHorario.style.display = c.horario_bloqueado ? "block" : "none";
+          if (c.hora_local_actual !== null && c.hora_local_actual !== undefined) {
+            setText("hora_local_actual", String(c.hora_local_actual).padStart(2, "0") + ":00");
+          }
+          if (c.horas_bloqueadas) {
+            setText("horas_bloqueadas", JSON.stringify(c.horas_bloqueadas));
+          }
+        }
+        
+        // Ciclo
+        setText("ciclo_balance_inicio", c.ciclo_balance_inicio === null || c.ciclo_balance_inicio === undefined ? "—" : fmt2(c.ciclo_balance_inicio));
+        setText("ciclo_inicio", c.ciclo_inicio_local || "—");
+        
+        // Último tick
+        setText("ultimo_tick", c.ultimo_tick_local || "—");
+        setText("ultimo_precio", c.ultimo_precio === null || c.ultimo_precio === undefined ? "—" : fmt2(c.ultimo_precio));
+        
+        // Señal
+        const nuevoValor = c.senal_valor === null || c.senal_valor === undefined ? null : Number(c.senal_valor);
+        setText("senal_valor", nuevoValor !== null ? fmt2(nuevoValor) : "—");
+        setSenalDecision(c.senal_decision);
+        actualizarSenalUI(c);
+        
+        // Actualizar gráfico de ticks para EURUSD
+        if (window._lastTicksData) {
+          actualizarGraficoTicks("EURUSD", window._lastTicksData, null);
+        }
+      }
+      
+      function actualizarTicksGrafico(ticks) {
+        window._lastTicksData = ticks;
+        actualizarGraficoTicks("EURUSD", ticks, null);
+      }
+      
+      // Iniciar conexión SSE
+      connectSSE();
+      
+      // Fallback: refrescar balance cada 5 segundos (SSE no envía balance_history)
       document.querySelectorAll(".tab").forEach(el => {
         el.addEventListener("click", () => {
           const r = el.getAttribute("data-range") || "hour";
@@ -1616,7 +1598,7 @@
         });
       });
       cargarBalance(rangoActivo);
-      setInterval(() => cargarBalance(rangoActivo), 5000); // Actualizar balance cada 5 segundos (tiempo real)
+      setInterval(() => cargarBalance(rangoActivo), 5000);
 
       // Pintar el modo correcto (extremos vs wᵀx) desde el primer render, sin esperar el polling.
       aplicarEstadoInicialSenal();

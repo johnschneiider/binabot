@@ -84,7 +84,7 @@ DERIV_API_TOKEN = os.getenv("DERIV_API_TOKEN", "").strip()
 DERIV_ACCOUNT_ID = os.getenv("DERIV_ACCOUNT_ID", "").strip()
 # Símbolo por defecto del bot. En producción se recomienda setear DERIV_SYMBOL en el entorno.
 # Default: R_10 (evita crear/mostrar accidentalmente cuentas R_100 en instalaciones nuevas).
-DERIV_SYMBOL = os.getenv("DERIV_SYMBOL", "R_10").strip()
+DERIV_SYMBOL = os.getenv("DERIV_SYMBOL", "frxEURUSD").strip()
 DERIV_MODO_REAL = (os.getenv("DERIV_MODO_REAL", "False").strip().lower() in {"1", "true", "yes", "y"})
 DERIV_CONFIRMAR_REAL = os.getenv("DERIV_CONFIRMAR_REAL", "NO").strip().upper()
 DERIV_DURACION_TICKS = int(os.getenv("DERIV_DURACION_TICKS", "5"))
@@ -92,6 +92,8 @@ DERIV_DURACION_TICKS = int(os.getenv("DERIV_DURACION_TICKS", "5"))
 # Esto evita que el bot intente enviar propuestas imposibles y quede en loop de reconexión.
 DERIV_MAX_DURACION_TICKS = int(os.getenv("DERIV_MAX_DURACION_TICKS", "10"))
 DERIV_MIN_STAKE = float(os.getenv("DERIV_MIN_STAKE", "1.0"))
+DERIV_MIN_STAKE_DINAMICO = float(os.getenv("DERIV_MIN_STAKE_DINAMICO", "0.35"))
+DERIV_DUR_ABS_MAX = int(os.getenv("DERIV_DUR_ABS_MAX", "10"))
 # Si está seteado (ej: 0.5), el bot intentará usar ese stake (USD) por operación en modo real,
 # respetando los límites de riesgo (no exceder riesgo_disponible ni capital_actual) y DERIV_MIN_STAKE.
 _stake_fijo_raw = os.getenv("DERIV_STAKE_FIJO", "").strip()
@@ -111,6 +113,8 @@ DERIV_BLOQUEO_HORAS_LOCAL = os.getenv("DERIV_BLOQUEO_HORAS_LOCAL", "").strip()
 # Cada cuántos segundos forzar un request "balance" (one-shot) para evitar que el bot
 # quede pegado bloqueado cuando Deriv no emite updates de balance (p. ej. pausa de ciclo ya vencida).
 DERIV_BALANCE_POLL_CADA_SEG = float(os.getenv("DERIV_BALANCE_POLL_CADA_SEG", "60"))
+TICKS_HIST_FLUSH_EVERY = int(os.getenv("TICKS_HIST_FLUSH_EVERY", "25"))
+TICKS_HIST_FLUSH_SECS = float(os.getenv("TICKS_HIST_FLUSH_SECS", "5.0"))
 
 # ===== ESTRATEGIA SPP (estructura + pendiente + pullback) =====
 # Estos valores se consumen desde `vector_pesos/senal_spp.py`.
@@ -119,7 +123,10 @@ SPP_SLOPE_N = int(os.getenv("SPP_SLOPE_N", "7"))
 SPP_PULLBACK_MIN_TICKS = int(os.getenv("SPP_PULLBACK_MIN_TICKS", "4"))
 SPP_PULLBACK_MAX_TICKS = int(os.getenv("SPP_PULLBACK_MAX_TICKS", "7"))
 SPP_PULLBACK_DIST_FACTOR = float(os.getenv("SPP_PULLBACK_DIST_FACTOR", "0.45"))
-SPP_COOLDOWN_TICKS = int(os.getenv("SPP_COOLDOWN_TICKS", "40"))
+SPP_COOLDOWN_TICKS = int(os.getenv("SPP_COOLDOWN_TICKS", "80"))
+SPP_DYNAMIC_COOLDOWN = os.getenv("SPP_DYNAMIC_COOLDOWN", "true").lower() == "true"
+SPP_FATIGA_PRDIDAS = int(os.getenv("SPP_FATIGA_PRDIDAS", "3"))
+SPP_FATIGA_MULTIPLICADOR = float(os.getenv("SPP_FATIGA_MULTIPLICADOR", "1.5"))
 SPP_CHOPPY_WINDOW = int(os.getenv("SPP_CHOPPY_WINDOW", "20"))
 SPP_CHOPPY_MAX_FLIPS = int(os.getenv("SPP_CHOPPY_MAX_FLIPS", "10"))
 SPP_ESTRUCTURA_WINDOW = int(os.getenv("SPP_ESTRUCTURA_WINDOW", "24"))

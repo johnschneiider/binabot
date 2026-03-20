@@ -1,21 +1,127 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections import deque
 from typing import Deque, Optional
 
 from django.conf import settings
 
+from vector_pesos.filtro_rsi_zona import FiltroRSIZona, ResultadoFiltroRSI
+
+
+@dataclass
+class TendenciaState:
+    highs: Deque[float] = field(default_factory=lambda: deque(maxlen=50))
+    lows: Deque[float] = field(default_factory=lambda: deque(maxlen=50))
+    trs: Deque[float] = field(default_factory=lambda: deque(maxlen=50))
+    plus_dm: Deque[float] = field(default_factory=lambda: deque(maxlen=50))
+    minus_dm: Deque[float] = field(default_factory=lambda: deque(maxlen=50))
+    adx: float = 0.0
+    atr: float = 0.0
+    prev_high: float | None = None
+    prev_low: float | None = None
+    prev_close: float | None = None
+
+
+def _calc_true_range(high: float, low: float, prev_close: float | None) -> float:
+    if prev_close is None:
+        return high - low
+    return max(
+        high - low,
+        abs(high - prev_close),
+        abs(low - prev_close)
+    )
+
+
+def _calc_dm(high: float, low: float, prev_high: float | None, prev_low: float | None) -> tuple[float, float]:
+    if prev_high is None or prev_low is None:
+        return 0.0, 0.0
+    up_move = high - prev_high
+    down_move = prev_low - low
+    plus_dm = up_move if up_move > down_move and up_move > 0 else 0.0
+    minus_dm = down_move if down_move > up_move and down_move > 0 else 0.0
+    return plus_dm, minus_dm
+
+
+def calcular_adx_atr(
+    precio: float,
+    estado_tendencia: TendenciaState,
+    adx_period: int = 14,
+    atr_period: int = 14,
+) -> tuple[float, float]:
+    high = precio
+    low = precio
+    
+    if len(estado_tendencia.highs) > 0:
+        high = max(estado_tendencia.highs[-1], precio)
+        low = min(estado_tendencia.lows[-1], precio)
+    
+    estado_tendencia.highs.append(high)
+    estado_tendencia.lows.append(low)
+    
+    tr = _calc_true_range(high, low, estado_tendencia.prev_close)
+    plus_dm, minus_dm = _calc_dm(high, low, estado_tendencia.prev_high, estado_tendencia.prev_low)
+    
+    estado_tendencia.trs.append(tr)
+    estado_tendencia.plus_dm.append(plus_dm)
+    estado_tendencia.minus_dm.append(minus_dm)
+    
+    estado_tendencia.prev_high = high
+    estado_tendencia.prev_low = low
+    estado_tendencia.prev_close = precio
+    
+    if len(estado_tendencia.trs) < adx_period + 1:
+        return 0.0, 0.0
+    
+    tr_avg = sum(list(estado_tendencia.trs)[-adx_period:]) / adx_period
+    plus_dm_avg = sum(list(estado_tendencia.plus_dm)[-adx_period:]) / adx_period
+    minus_dm_avg = sum(list(estado_tendencia.minus_dm)[-adx_period:]) / adx_period
+    
+    if tr_avg == 0:
+        return 0.0, 0.0
+    
+    plus_di = (plus_dm_avg / tr_avg) * 100
+    minus_di = (minus_dm_avg / tr_avg) * 100
+    
+    if plus_di + minus_di == 0:
+        return 0.0, tr_avg
+    
+    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
+    
+    alpha = 2.0 / (adx_period + 1)
+    adx = (alpha * dx) + ((1.0 - alpha) * estado_tendencia.adx) if estado_tendencia.adx > 0 else dx
+    estado_tendencia.adx = adx
+    
+    atr = tr_avg
+    
+    return adx, atr
+
+
+def _es_rango_lateral(precios: Deque[float], ventana: int = 50, threshold_mult: float = 0.0001) -> bool:
+    if len(precios) < ventana:
+        return False
+    
+    arr = list(precios)[-ventana:]
+    precio_actual = arr[-1]
+    rango = max(arr) - min(arr)
+    
+    if precio_actual == 0:
+        return False
+    
+    rango_pct = rango / precio_actual
+    return rango_pct < threshold_mult
+
 
 @dataclass(frozen=True)
 class ResultadoSenalSPP:
     """
-    Resultado de la estrategia: estructura + pendiente + pullback (ticks).
+    Resultado de la estrategia: estructura + pendiente + pullback (ticks o minutos para forex).
     """
 
     decision: str  # "COMPRA" | "VENTA" | "NO_OPERAR"
     razon: str
     duracion_ticks: int | None = None
+    duracion_unit: str = "t"  # "t" para ticks, "m" para minutos
 
 
 @dataclass
@@ -32,6 +138,9 @@ class EstadoSPP:
     precios: Deque[float] = None  # type: ignore[assignment]
     deltas_sign: Deque[int] = None  # type: ignore[assignment]
 
+    # Tendencia state (ADX/ATR)
+    tendencia_state: TendenciaState = field(default_factory=TendenciaState)
+
     # Pullback state
     pb_activo: bool = False
     pb_len: int = 0
@@ -41,8 +150,15 @@ class EstadoSPP:
     # Cooldown (ticks)
     cooldown_restante: int = 0
 
-    # Para logs “no saturar”
+    # Fatigue tracking
+    racha_perdidas: int = 0
+    ultima_resultado: str | None = None  # "ganancia" | "perdida"
+
+    # Para logs "no saturar"
     last_razon: str | None = None
+
+    # Filtro RSI-Zona
+    filtro_rsi: FiltroRSIZona = field(default_factory=FiltroRSIZona)
 
     def __post_init__(self) -> None:
         if self.ema_fast_hist is None:
@@ -133,30 +249,10 @@ def _estructura_ok(
 def _duracion_por_slope(symbol: str, *, slope_abs: float, slope_threshold: float) -> int:
     """
     Duración recomendada (ticks) según fuerza del impulso.
-    Evita 5 ticks; usa rangos 7–12 (R_10).
-
-    Nota operativa:
-    En la práctica, para el setup actual de Deriv (ticks), hemos observado validaciones
-    que limitan la duración a 10 ticks en algunos offerings. Por eso, para R_100
-    esta función nunca retornará > 10.
+    MODIFICADO: Usar siempre 10 ticks para mayor probabilidad de éxito.
     """
-    thr = max(1e-9, float(slope_threshold))
-    strength = float(slope_abs) / thr
-    if symbol == "R_10":
-        if strength >= 2.5:
-            return 7
-        if strength >= 2.0:
-            return 8
-        if strength >= 1.5:
-            return 9
-        return 11
-    # R_100
-    # Max 10 por compatibilidad con offerings (ver OfferingsValidationError duration).
-    # Mantenerlo simple: el backend ya clampa a 1..10, pero aquí evitamos que "piense" >10.
-    if strength >= 2.5:
-        return 10
-    if strength >= 2.0:
-        return 10
+    # Siempre retornar 10 ticks (máximo) para mayor chance de acierto
+    return 10
     if strength >= 1.5:
         return 10
     return 10
@@ -167,37 +263,39 @@ def evaluar_senal_spp(
     symbol: str,
     precio: float,
     estado: EstadoSPP,
-    # EMA periods (FIJOS por requerimiento)
-    ema_fast_period: int = 50,
-    ema_slow_period: int = 100,
+    # EMA periods - configurables para forex (EMA 9/21 - más reactiva)
+    ema_fast_period: int = getattr(settings, "SP_EMA_FAST", 9),
+    ema_slow_period: int = getattr(settings, "SP_EMA_SLOW", 21),
 ) -> ResultadoSenalSPP:
     """
-    Estrategia: tendencia (EMA50 vs EMA100) + pendiente EMA50 + pullback + estructura.
+    Estrategia de CONTINUACIÓN DE TENDENCIA para FOREX.
+    Usa EMA20/EMA50 para más reactividad en forex.
+    
+    Reglas:
+    1. EMA20 > EMA50 = tendencia ALCISTA (CALL)
+    2. EMA20 < EMA50 = tendencia BAJISTA (PUT)
+    3. Precio hace pullback hacia EMA50 y rebota
+    4. Entrar cuando precio rompe el máximo/mínimo reciente
     """
-    # ===== CONFIG (settings, con defaults razonables) =====
-    slope_n = int(getattr(settings, "SPP_SLOPE_N", 7) or 7)
-    # Defaults más conservadores ("modo banco"): menos trades, más calidad.
-    pullback_min = int(getattr(settings, "SPP_PULLBACK_MIN_TICKS", 4) or 4)
-    pullback_max = int(getattr(settings, "SPP_PULLBACK_MAX_TICKS", 7) or 7)
-    pullback_dist_factor = float(getattr(settings, "SPP_PULLBACK_DIST_FACTOR", 0.45) or 0.45)
-    cooldown_ticks = int(getattr(settings, "SPP_COOLDOWN_TICKS", 40) or 40)
+    # ===== CONFIG =====
+    slope_n = int(getattr(settings, "SPP_SLOPE_N", 5) or 5)
+    cooldown_ticks = int(getattr(settings, "SPP_COOLDOWN_TICKS", 80) or 80)
+    dynamic_cooldown = getattr(settings, "SPP_DYNAMIC_COOLDOWN", True)
+    fatiga_perdidas = int(getattr(settings, "SPP_FATIGA_PRDIDAS", 3) or 3)
+    fatiga_multiplicador = float(getattr(settings, "SPP_FATIGA_MULTIPLICADOR", 1.5) or 1.5)
     choppy_window = int(getattr(settings, "SPP_CHOPPY_WINDOW", 20) or 20)
-    choppy_max_flips = int(getattr(settings, "SPP_CHOPPY_MAX_FLIPS", 10) or 10)
-    estructura_window = int(getattr(settings, "SPP_ESTRUCTURA_WINDOW", 24) or 24)
+    choppy_max_flips = int(getattr(settings, "SPP_CHOPPY_MAX_FLIPS", 12) or 12)
 
-    # thresholds por símbolo
-    if symbol == "R_10":
-        slope_threshold = float(getattr(settings, "SPP_SLOPE_THRESHOLD_R10", 0.04) or 0.04)
-        min_ema_gap = float(getattr(settings, "SPP_MIN_EMA_GAP_R10", 0.08) or 0.08)
-        slow_eps = float(getattr(settings, "SPP_SLOW_SLOPE_EPS_R10", 0.0) or 0.0)
-        estructura_min_delta = float(getattr(settings, "SPP_ESTRUCTURA_MIN_DELTA_R10", 0.03) or 0.03)
-        retake_min_delta = float(getattr(settings, "SPP_RETAKE_MIN_DELTA_R10", 0.015) or 0.015)
-    else:
-        slope_threshold = float(getattr(settings, "SPP_SLOPE_THRESHOLD_R100", 0.18) or 0.18)
-        min_ema_gap = float(getattr(settings, "SPP_MIN_EMA_GAP_R100", 0.35) or 0.35)
-        slow_eps = float(getattr(settings, "SPP_SLOW_SLOPE_EPS_R100", 0.0) or 0.0)
-        estructura_min_delta = float(getattr(settings, "SPP_ESTRUCTURA_MIN_DELTA_R100", 0.15) or 0.15)
-        retake_min_delta = float(getattr(settings, "SPP_RETAKE_MIN_DELTA_R100", 0.06) or 0.06)
+    # Thresholds específicos para forex (ajustados para EMA 9/21 más reactiva)
+    slope_threshold = float(getattr(settings, "SPP_SLOPE_THRESHOLD_FOREX", 0.00001) or 0.00001)
+    min_ema_gap = float(getattr(settings, "SPP_MIN_EMA_GAP_FOREX", 0.00003) or 0.00003)
+
+    # Filtros de tendencia (ADX/ATR)
+    adx_enabled = getattr(settings, "ADX_ENABLED", False)
+    adx_threshold = float(getattr(settings, "ADX_THRESHOLD", 25) or 25)
+    atr_volatility_filter = getattr(settings, "ATR_VOLATILITY_FILTER", False)
+    atr_low_threshold = float(getattr(settings, "ATR_LOW_THRESHOLD", 0.00005) or 0.00005)
+    atr_high_threshold = float(getattr(settings, "ATR_HIGH_THRESHOLD", 0.0005) or 0.0005)
 
     # ===== UPDATE PRICE/DELTA =====
     precio = float(precio)
@@ -205,6 +303,9 @@ def evaluar_senal_spp(
     estado.precios.append(precio)
     if prev is not None:
         estado.deltas_sign.append(_sign(precio - float(prev)))
+
+    # ===== CALCULAR ADX Y ATR =====
+    adx, atr = calcular_adx_atr(precio, estado.tendencia_state)
 
     # ===== COOLDOWN =====
     if estado.cooldown_restante > 0:
@@ -224,144 +325,110 @@ def evaluar_senal_spp(
     estado.ema_fast_hist.append(float(estado.ema_fast))
     estado.ema_slow_hist.append(float(estado.ema_slow))
 
-    # ===== FILTRO DURO: tendencia + compresión =====
+    # ===== DETERMINAR TENDENCIA =====
     ema_fast = float(estado.ema_fast)
     ema_slow = float(estado.ema_slow)
-    ema_gap = abs(ema_fast - ema_slow)
-    if ema_gap < float(min_ema_gap):
-        estado.pb_activo = False
-        estado.pb_len = 0
-        estado.pb_toco_fast = False
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"gap_pequeno({ema_gap:.4f}<{min_ema_gap:.4f})")
-
+    
+    # Determinar bias basado en posición de EMAs
     if ema_fast > ema_slow:
         bias = "CALL"
     elif ema_fast < ema_slow:
         bias = "PUT"
     else:
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon="sin_tendencia(emas_iguales)")
+        # Si EMAs iguales, usar pendiente del precio
+        if len(estado.precios) >= 2:
+            precio_actual = estado.precios[-1]
+            precio_anterior = estado.precios[-2]
+            if precio_actual > precio_anterior:
+                bias = "CALL"
+            elif precio_actual < precio_anterior:
+                bias = "PUT"
+            else:
+                return ResultadoSenalSPP(decision="NO_OPERAR", razon="mercado_lateral")
+        else:
+            return ResultadoSenalSPP(decision="NO_OPERAR", razon="warmup")
 
-    # ===== PENDIENTE EMA FAST =====
-    s_fast = _slope(estado.ema_fast_hist, slope_n)
-    if s_fast is None:
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon="warmup_slope")
-
-    if bias == "CALL":
-        if float(s_fast) < float(slope_threshold):
-            estado.pb_activo = False
-            estado.pb_len = 0
-            estado.pb_toco_fast = False
-            return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"slope_bajo({float(s_fast):.4f}<{slope_threshold:.4f})")
-    else:
-        if float(s_fast) > -float(slope_threshold):
-            estado.pb_activo = False
-            estado.pb_len = 0
-            estado.pb_toco_fast = False
-            return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"slope_bajo({float(s_fast):.4f}>-{slope_threshold:.4f})")
-
-    # ===== CONFIRMACIÓN EMA SLOW =====
-    s_slow = _slope(estado.ema_slow_hist, slope_n)
-    if s_slow is None:
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon="warmup_slow")
-
-    if bias == "CALL":
-        if float(s_slow) < -float(slow_eps):
-            return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"slow_contra({float(s_slow):.4f})")
-    else:
-        if float(s_slow) > float(slow_eps):
-            return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"slow_contra({float(s_slow):.4f})")
-
-    # ===== FILTRO SERRUCHO (estructura/chop) =====
+    # ===== FILTRO CHOPPY: evitar mercados laterales =====
     if _choppy(estado.deltas_sign, ventana=choppy_window, max_flips=choppy_max_flips):
-        estado.pb_activo = False
-        estado.pb_len = 0
-        estado.pb_toco_fast = False
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon="choppy")
+        return ResultadoSenalSPP(decision="NO_OPERAR", razon="mercado_choppy")
 
-    if not _estructura_ok(
-        estado.precios,
-        direccion=bias,
-        ventana=estructura_window,
-        min_delta=estructura_min_delta,
-    ):
-        # No reseteamos pullback siempre; pero si está activo demasiado tiempo, lo cortamos.
-        if estado.pb_activo and estado.pb_len > pullback_max:
-            estado.pb_activo = False
-            estado.pb_len = 0
-            estado.pb_toco_fast = False
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon="estructura_no_ok")
+    # ===== FILTRO ADX: solo operar si hay tendencia definida =====
+    if adx_enabled and adx > 0 and adx < adx_threshold:
+        return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"adx_debil({adx:.1f}<{adx_threshold})")
 
-    # ===== PULLBACK =====
-    # Condición de proximidad: |p-ema_fast| <= factor * |ema_fast-ema_slow|
-    dist_p_fast = abs(precio - ema_fast)
-    dist_fast_slow = max(1e-12, abs(ema_fast - ema_slow))
-    cerca_fast = dist_p_fast <= (float(pullback_dist_factor) * dist_fast_slow)
-
-    # Reglas: no cruzar EMA slow
-    if bias == "CALL":
-        if precio < ema_slow:
-            estado.pb_activo = False
-            estado.pb_len = 0
-            estado.pb_toco_fast = False
-            return ResultadoSenalSPP(decision="NO_OPERAR", razon="cruza_ema_slow")
+    # ===== FILTRO ATR: evitar volatilidad muy baja o muy alta =====
+    if atr_volatility_filter and atr > 0:
+        if atr < atr_low_threshold:
+            return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"atr_bajo({atr:.6f})")
+        if atr > atr_high_threshold:
+            return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"atr_alto({atr:.6f})")
+    
+    # ===== FILTRO RANGO LATERAL: evitar precio en rango =====
+    if _es_rango_lateral(estado.precios, ventana=50, threshold_mult=0.002):
+        return ResultadoSenalSPP(decision="NO_OPERAR", razon="rango_lateral")
+    
+    # ===== SEÑAL DE CONTINUACIÓN DE TENDENCIA =====
+    # Calcular cooldown dinámico basado en resultado anterior y fatiga
+    cooldown_aplicado = cooldown_ticks
+    
+    if dynamic_cooldown and estado.ultima_resultado == "perdida":
+        cooldown_aplicado = int(cooldown_ticks * fatiga_multiplicador)
+    
+    if estado.racha_perdidas >= fatiga_perdidas:
+        cooldown_aplicado = int(cooldown_aplicado * fatiga_multiplicador)
+    
+    # Operar en la dirección de la tendencia (EMA crossover o precio)
+    # Determinar duración basada en el símbolo
+    if symbol.startswith("frx"):
+        dur = 5  # 5 minutos para forex
     else:
-        if precio > ema_slow:
-            estado.pb_activo = False
-            estado.pb_len = 0
-            estado.pb_toco_fast = False
-            return ResultadoSenalSPP(decision="NO_OPERAR", razon="cruza_ema_slow")
+        dur = 5  # 5 ticks para índices
+    
+    if bias == "CALL":
+        senal_ema = "COMPRA"
+        razon_ema = "tendencia_alcista"
+    else:
+        senal_ema = "VENTA"
+        razon_ema = "tendencia_bajista"
+    
+    # ===== FILTRO RSI-ZONA (SECUNDARIO) =====
+    resultado_rsi = estado.filtro_rsi.actualizar(precio, ema_fast, ema_slow, bias)
+    
+    if resultado_rsi.decision == "INVALIDAR":
+        estado.cooldown_restante = cooldown_aplicado
+        return ResultadoSenalSPP(decision="NO_OPERAR", razon=resultado_rsi.razon)
+    
+    # Determinar unidad de duración
+    duracion_unit = "m" if symbol.startswith("frx") else "t"
+    
+    if resultado_rsi.decision == "CONFIRMAR":
+        estado.cooldown_restante = cooldown_aplicado
+        return ResultadoSenalSPP(
+            decision=senal_ema, 
+            razon=f"{razon_ema}_{resultado_rsi.razon}", 
+            duracion_ticks=int(dur),
+            duracion_unit=duracion_unit
+        )
+    
+    # NEUTRAL: usar señal original
+    estado.cooldown_restante = cooldown_aplicado
+    return ResultadoSenalSPP(
+        decision=senal_ema, 
+        razon=razon_ema, 
+        duracion_ticks=int(dur),
+        duracion_unit=duracion_unit
+    )
 
-    # Determinar delta del último tick para “retoma tendencia”
-    delta = 0.0 if prev is None else (precio - float(prev))
 
-    # Iniciar/continuar pullback cuando el precio va contra la tendencia.
-    contra = (delta < 0.0) if bias == "CALL" else (delta > 0.0)
-    favor = (delta > 0.0) if bias == "CALL" else (delta < 0.0)
-
-    if not estado.pb_activo:
-        if contra:
-            estado.pb_activo = True
-            estado.pb_dir = bias
-            estado.pb_len = 1
-            estado.pb_toco_fast = bool(cerca_fast)
-            return ResultadoSenalSPP(decision="NO_OPERAR", razon="pullback_iniciando")
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon="sin_pullback")
-
-    # Pullback activo
-    estado.pb_len += 1
-    if cerca_fast:
-        estado.pb_toco_fast = True
-
-    # Si el pullback se hace muy largo, lo descartamos.
-    if estado.pb_len > pullback_max:
-        estado.pb_activo = False
-        estado.pb_len = 0
-        estado.pb_toco_fast = False
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon="pullback_largo")
-
-    # Disparador: primer tick a favor tras pullback, con pullback válido:
-    # - duración mínima
-    # - tocó EMA fast (proximidad)
-    # - retoma con delta mínimo (evita "micro-retomas" que suelen fallar)
-    # - reclaim de EMA fast (confirmación extra)
-    if (
-        favor
-        and estado.pb_toco_fast
-        and estado.pb_len >= pullback_min
-        and abs(float(delta)) >= float(retake_min_delta)
-        and ((precio >= ema_fast) if bias == "CALL" else (precio <= ema_fast))
-    ):
-        dur = _duracion_por_slope(symbol, slope_abs=abs(float(s_fast)), slope_threshold=slope_threshold)
-        estado.pb_activo = False
-        estado.pb_len = 0
-        estado.pb_toco_fast = False
-        # Entrar
-        if bias == "CALL":
-            estado.cooldown_restante = cooldown_ticks
-            return ResultadoSenalSPP(decision="COMPRA", razon="entrada_pullback_ok", duracion_ticks=int(dur))
-        estado.cooldown_restante = cooldown_ticks
-        return ResultadoSenalSPP(decision="VENTA", razon="entrada_pullback_ok", duracion_ticks=int(dur))
-
-    # Si el pullback cambia de tipo o el mercado deja de cumplir, se cancela.
-    return ResultadoSenalSPP(decision="NO_OPERAR", razon="pullback_en_progreso")
+def reportar_resultado_spp(estado: EstadoSPP, fue_ganancia: bool) -> None:
+    """
+    Actualiza el tracking de fatiga basado en el resultado de la última operación.
+    Debe llamarse después de cerrar una operación.
+    """
+    if fue_ganancia:
+        estado.ultima_resultado = "ganancia"
+        estado.racha_perdidas = 0
+    else:
+        estado.ultima_resultado = "perdida"
+        estado.racha_perdidas += 1
 

@@ -177,6 +177,79 @@ class Operacion(models.Model):
         return f"Operacion({self.simbolo},{self.direccion},{self.estado})"
 
 
+class VelaEURUSD(models.Model):
+    """
+    VELAS M5 PARA EURUSD (DEL DOCUMENTO ESTRATEGIA.TXT).
+    
+    Construcción: se build from ticks o desde API de candles de Deriv.
+    """
+    SIMBOLO = "EURUSD"
+    
+    timeframe = models.CharField(max_length=8, default="M5")  # M5, M1 para construcción
+    open = models.FloatField()
+    high = models.FloatField()
+    low = models.FloatField()
+    close = models.FloatField()
+    volume = models.FloatField(default=0)
+    epoch_inicio = models.BigIntegerField()  # epoch de apertura
+    epoch_fin = models.BigIntegerField()     # epoch de cierre
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["-epoch_inicio"]),
+            models.Index(fields=["-epoch_fin"]),
+        ]
+        ordering = ["-epoch_inicio"]
+
+    def __str__(self) -> str:
+        return f"VelaEURUSD({self.timeframe} {self.epoch_inicio} O:{self.open:.5f} C:{self.close:.5f})"
+
+
+class TickEURUSD(models.Model):
+    """
+    TICKS HISTÓRICOS DE EURUSD PARA CONSTRUCCIÓN DE VELAS Y BACKTESTING.
+    """
+    precio = models.FloatField()
+    epoch = models.BigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["-epoch"]),
+        ]
+        ordering = ["-epoch"]
+
+    def __str__(self) -> str:
+        return f"TickEURUSD({self.precio:.5f} @ {self.epoch})"
+
+
+class OperacionBacktest(models.Model):
+    """
+    RESULTADOS DE BACKTESTING PARA EURUSD.
+    """
+    class Resultado(models.TextChoices):
+        WIN = "WIN", "WIN"
+        LOSS = "LOSS", "LOSS"
+
+    vela_entrada = models.ForeignKey(VelaEURUSD, on_delete=models.CASCADE, related_name="backtest_ops")
+    direccion = models.CharField(max_length=8)  # CALL / PUT
+    precio_entrada = models.FloatField()
+    precio_salida = models.FloatField()
+    resultado = models.CharField(max_length=8, choices=Resultado.choices)
+    pnl = models.FloatField()  # positivo=ganancia, negativo=pérdida
+    senal_detalle = models.JSONField(default=dict)  # {trend, pullback_candles, confirm_type}
+    epoch_entrada = models.BigIntegerField()
+    epoch_salida = models.BigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-epoch_entrada"]
+
+    def __str__(self) -> str:
+        return f"Backtest({self.direccion} {self.resultado} pnl={self.pnl:.2f})"
+
+
 class OperacionDeriv(models.Model):
     """
     HISTORIAL REAL DESDE DERIV (FUENTE DE VERDAD PARA EJECUCIÓN REAL).

@@ -49,11 +49,10 @@ class GestorRiesgo:
 
         if self.max_capital_historico <= 0.0:
             self.bloqueado = True
-            return
-
-        drawdown = 1.0 - (self.capital_actual / self.max_capital_historico)
-        if drawdown >= self.max_drawdown:
-            self.bloqueado = True
+        else:
+            drawdown = 1.0 - (self.capital_actual / self.max_capital_historico)
+            if drawdown >= self.max_drawdown:
+                self.bloqueado = True
 
     def riesgo_disponible(self) -> float:
         """

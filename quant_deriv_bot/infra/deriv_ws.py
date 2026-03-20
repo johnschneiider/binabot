@@ -291,3 +291,48 @@ async def dormir_segundos(segundos: float) -> None:
     await asyncio.sleep(segundos)
 
 
+async def obtener_duraciones_disponibles(
+    cliente: "ClienteDerivWS", symbol: str
+) -> list[int]:
+    """
+    OBTIENE LAS DURACIONES VÁLIDAS (EN TICKS) PARA UN SÍMBOLO.
+    DEVUELVE LISTA DE TICS DISPONIBLES, O LISTA VACÍA SI FALLA.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    try:
+        # contracts_for requiere landing_company para obtener info completa
+        await cliente.enviar({"contracts_for": symbol, "landing_company": "svg"})
+        msg = await cliente.recibir(timeout_segundos=10)
+
+        if msg.get("error"):
+            logger.warning(f"[deriv_ws] Error en contracts_for: {msg.get('error')}")
+            return []
+
+        data = msg.get("contracts_for") or {}
+        available = data.get("available") or []
+
+        if not available:
+            logger.warning(f"[deriv_ws] No hay contratos disponibles para {symbol}")
+            return []
+
+        tick_durations: list[int] = []
+        for contract in available:
+            durations_list = contract.get("duration_choices") or []
+            for d in durations_list:
+                if isinstance(d, int) and d > 0:
+                    tick_durations.append(d)
+
+        if tick_durations:
+            tick_durations = sorted(set(tick_durations))
+            logger.info(f"[deriv_ws] Duraciones válidas para {symbol}: {tick_durations}")
+            return tick_durations
+
+        logger.warning(f"[deriv_ws] No se encontraron duraciones en ticks para {symbol}")
+        return []
+    except Exception as e:
+        logger.warning(f"[deriv_ws] Excepción en obtener_duraciones_disponibles: {e}")
+        return []
+
+

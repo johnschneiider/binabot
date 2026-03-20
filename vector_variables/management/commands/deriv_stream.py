@@ -21,8 +21,16 @@ from django.db.models import F
 
 from gestion_riesgo.gestor_riesgo import GestorRiesgo
 from gestion_riesgo.models import BalanceDerivSnapshot, Cuenta, Operacion, OperacionDeriv, TickDerivHistorico, TickDerivSnapshot
-from quant_deriv_bot.infra.deriv_ws import ClienteDerivWS, dormir_segundos
+from quant_deriv_bot.infra.deriv_ws import ClienteDerivWS, dormir_segundos, obtener_duraciones_disponibles
 from vector_pesos.senal_spp import EstadoSPP, ResultadoSenalSPP, evaluar_senal_spp
+
+# Importar estrategia Momentum Breakout
+try:
+    from estrategia_momentum import EstadoMomentum, evaluar_momentum_breakout, reportar_resulto
+    from estrategia_config import MOMENTUM_PARAMS, RISK_PARAMS, SYMBOL_CONFIG
+    MOMENTUM_AVAILABLE = True
+except ImportError:
+    MOMENTUM_AVAILABLE = False
 
 
 def _ema(series, span):
@@ -154,8 +162,9 @@ def _runtime_log_path() -> str:
         from django.conf import settings as _settings  # local import (evita problemas en import-time)
 
         p = str(getattr(_settings, "BOT_RUNTIME_LOG_FILE", "") or "").strip()
-    except Exception:
-        p = ""
+    except Exception as e:
+        import logging
+        logging.warning(f"Could not load Django settings: {e}")
     if not p:
         p = str(os.environ.get("BOT_RUNTIME_LOG_FILE", "") or "").strip()
     if not p:
@@ -189,17 +198,18 @@ def _append_runtime_log(line: str) -> None:
                     wf.write(data)
                     if not data.endswith(b"\n"):
                         wf.write(b"\n")
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.warning(f"Runtime log rotation failed: {e}")
 
         s = str(line or "")
         if not s.endswith("\n"):
             s += "\n"
         with open(p, "a", encoding="utf-8", errors="replace") as f:
             f.write(s)
-    except Exception:
-        # No romper el bot por logging.
-        return
+    except Exception as e:
+        import logging
+        logging.warning(f"Runtime log write failed: {e}")
 
 
 @dataclass
@@ -391,7 +401,18 @@ class Command(BaseCommand):
         if estrategia_tipo in {"extremos", "vector", "vectores", "wtx"}:
             # Backward-compat: forzamos a la nueva estrategia.
             estrategia_tipo = "spp"
-
+        
+        # Inicializar estado según estrategia
+        self.stdout.write(f"[BOOT] Estrategia tipo: {estrategia_tipo}, MOMENTUM_AVAILABLE: {MOMENTUM_AVAILABLE}")
+        if estrategia_tipo == "momentum" and MOMENTUM_AVAILABLE:
+            estado_momentum = EstadoMomentum()
+            self.stdout.write(self.style.SUCCESS(f"[BOOT] Usando estrategia Momentum Breakout"))
+        else:
+            estado_momentum = None
+            if estrategia_tipo == "momentum":
+                self.stdout.write(self.style.WARNING(f"[BOOT] Momentum no disponible, usando SPP"))
+            estrategia_tipo = "spp"  # Fallback a SPP
+        
         estado_spp = EstadoSPP()
 
         gestor_riesgo = GestorRiesgo(
@@ -499,14 +520,16 @@ class Command(BaseCommand):
         # ===== CONFIG EFECTIVA (LOG 1 VEZ) =====
         # Nota: stdout sin style para que quede grepeable en `journalctl | grep`.
         stake_fijo_cfg = getattr(settings, "DERIV_STAKE_FIJO", None)
+        ema_fast_cfg = int(getattr(settings, "SPP_EMA_FAST", 9))
+        ema_slow_cfg = int(getattr(settings, "SPP_EMA_SLOW", 21))
         _cfg_line2 = (
             "[CFG] "
             f"modo_real={modo_real} symbol={symbol} "
             f"estrategia={estrategia_tipo} "
-            "ema_fast=50 ema_slow=100 "
-            f"slope_n={int(getattr(settings,'SPP_SLOPE_N',7) or 7)} "
+            f"ema_fast={ema_fast_cfg} ema_slow={ema_slow_cfg} "
+            f"slope_n={int(getattr(settings,'SPP_SLOPE_N',5) or 5)} "
             f"balance_poll_cada_seg={balance_poll_cada_seg:.0f} "
-            f"min_stake={float(getattr(settings,'DERIV_MIN_STAKE',1.0))} "
+            f"min_stake={float(getattr(settings,'DERIV_MIN_STAKE',0.35))} "
             f"stake_fijo={float(stake_fijo_cfg) if stake_fijo_cfg is not None else '-'} "
             f"contract_types={','.join(sorted(contract_types_permitidos))} "
             f"horas_bloqueadas={','.join(str(h) for h in sorted(horas_bloqueadas)) if horas_bloqueadas else '-'} "
@@ -571,6 +594,23 @@ class Command(BaseCommand):
                     _ws_line4 = f"[{symbol}] [WS] Conexión establecida, iniciando stream de eventos..."
                     self.stdout.write(self.style.SUCCESS(_ws_line4))
                     _append_runtime_log(_ws_line4)
+
+                    # OBTENER DURACIONES VÁLIDAS PARA ESTE SÍMBOLO
+                    # Importante: consultar siempre (demo y real) para evitar OfferingsValidationError
+                    duraciones_disponibles: list[int] = []
+                    try:
+                        duraciones_disponibles = await obtener_duraciones_disponibles(cliente, symbol)
+                        if duraciones_disponibles:
+                            self.stderr.write(
+                                f"[TRADING] Duraciones válidas para {symbol}: {duraciones_disponibles}"
+                            )
+                        else:
+                            self.stderr.write(
+                                f"[TRADING] No se pudieron obtener duraciones para {symbol}, usando fallback"
+                            )
+                    except Exception as e:
+                        self.stderr.write(f"[TRADING] Error obteniendo duraciones: {e}")
+
                     async for ev in cliente.stream_eventos(symbol, incluir_balance=incluir_balance):
                         # Balance poll periódico (one-shot). Esto garantiza recalcular ciclos/drawdown aunque
                         # Deriv no envíe mensajes `balance` cuando el monto no cambia.
@@ -776,10 +816,24 @@ class Command(BaseCommand):
 
                                     # ===== DRAWDOWN GLOBAL (OPCIONAL) =====
                                     dd_habil = bool(getattr(settings, "DRAWDOWN_GLOBAL_HABILITADO", True))
+                                    dd_cooldown_seg = int(getattr(settings, "DRAWDOWN_COOLDOWN_SEG", 3600))
+                                    bloqueado_dd = False
 
                                     # Histéresis: si ya está bloqueado, requerimos recuperación adicional para desbloquear.
+                                    # MEJORA: Si pasa el cooldown, resetear max para permitir recuperación gradual
                                     if dd_habil:
-                                        if prev_bloqueado:
+                                        if prev_bloqueado and bloqueado_dd:
+                                            # Ya estaba bloqueado por DD - verificar si pasó el cooldown
+                                            tiempo_bloqueado = ahora_epoch - prev.get("updated_at", 0)
+                                            if tiempo_bloqueado >= dd_cooldown_seg:
+                                                # Resetear max para permitir operar de nuevo (recovery gradual)
+                                                nuevo_max = balance_val
+                                                drawdown = 0.0
+                                                bloqueado_dd = False
+                                                self.stderr.write(f"[RISK] DRAWDOWN_COOLDOWN_PASSED reseteando max balance={balance_val:.2f}")
+                                            else:
+                                                bloqueado_dd = not (drawdown <= dd_unblock)
+                                        elif prev_bloqueado:
                                             bloqueado_dd = not (drawdown <= dd_unblock)
                                         else:
                                             bloqueado_dd = bool(drawdown >= dd_max)
@@ -1026,9 +1080,12 @@ class Command(BaseCommand):
                         # Nota: usamos bulk_create por batches para no saturar SQLite.
                         if getattr(cuenta, "ticks_colector_activo", False):
                             try:
-                                if "ticks_hist_buffer" not in locals():
-                                    ticks_hist_buffer = []  # type: ignore[var-annotated]
-                                    ticks_hist_last_flush = time.monotonic()  # type: ignore[var-annotated]
+                                if not hasattr(self, "ticks_hist_buffer"):
+                                    self.ticks_hist_buffer = []
+                                    self.ticks_hist_last_flush = time.monotonic()
+
+                                ticks_hist_buffer = self.ticks_hist_buffer
+                                ticks_hist_last_flush = self.ticks_hist_last_flush
 
                                 ticks_hist_buffer.append(
                                     TickDerivHistorico(
@@ -1043,8 +1100,8 @@ class Command(BaseCommand):
                                 now_m = time.monotonic()
                                 if len(ticks_hist_buffer) >= flush_every or (now_m - ticks_hist_last_flush) >= flush_secs:
                                     batch = ticks_hist_buffer
-                                    ticks_hist_buffer = []  # type: ignore[var-annotated]
-                                    ticks_hist_last_flush = now_m  # type: ignore[var-annotated]
+                                    self.ticks_hist_buffer = []
+                                    self.ticks_hist_last_flush = now_m
 
                                     def _flush() -> None:
                                         TickDerivHistorico.objects.bulk_create(batch, batch_size=1000)
@@ -1150,15 +1207,84 @@ class Command(BaseCommand):
                                     thread_sensitive=True,
                                 )()
 
-                        # ===== EVALUACIÓN DE SEÑAL (SPP) =====
-                        # EMA_FAST=50, EMA_SLOW=100 (fijas por requerimiento)
-                        resultado_spp: ResultadoSenalSPP = evaluar_senal_spp(
-                            symbol=symbol,
-                            precio=float(tick_deriv.precio),
-                            estado=estado_spp,
-                            ema_fast_period=50,
-                            ema_slow_period=100,
-                        )
+                        # ===== EVALUACIÓN DE SEÑAL =====
+                        if estrategia_tipo == "momentum" and estado_momentum is not None and MOMENTUM_AVAILABLE:
+                            # Log de debug cada 100 ticks
+                            if len(estado_momentum.precios) % 100 == 0:
+                                _append_runtime_log(f"[{symbol}] [DEBUG] Usando estrategia momentum, precios={len(estado_momentum.precios)}")
+                            # Usar estrategia Momentum Breakout
+                            resultado_momentum = evaluar_momentum_breakout(
+                                precio=float(tick_deriv.precio),
+                                estado=estado_momentum,
+                                **MOMENTUM_PARAMS
+                            )
+                            
+                            # Convertir resultado a formato compatible
+                            class ResultadoMomento:
+                                def __init__(self, decision, razon, duracion_ticks=None, duracion_unit="t"):
+                                    self.decision = decision
+                                    self.razon = razon
+                                    self.duracion_ticks = duracion_ticks
+                                    self.duracion_unit = duracion_unit
+                            
+                            if resultado_momentum['decision'] == 'COMPRA':
+                                resultado_spp = ResultadoMomento('COMPRA', resultado_momentum['razon'], 5, 't')
+                            elif resultado_momentum['decision'] == 'VENTA':
+                                resultado_spp = ResultadoMomento('VENTA', resultado_momentum['razon'], 5, 't')
+                            else:
+                                resultado_spp = ResultadoMomento('NO_OPERAR', resultado_momentum['razon'], None, 't')
+                            
+                            # Actualizar telemetría
+                            ema_fast = estado_momentum.ema_rapida
+                            ema_slow = estado_momentum.ema_lenta
+                            gap = abs(ema_fast - ema_slow) if (ema_fast and ema_slow) else 0.0
+                            volatilidad_100 = estado_momentum.volatilidad
+                            
+                            # Top contribuciones para el dashboard
+                            momentum_val = estado_momentum.momentum
+                            rsi_val = estado_momentum.rsi
+                            vol_val = estado_momentum.volatilidad
+                            
+                            top_contrib = [
+                                {"variable": "momentum", "contribucion": float(momentum_val), "x": float(momentum_val), "w": 1.0},
+                                {"variable": "volatilidad", "contribucion": float(vol_val), "x": float(vol_val), "w": 1.0},
+                                {"variable": "rsi", "contribucion": float(rsi_val), "x": float(rsi_val), "w": 1.0},
+                                {"variable": "ema_9", "contribucion": float(ema_fast or 0.0), "x": float(ema_fast or 0.0), "w": 1.0},
+                                {"variable": "ema_21", "contribucion": float(ema_slow or 0.0), "x": float(ema_slow or 0.0), "w": 1.0},
+                            ]
+                            
+                        else:
+                            # Usar estrategia SPP (por defecto)
+                            resultado_spp: ResultadoSenalSPP = evaluar_senal_spp(
+                                symbol=symbol,
+                                precio=float(tick_deriv.precio),
+                                estado=estado_spp,
+                                ema_fast_period=int(getattr(settings, "SPP_EMA_FAST", 9)),
+                                ema_slow_period=int(getattr(settings, "SPP_EMA_SLOW", 21)),
+                            )
+                            
+                            # Telemetría para dashboard (sin máximos/mínimos)
+                            ema_fast = float(estado_spp.ema_fast) if estado_spp.ema_fast is not None else None
+                            ema_slow = float(estado_spp.ema_slow) if estado_spp.ema_slow is not None else None
+                            gap = (abs(ema_fast - ema_slow) if (ema_fast is not None and ema_slow is not None) else None)
+                            volatilidad_100 = 0.0
+                            try:
+                                ps = list(estado_spp.precios)
+                                if len(ps) >= 3:
+                                    # std de deltas de precio (últimos 100)
+                                    deltas = [ps[i] - ps[i - 1] for i in range(max(1, len(ps) - 100), len(ps))]
+                                    if len(deltas) >= 2:
+                                        m = sum(deltas) / float(len(deltas))
+                                        var = sum((d - m) ** 2 for d in deltas) / float(len(deltas))
+                                        volatilidad_100 = float(var ** 0.5)
+                            except Exception:
+                                volatilidad_100 = 0.0
+
+                            top_contrib = [
+                                {"variable": "ema_50", "contribucion": float(ema_fast or 0.0), "x": float(ema_fast or 0.0), "w": 1.0},
+                                {"variable": "ema_100", "contribucion": float(ema_slow or 0.0), "x": float(ema_slow or 0.0), "w": 1.0},
+                                {"variable": "ema_gap", "contribucion": float(gap or 0.0), "x": float(gap or 0.0), "w": 1.0},
+                            ]
 
                         # Telemetría para dashboard (sin máximos/mínimos)
                         ema_fast = float(estado_spp.ema_fast) if estado_spp.ema_fast is not None else None
@@ -1353,7 +1479,7 @@ class Command(BaseCommand):
                                 stake_fijo = getattr(settings, "DERIV_STAKE_FIJO", None)
                                 balance_actual = float(gestor_riesgo.capital_actual)
                                 min_stake = float(getattr(settings, "DERIV_MIN_STAKE", 1.0))
-                                min_stake_dinamico = 0.35  # Mínimo dinámico: 0.35 USD
+                                min_stake_dinamico = float(getattr(settings, "DERIV_MIN_STAKE_DINAMICO", 0.35))
 
                                 if balance_actual <= 0.0:
                                     continue
@@ -1372,9 +1498,7 @@ class Command(BaseCommand):
                                 # Aplicar mínimo dinámico (0.35) si el stake calculado es menor
                                 stake = max(float(stake), float(min_stake_dinamico))
                                 
-                                # Respetar límites: no exceder el balance actual ni el mínimo configurado
-                                stake = min(float(stake), float(balance_actual))
-                                stake = max(float(stake), float(min_stake))
+                                stake = max(min_stake, min(round(stake, 2), balance_actual))
                                 if stake > 0:
                                     contract_type = "CALL" if resultado.decision == "COMPRA" else "PUT"
 
@@ -1422,36 +1546,60 @@ class Command(BaseCommand):
                                         if dur <= 0:
                                             dur = 11 if symbol == "R_10" else 14
 
-                                    # === LÍMITE REAL DE DERIV (ticks) ===
-                                    # En algunos markets/offerings de Deriv, la duración por ticks está limitada a 10.
-                                    # Si enviamos >10, Deriv responde OfferingsValidationError (duration) y tumba el stream.
-                                    dur_abs_max = 10
-
-                                    dur_max_cfg = int(getattr(settings, "DERIV_MAX_DURACION_TICKS", 10) or 10)
-                                    # max efectivo: respeta config pero nunca excede el límite absoluto conocido
-                                    dur_max_eff = dur_abs_max if dur_max_cfg <= 0 else min(int(dur_max_cfg), dur_abs_max)
-
+                                    # === AJUSTAR DURACIÓN A UNA VÁLIDA ===
+                                    # Si tenemos duraciones disponibles del API, ajustar la duración solicitada
+                                    # a la más cercana que sea válida.
                                     dur_deseada = int(dur)
-                                    dur = max(1, min(int(dur), int(dur_max_eff)))
-                                    if dur != dur_deseada:
-                                        ahora_w = time.monotonic()
-                                        if (ahora_w - ultimo_warn_duracion) >= 5.0:
-                                            ultimo_warn_duracion = ahora_w
-                                            msg = (
-                                                f"[{symbol}] [TRADING] WARN duration_clamped desired={dur_deseada} "
-                                                f"-> using={dur} (max_cfg={dur_max_cfg}, max_deriv={dur_abs_max})"
+                                    if duraciones_disponibles:
+                                        # Encontrar la duración válida más cercana
+                                        diff = min(abs(d - dur_deseada) for d in duraciones_disponibles)
+                                        dur = next(d for d in duraciones_disponibles if abs(d - dur_deseada) == diff)
+                                        if dur != dur_deseada:
+                                            self.stderr.write(
+                                                f"[TRADING] Duration adjusted {dur_deseada} -> {dur} (available: {duraciones_disponibles})"
                                             )
-                                            self.stderr.write(msg)
-                                            _append_runtime_log(msg)
+                                    else:
+                                        # Detectar símbolos forex (frx*) que pueden tener límites diferentes
+                                        is_forex = symbol.startswith("frx")
+                                        # Para forex, usar límite más conservador por defecto (5 ticks)
+                                        # ya que 10 ticks puede no estar disponible para forex
+                                        default_abs_max = 5 if is_forex else 10
 
+                                        dur_abs_max_cfg = int(getattr(settings, "DERIV_DUR_ABS_MAX", default_abs_max) or default_abs_max)
+
+                                        dur_max_cfg = int(getattr(settings, "DERIV_MAX_DURACION_TICKS", default_abs_max) or default_abs_max)
+                                        # max efectivo: respeta config pero nunca excede el límite absoluto conocido
+                                        dur_max_eff = dur_abs_max_cfg if dur_max_cfg <= 0 else min(int(dur_max_cfg), dur_abs_max_cfg)
+
+                                        dur = max(1, min(int(dur), int(dur_max_eff)))
+                                        if dur != dur_deseada:
+                                            ahora_w = time.monotonic()
+                                            if (ahora_w - ultimo_warn_duracion) >= 5.0:
+                                                ultimo_warn_duracion = ahora_w
+                                                msg = (
+                                                    f"[{symbol}] [TRADING] WARN duration_clamped desired={dur_deseada} "
+                                                    f"-> using={dur} (max_cfg={dur_max_cfg}, max_deriv={dur_abs_max_cfg})"
+                                                )
+                                                self.stderr.write(msg)
+                                                _append_runtime_log(msg)
+
+                                    # Determinar unidad de duración basada en el resultado de la estrategia
+                                    duration_unit = getattr(resultado_spp, "duracion_unit", "t")
+                                    
                                     self.stderr.write(
                                         f"[TRADING] estrategia=spp decision={resultado.decision} stake={float(stake):.2f} "
-                                        f"dur={dur} contract_type={contract_type} razon={getattr(resultado_spp,'razon','-')}"
+                                        f"dur={dur}{duration_unit} contract_type={contract_type} razon={getattr(resultado_spp,'razon','-')}"
                                     )
                                     _append_runtime_log(
                                         f"[{symbol}] [TRADING] estrategia=spp decision={resultado.decision} stake={float(stake):.2f} "
-                                        f"dur={dur} contract_type={contract_type} razon={getattr(resultado_spp,'razon','-')}"
+                                        f"dur={dur}{duration_unit} contract_type={contract_type} razon={getattr(resultado_spp,'razon','-')}"
                                     )
+                                    
+                                    # Para forex, ajustar duración a minutos
+                                    if symbol.startswith("frx") and duration_unit == "t":
+                                        # Convertir ticks a minutos (5 minutos por defecto)
+                                        dur = 5
+                                        duration_unit = "m"
                                     
                                     await cliente.enviar(
                                         {
@@ -1461,7 +1609,26 @@ class Command(BaseCommand):
                                             "contract_type": contract_type,
                                             "currency": (balance_moneda or "USD"),
                                             "duration": dur,
-                                            "duration_unit": "t",
+                                            "duration_unit": duration_unit,
+                                            "symbol": symbol,
+                                        }
+                                    )
+                                    
+                                    # Determinar unidad de duración basada en el resultado de la estrategia
+                                    duration_unit = getattr(resultado_spp, "duracion_unit", "t")
+                                    if duration_unit == "m" and symbol.startswith("frx"):
+                                        # Asegurar que para forex use minutos
+                                        dur = getattr(resultado_spp, "duracion_ticks", 1) or 1
+                                    
+                                    await cliente.enviar(
+                                        {
+                                            "proposal": 1,
+                                            "amount": float(stake),
+                                            "basis": "stake",
+                                            "contract_type": contract_type,
+                                            "currency": (balance_moneda or "USD"),
+                                            "duration": dur,
+                                            "duration_unit": duration_unit,
                                             "symbol": symbol,
                                         }
                                     )
@@ -1482,7 +1649,8 @@ class Command(BaseCommand):
                                         "senal_top_contribuciones": top_contrib,
                                         # Guardar spot de entrada (precio del índice) para persistirlo aunque Deriv no lo mande.
                                         "entry_spot": float(precio_actual_dash) if precio_actual_dash is not None else None,
-                                        "duracion_ticks": int(dur),
+                                        "duracion_ticks": int(dur) if duration_unit == "t" else None,
+                                        "duracion_minutos": int(dur) if duration_unit == "m" else None,
                                     }
                                     esperando_desde = time.monotonic()
 

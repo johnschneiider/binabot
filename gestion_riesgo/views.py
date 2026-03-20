@@ -16,9 +16,19 @@ from django.db.models import F
 from django.db.utils import OperationalError
 from django.db.models import Value
 from django.db.models.functions import Coalesce
+from django.http import StreamingHttpResponse
+import json
+import time
+import queue
 
 from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, TickDerivSnapshot, TickDerivHistorico
 import subprocess
+
+# cola para SSE
+sse_queue = queue.Queue()
+
+# Configuración SSE
+SSE_INTERVAL = 1.0  # segundos entre cada evento
 
 
 def _tail_lines(path: str, n: int) -> list[str]:
@@ -115,7 +125,10 @@ def _winrate_ultimas_deriv(*, n: int = 15) -> dict:
         return {"n": 0, "wins": 0, "losses": 0, "winrate": None}
     wins = sum(1 for p in profits if float(p) > 0.0)
     losses = len(profits) - wins
-    winrate = (wins / len(profits)) * 100.0
+    if len(profits) > 0:
+        winrate = (wins / len(profits)) * 100.0
+    else:
+        winrate = 0.0
     return {"n": len(profits), "wins": wins, "losses": losses, "winrate": winrate}
 
 
@@ -392,8 +405,14 @@ def estado_json(request):
                 dt_pausa_local = _fecha_hora_colombia_desde_epoch(pausa_hasta_epoch)
                 pausa_restante_seg = max(0, int(pausa_hasta_epoch - now_epoch))
 
-            dt_ciclo_inicio = _fecha_hora_colombia_desde_epoch(cuenta.ciclo_inicio_epoch) if cuenta.ciclo_inicio_epoch else None
-            dt_ultimo_tick = _fecha_hora_colombia_desde_epoch(cuenta.ultimo_tick_epoch) if cuenta.ultimo_tick_epoch else None
+            try:
+                dt_ciclo_inicio = _fecha_hora_colombia_desde_epoch(cuenta.ciclo_inicio_epoch) if cuenta.ciclo_inicio_epoch else None
+            except Exception:
+                dt_ciclo_inicio = None
+            try:
+                dt_ultimo_tick = _fecha_hora_colombia_desde_epoch(cuenta.ultimo_tick_epoch) if cuenta.ultimo_tick_epoch else None
+            except Exception:
+                dt_ultimo_tick = None
 
             horas_bloqueadas = _parse_horas_bloqueadas(str(getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""))
             hora_local_actual = _hora_local_actual()
@@ -691,4 +710,228 @@ def logs_json(request):
             },
         }
     )
+
+
+def dashboard_eurusd(request):
+    """
+    Dashboard específico para EURUSD con estrategia EMA 35 M5.
+    """
+    return render(request, "gestion_riesgo/dashboard_eurusd.html")
+
+
+@require_http_methods(["GET"])
+def sse_stream(request):
+    """
+    Server-Sent Events endpoint para actualizaciones en tiempo real.
+    Envía datos de estado, ticks y operaciones.
+    """
+    def event_stream():
+        last_ops_key = ""
+        last_balance = None
+        last_logs_hash = ""
+        
+        while True:
+            try:
+                # Obtener datos de estado
+                simbolo = str(getattr(settings, "DERIV_SYMBOL", "") or "").strip() or "R_100"
+                cuenta = Cuenta.objects.filter(simbolo=simbolo).order_by(
+                    "-ultimo_tick_epoch", "-updated_at"
+                ).first()
+                
+                data = {"type": "state", "timestamp": int(timezone.now().timestamp())}
+                
+                if cuenta:
+                    now_epoch = int(timezone.now().timestamp())
+                    pausa_hasta_epoch = int(cuenta.ciclo_pausa_hasta_epoch) if cuenta.ciclo_pausa_hasta_epoch else None
+                    dt_pausa_local = _fecha_hora_colombia_desde_epoch(pausa_hasta_epoch) if pausa_hasta_epoch else None
+                    pausa_restante_seg = max(0, int(pausa_hasta_epoch - now_epoch)) if pausa_hasta_epoch else None
+                    
+                    riesgo_ui = _riesgo_motivo_ui(cuenta.riesgo_motivo)
+                    
+                    try:
+                        dt_ciclo_inicio = _fecha_hora_colombia_desde_epoch(cuenta.ciclo_inicio_epoch) if cuenta.ciclo_inicio_epoch else None
+                    except:
+                        dt_ciclo_inicio = None
+                    try:
+                        dt_ultimo_tick = _fecha_hora_colombia_desde_epoch(cuenta.ultimo_tick_epoch) if cuenta.ultimo_tick_epoch else None
+                    except:
+                        dt_ultimo_tick = None
+                    
+                    data["cuenta"] = {
+                        "id": cuenta.id,
+                        "simbolo": cuenta.simbolo,
+                        "balance_deriv": float(cuenta.balance_deriv) if cuenta.balance_deriv else None,
+                        "moneda_deriv": cuenta.moneda_deriv,
+                        "capital_actual": float(cuenta.capital_actual) if cuenta.capital_actual else None,
+                        "bloqueado": bool(cuenta.bloqueado),
+                        "riesgo_motivo_ui": riesgo_ui.get("label") or cuenta.riesgo_motivo,
+                        "ciclo_balance_inicio": float(cuenta.ciclo_balance_inicio) if cuenta.ciclo_balance_inicio else None,
+                        "ciclo_inicio_local": dt_ciclo_inicio.strftime("%Y-%m-%d %H:%M:%S") if dt_ciclo_inicio else None,
+                        "ciclo_pausa_hasta_local": dt_pausa_local.strftime("%Y-%m-%d %H:%M:%S") if dt_pausa_local else None,
+                        "ciclo_pausa_restante_hhmmss": _fmt_hhmmss(pausa_restante_seg) if pausa_restante_seg else None,
+                        "ultimo_tick_local": dt_ultimo_tick.strftime("%H:%M:%S") if dt_ultimo_tick else None,
+                        "ultimo_precio": float(cuenta.ultimo_precio) if cuenta.ultimo_precio else None,
+                        "senal_valor": float(cuenta.senal_valor) if cuenta.senal_valor else None,
+                        "senal_decision": cuenta.senal_decision,
+                        "senal_top_contribuciones": cuenta.senal_top_contribuciones if cuenta.senal_top_contribuciones else [],
+                    }
+                    
+                    # Winrate
+                    data["cuenta"]["winrate_ult15"] = _winrate_ultimas_deriv(n=15)
+                    
+                    # Horario bloqueado
+                    horas_bloqueadas = _parse_horas_bloqueadas(str(getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""))
+                    hora_local_actual = _hora_local_actual()
+                    data["cuenta"]["hora_local_actual"] = hora_local_actual
+                    data["cuenta"]["horario_bloqueado"] = bool(horas_bloqueadas and (hora_local_actual in horas_bloqueadas))
+                    data["cuenta"]["horas_bloqueadas"] = sorted(list(horas_bloqueadas))
+                
+                # Obtener ticks
+                ticks_window = 200
+                ticks_qs = TickDerivSnapshot.objects.filter(cuenta=cuenta).order_by("-epoch")[:ticks_window]
+                data["ticks"] = [{"precio": float(t.precio), "epoch": int(t.epoch)} for t in reversed(list(ticks_qs))]
+                
+                # Obtener operaciones
+                ops_qs = (
+                    OperacionDeriv.objects.annotate(epoch_ref=Coalesce("closed_epoch", "opened_epoch", Value(0)))
+                    .order_by("-epoch_ref", "-updated_at")
+                    .filter(creada_por_bot=True, cuenta__simbolo=simbolo)
+                    .annotate(duracion_segundos=F("closed_epoch") - F("opened_epoch"))
+                    .values(
+                        "id", "simbolo", "contract_id", "contract_type", "estado", "profit",
+                        "entry_spot", "exit_spot", "umbral_usado", "opened_epoch", "closed_epoch",
+                        "duracion_segundos", "updated_at",
+                    )[:50]
+                )
+                
+                ops_list = list(ops_qs)
+                ops_key = str([(op.get("contract_id"), op.get("updated_at"), op.get("estado"), op.get("profit")) for op in ops_list])
+                
+                if ops_key != last_ops_key:
+                    last_ops_key = ops_key
+                    for op in ops_list:
+                        epoch_ref = op.get("closed_epoch") or op.get("opened_epoch")
+                        dt_local = _fecha_hora_colombia_desde_epoch(int(epoch_ref) if epoch_ref else None)
+                        op["fecha_hora"] = dt_local.strftime("%Y-%m-%d %H:%M:%S") if dt_local else None
+                    data["operaciones"] = ops_list
+                    data["ops_changed"] = True
+                else:
+                    data["ops_changed"] = False
+                
+                # Obtener logs
+                log_path = (
+                    str(getattr(settings, "BOT_RUNTIME_LOG_FILE", "") or "").strip()
+                    or str(os.environ.get("BOT_RUNTIME_LOG_FILE", "") or "").strip()
+                    or os.path.join(getattr(settings, "BASE_DIR", os.getcwd()), "logs", "runtime.log")
+                )
+                log_lines = _tail_lines(log_path, 100)
+                current_logs_hash = hash(tuple(log_lines[-20:])) if log_lines else ""
+                
+                if current_logs_hash != last_logs_hash:
+                    last_logs_hash = current_logs_hash
+                    data["logs"] = log_lines
+                    data["logs_changed"] = True
+                else:
+                    data["logs_changed"] = False
+                
+                yield f"data: {json.dumps(data)}\n\n"
+                
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            
+            time.sleep(SSE_INTERVAL)
+    
+    response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response
+
+
+def estado_eurusd_json(request):
+    """
+    API para datos en tiempo real de EURUSD.
+    """
+    from .models import VelaEURUSD, TickEURUSD, OperacionBacktest
+    from datetime import datetime, timezone as dt_timezone
+    
+    # Obtener último tick
+    ultimo_tick = TickEURUSD.objects.first()
+    
+    # Obtener última vela
+    ultima_vela = VelaEURUSD.objects.first()
+    
+    # Calcular EMA 35 desde las últimas 35+ velas
+    velas = list(VelaEURUSD.objects.order_by("-epoch_inicio")[:50])
+    ema35 = None
+    if len(velas) >= 35:
+        precios = [v.close for v in reversed(velas)]
+        alpha = 2.0 / (35 + 1)
+        ema35 = precios[0]
+        for p in precios[1:]:
+            ema35 = alpha * p + (1 - alpha) * ema35
+    
+    # Calcular tendencia
+    tendencia = None
+    pendiente = None
+    if ultimo_tick and ema35:
+        diff = ultimo_tick.precio - ema35
+        if diff > 0.0001:
+            tendencia = "ALCISTA"
+            pendiente = diff / 100
+        elif diff < -0.0001:
+            tendencia = "BAJISTA"
+            pendiente = diff / 100
+        else:
+            tendencia = "FLAT"
+            pendiente = 0
+    
+    # Obtener operaciones de hoy
+    hoy_inicio = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    hoy_epoch = int(hoy_inicio.timestamp())
+    
+    ops_hoy = OperacionBacktest.objects.filter(epoch_entrada__gte=hoy_epoch)
+    wins_hoy = ops_hoy.filter(resultado="WIN").count()
+    losses_hoy = ops_hoy.filter(resultado="LOSS").count()
+    winrate_hoy = (wins_hoy / ops_hoy.count() * 100) if ops_hoy.count() > 0 else 0
+    
+    # PnL total
+    pnl_total = sum(op.pnl for op in OperacionBacktest.objects.all())
+    
+    # Capital
+    capital = 100 + pnl_total
+    
+    # Obtener última señal (desde última vela procesada)
+    senal = None
+    senal_razon = "Sin datos suficientes"
+    
+    # Últimas operaciones
+    ultimas_ops = OperacionBacktest.objects.order_by("-epoch_entrada")[:10]
+    operaciones = []
+    for op in ultimas_ops:
+        fecha = datetime.fromtimestamp(op.epoch_entrada, tz=dt_timezone.utc)
+        operaciones.append({
+            "hora": fecha.strftime("%H:%M"),
+            "direccion": op.direccion,
+            "entrada": op.precio_entrada,
+            "salida": op.precio_salida,
+            "resultado": op.resultado,
+            "pnl": op.pnl,
+        })
+    
+    return JsonResponse({
+        "precio": ultimo_tick.precio if ultimo_tick else None,
+        "ema35": ema35,
+        "tendencia": tendencia,
+        "pendiente": pendiente,
+        "senal": senal,
+        "senal_razon": senal_razon,
+        "hora": datetime.now().strftime("%H:%M:%S"),
+        "ops_hoy": ops_hoy.count(),
+        "wins_hoy": wins_hoy,
+        "losses_hoy": losses_hoy,
+        "winrate_hoy": winrate_hoy,
+        "pnl_total": pnl_total,
+        "capital": capital,
+        "operaciones": operaciones,
+    })
 
