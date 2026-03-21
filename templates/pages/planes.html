@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+
+{% block title %}Planes y Precios · QUANT·DERIV{% endblock %}
+
+{% block extra_head %}
+<style>
+  .plans-hero {
+    padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px);
+    text-align: center;
+    background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .plans-hero h1 {
+    font-size: clamp(30px, 5vw, 48px); font-weight: 900; color: #fff;
+    letter-spacing: -1px; margin-bottom: 14px;
+  }
+  .plans-hero p { font-size: 16px; color: var(--text-3); max-width: 500px; margin: 0 auto 32px; }
+  .toggle-billing {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    font-size: 13px; color: var(--text-3); margin-bottom: 48px;
+  }
+  .toggle-billing input { display: none; }
+  .toggle-track {
+    width: 44px; height: 24px; background: var(--bg-4); border-radius: 100px;
+    border: 1px solid var(--border); position: relative; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .toggle-thumb {
+    position: absolute; top: 3px; left: 3px;
+    width: 16px; height: 16px; background: var(--text-3);
+    border-radius: 50%; transition: all 0.2s;
+  }
+  .toggle-billing input:checked + .toggle-track { background: var(--accent); border-color: var(--accent); }
+  .toggle-billing input:checked + .toggle-track .toggle-thumb { left: 23px; background: #fff; }
+  .save-badge { background: var(--green-bg); color: var(--green); border: 1px solid rgba(16,185,129,0.2); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 100px; }
+
+  .plans-grid { max-width: 1200px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px) clamp(60px, 8vw, 100px); }
+  .plans-grid-inner { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+
+  .plan-card {
+    background: var(--bg-3); border: 1px solid var(--border);
+    border-radius: var(--r-xl); padding: 32px 28px;
+    display: flex; flex-direction: column; position: relative;
+    transition: all 0.2s;
+  }
+  .plan-card:hover { border-color: var(--border-bright); background: var(--bg-4); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
+  .plan-card.featured { border-color: var(--accent); background: linear-gradient(160deg, rgba(59,130,246,0.06) 0%, var(--bg-3) 60%); box-shadow: 0 0 60px rgba(59,130,246,0.1); }
+  .plan-popular {
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; font-weight: 800; letter-spacing: 1.5px;
+    background: var(--accent); color: #fff; padding: 4px 16px; border-radius: 100px;
+    white-space: nowrap;
+  }
+  .plan-icon { width: 44px; height: 44px; border-radius: var(--r-md); margin-bottom: 20px; display: flex; align-items: center; justify-content: center; }
+  .plan-icon.free { background: rgba(71,85,105,0.2); border: 1px solid rgba(71,85,105,0.3); color: var(--text-3); }
+  .plan-icon.basic { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); color: var(--accent-light); }
+  .plan-icon.pro { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); color: var(--accent-light); }
+  .plan-icon.inst { background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); color: #a78bfa; }
+  .plan-icon svg { width: 22px; height: 22px; }
+  .plan-name { font-size: 16px; font-weight: 800; color: var(--text-1); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .plan-desc { font-size: 13px; color: var(--text-4); margin-bottom: 24px; min-height: 36px; line-height: 1.5; }
+  .plan-price { display: flex; align-items: baseline; gap: 4px; margin-bottom: 24px; }
+  .plan-price .currency { font-size: 18px; font-weight: 700; color: var(--text-3); }
+  .plan-price .amount { font-size: clamp(32px, 5vw, 44px); font-weight: 900; color: var(--text-1); letter-spacing: -1.5px; }
+  .plan-price .amount.zero { font-size: clamp(32px, 5vw, 44px); }
+  .plan-price .period { font-size: 13px; color: var(--text-4); }
+  .plan-divider { height: 1px; background: var(--border); margin-bottom: 24px; }
+  .plan-features { list-style: none; flex: 1; margin-bottom: 28px; }
+  .plan-features li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-3); margin-bottom: 10px; line-height: 1.4; }
+  .plan-features li svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+  .plan-features li svg.check { color: var(--green); }
+  .plan-features li svg.cross { color: var(--text-4); }
+  .plan-features li.disabled { color: var(--text-4); }
+  .plan-features li.disabled svg { color: var(--text-4); }
+  .plan-trial { font-size: 12px; color: var(--text-4); margin-bottom: 16px; text-align: center; }
+  .plan-card .btn { width: 100%; justify-content: center; }
+  .plan-card.featured .btn { background: var(--accent); border-color: var(--accent); box-shadow: 0 4px 20px rgba(59,130,246,0.3); }
+  .plan-card.featured .btn:hover { background: var(--accent-light); }
+
+  /* FAQ */
+  .faq-section { padding: clamp(60px, 8vw, 80px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); }
+  .faq-inner { max-width: 700px; margin: 0 auto; }
+  .faq-item { border-bottom: 1px solid var(--border); padding: 20px 0; }
+  .faq-q { font-size: 15px; font-weight: 700; color: var(--text-1); margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+  .faq-q::after { content: "+"; font-size: 20px; color: var(--text-4); font-weight: 300; }
+  .faq-item.open .faq-q::after { content: "−"; }
+  .faq-a { font-size: 13px; color: var(--text-4); line-height: 1.7; display: none; padding-bottom: 8px; }
+  .faq-item.open .faq-a { display: block; }
+
+  /* CTA */
+  .plans-cta { padding: clamp(50px, 7vw, 80px) clamp(16px, 5vw, 48px); text-align: center; }
+  .plans-cta h2 { font-size: clamp(24px, 4vw, 36px); font-weight: 900; color: var(--text-1); letter-spacing: -0.5px; margin-bottom: 12px; }
+  .plans-cta p { font-size: 15px; color: var(--text-3); margin-bottom: 28px; }
+  .plans-cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  /* COMPARISON TABLE */
+  .compare-section { padding: clamp(40px, 6vw, 60px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); }
+  .compare-inner { max-width: 1000px; margin: 0 auto; overflow-x: auto; }
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .compare-table th { padding: 12px 16px; font-size: 12px; font-weight: 700; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.8px; background: var(--bg-2); border-bottom: 1px solid var(--border); text-align: left; }
+  .compare-table td { padding: 12px 16px; color: var(--text-3); border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .compare-table tr:hover td { background: var(--bg-4); }
+  .compare-table tr:hover td:first-child { border-left: 2px solid var(--accent); }
+  .compare-table td:first-child { color: var(--text-2); font-weight: 600; border-left: 2px solid transparent; }
+  .compare-table .cmp-check { color: var(--green); font-size: 16px; }
+  .compare-table .cmp-cross { color: var(--text-4); font-size: 16px; }
+  .compare-table .cmp-text { color: var(--text-4); font-size: 12px; }
+
+  @media (max-width: 640px) {
+    .plans-cta-btns { flex-direction: column; }
+    .plans-cta-btns .btn { width: 100%; }
+    .compare-table { font-size: 12px; }
+    .compare-table th, .compare-table td { padding: 10px 12px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- HERO -->
+<section class="plans-hero">
+  <div class="section-label">Planes y Precios</div>
+  <h1>Elige tu plan</h1>
+  <p>Sin contratos a largo plazo. Cancela cuando quieras. Empieza gratis y escala según tus necesidades.</p>
+
+  <div class="toggle-billing">
+    <span>Mensual</span>
+    <label>
+      <input type="checkbox" id="billingToggle">
+      <div class="toggle-track"><div class="toggle-thumb"></div></div>
+    </label>
+    <span>Anual</span>
+    <span class="save-badge">Ahorra hasta 30%</span>
+  </div>
+</section>
+
+<!-- PLANS -->
+<section class="plans-grid">
+  <div class="plans-grid-inner">
+
+    <!-- FREE -->
+    <div class="plan-card">
+      <div class="plan-icon free">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+      </div>
+      <div class="plan-name">Free</div>
+      <div class="plan-desc">Para usuarios nuevos que quieren probar el sistema sin compromiso</div>
+      <div class="plan-price">
+        <span class="currency">$</span>
+        <span class="amount zero">0</span>
+        <span class="period">/ para siempre</span>
+      </div>
+      <div class="plan-divider"></div>
+      <ul class="plan-features">
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 1 cuenta de trading</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 1 símbolo (R_100)</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard en tiempo real</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 trades / día</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 1.000 ticks / día</li>
+        <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin backtesting</li>
+        <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin acceso API</li>
+        <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin soporte prioritario</li>
+      </ul>
+      <div class="plan-trial">Sin trial — acceso inmediato</div>
+      <button class="btn btn-outline" onclick="openAuth('register')">Crear Cuenta Gratis</button>
+    </div>
+
+    <!-- BÁSICO -->
+    <div class="plan-card">
+      <div class="plan-icon basic">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      </div>
+      <div class="plan-name">Básico</div>
+      <div class="plan-desc">Para traders individuales que buscan resultados consistentes</div>
+      <div class="plan-price">
+        <span class="currency">$</span>
+        <span class="amount" data-monthly="29" data-annual="20">29</span>
+        <span class="period">/ <span class="period-label">mes</span></span>
+      </div>
+      <div class="plan-divider"></div>
+      <ul class="plan-features">
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 3 cuentas de trading</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 3 símbolos activos</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard en tiempo real</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 50 trades / día</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10.000 ticks / día</li>
+        <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin backtesting</li>
+        <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin acceso API</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte por email</li>
+      </ul>
+      <div class="plan-trial">3 días de trial gratis</div>
+      <button class="btn btn-outline" onclick="openAuth('register')">Comenzar con Básico</button>
+    </div>
+
+    <!-- PRO -->
+    <div class="plan-card featured">
+      <div class="plan-popular">MÁS POPULAR</div>
+      <div class="plan-icon pro">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </div>
+      <div class="plan-name" style="color: var(--accent-light)">Pro</div>
+      <div class="plan-desc">Para traders avanzados con acceso completo a herramientas de análisis</div>
+      <div class="plan-price">
+        <span class="currency">$</span>
+        <span class="amount" data-monthly="79" data-annual="55">79</span>
+        <span class="period">/ <span class="period-label">mes</span></span>
+      </div>
+      <div class="plan-divider"></div>
+      <ul class="plan-features">
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 cuentas de trading</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 símbolos activos</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard + Backtesting</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 200 trades / día</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 50.000 ticks / día</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Acceso API REST</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte prioritario</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Walk-forward analysis</li>
+      </ul>
+      <div class="plan-trial">3 días de trial gratis</div>
+      <button class="btn btn-primary" onclick="openAuth('register')">Comenzar con Pro</button>
+    </div>
+
+    <!-- INSTITUCIONAL -->
+    <div class="plan-card">
+      <div class="plan-icon inst">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 7v1a3 3 0 006 0V7m0 1a3 3 0 006 0V7m0 1a3 3 0 006 0V7H3l2-4h14l2 4M5 21V10.87M19 21V10.87"/></svg>
+      </div>
+      <div class="plan-name">Institucional</div>
+      <div class="plan-desc">Para firms, equipos y clientes con necesidades de white label</div>
+      <div class="plan-price">
+        <span class="currency">$</span>
+        <span class="amount" data-monthly="199" data-annual="139">199</span>
+        <span class="period">/ <span class="period-label">mes</span></span>
+      </div>
+      <div class="plan-divider"></div>
+      <ul class="plan-features">
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Cuentas ilimitadas</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Símbolos ilimitados</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> White label completo</li>
+        <li><svg class="check" viewViewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Backtesting avanzado</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Tráficos ilimitados</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte 24/7 dedicado</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> SLA garantizado 99.9%</li>
+        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Onboarding personalizado</li>
+      </ul>
+      <div class="plan-trial">Sin trial — contacto directo</div>
+      <button class="btn btn-outline" onclick="openAuth('register')">Contactar Ventas</button>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARISON TABLE -->
+<section class="compare-section">
+  <div class="compare-inner">
+    <div class="section-header">
+      <div class="section-label">Comparación</div>
+      <h2 class="section-title">Todos los detalles</h2>
+    </div>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Característica</th>
+          <th>Free</th>
+          <th>Básico</th>
+          <th>Pro</th>
+          <th>Institucional</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Cuentas de trading</td><td>1</td><td>3</td><td>10</td><td>Ilimitadas</td></tr>
+        <tr><td>Símbolos activos</td><td>1</td><td>3</td><td>10</td><td>Ilimitados</td></tr>
+        <tr><td>Dashboard en tiempo real</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
+        <tr><td>Trades por día</td><td>10</td><td>50</td><td>200</td><td>Ilimitados</td></tr>
+        <tr><td>Ticks por día</td><td>1.000</td><td>10.000</td><td>50.000</td><td>Ilimitados</td></tr>
+        <tr><td>Backtesting</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
+        <tr><td>Walk-forward analysis</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
+        <tr><td>Acceso API REST</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
+        <tr><td>White label</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td></tr>
+        <tr><td>Soporte</td><td>Comunidad</td><td>Email</td><td>Prioritario</td><td>24/7 Dedicado</td></tr>
+        <tr><td>Trial gratis</td><td class="cmp-text">—</td><td>3 días</td><td>3 días</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section">
+  <div class="faq-inner">
+    <div class="section-header">
+      <div class="section-label">Preguntas Frecuentes</div>
+      <h2 class="section-title">Resolvemos tus dudas</h2>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Cómo funciona el trial gratuito?</div>
+      <div class="faq-a">Al registrarte con el plan Básico o Pro tendrás 3 días de acceso completo a todas las funcionalidades del plan sin costo. Al terminar el trial se renueva automáticamente a menos que canceles antes.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Puedo cambiar de plan en cualquier momento?</div>
+      <div class="faq-a">Sí. Puedes hacer upgrade o downgrade de tu plan en cualquier momento desde tu panel de usuario. Los cambios se aplican de inmediato y se ajustan prorrateados.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Qué métodos de pago aceptan?</div>
+      <div class="faq-a">Aceptamos tarjetas de crédito y débito (Visa, Mastercard, Amex), PayPal y transferencia bancaria. Todos los pagos son procesados de forma segura a través de Stripe.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Es seguro el trading automatizado?</div>
+      <div class="faq-a">El bot ejecuta operaciones siguiendo una estrategia cuantitativa con gestión de riesgo robusta. Sin embargo, el trading de derivados conlleva riesgos inherentes. Nunca inviertas más de lo que puedas permitirte perder completamente.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Qué es white label?</div>
+      <div class="faq-a">White label te permite usar la plataforma QUANT·DERIV con tu propia marca, colores y dominio. Ideal para firms de trading o asesores financieros que quieren ofrecer trading automatizado a sus clientes.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Hay descuentos por pago anual?</div>
+      <div class="faq-a">Sí. Al pagar annually obtienes un 30% de descuento en el plan Básico y Pro. El plan Institucional tiene un 30% de descuento también.</div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="plans-cta">
+  <div class="plans-cta">
+    <h2>Empieza gratis hoy</h2>
+    <p>Sin tarjeta de crédito. Sin compromiso. Configúralo en 5 minutos.</p>
+    <div class="plans-cta-btns">
+      <button class="btn btn-primary" onclick="openAuth('register')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        Crear Cuenta Gratis
+      </button>
+      <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-outline">Ver Dashboard</a>
+    </div>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll('.faq-item').forEach(function(item) {
+    item.querySelector('.faq-q').addEventListener('click', function() {
+      item.classList.toggle('open');
+    });
+  });
+
+  document.getElementById('billingToggle').addEventListener('change', function() {
+    var annual = this.checked;
+    document.querySelectorAll('.amount[data-monthly]').forEach(function(el) {
+      el.textContent = annual ? el.dataset.annual : el.dataset.monthly;
+    });
+    document.querySelectorAll('.period-label').forEach(function(el) {
+      el.textContent = annual ? 'año' : 'mes';
+    });
+  });
+</script>
+
+{% endblock %}
