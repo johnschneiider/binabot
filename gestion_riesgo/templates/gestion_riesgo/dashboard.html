@@ -222,7 +222,7 @@
       <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
         <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px;">
           <div class="row">
-            <div class="mono" style="font-weight: 700;">EURUSD</div>
+            <div class="mono" style="font-weight: 700;">R_100</div>
             <div class="badge neutral mono" id="ticks_collector_badge_forex">—</div>
           </div>
           <div class="muted" style="margin-top: 8px;">Ticks archivados: <span class="mono" id="ticks_collector_total_forex">0</span></div>
@@ -231,10 +231,10 @@
             <button class="btn" id="ticks_collector_toggle_forex">Pausar</button>
           </div>
         </div>
-        <!-- Segundo símbolo forex -->
+        <!-- Segundo símbolo -->
         <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px;">
           <div class="row">
-            <div class="mono" style="font-weight: 700;">GBPUSD</div>
+            <div class="mono" style="font-weight: 700;">EURUSD</div>
             <div class="badge neutral mono" id="ticks_collector_badge_forex2">—</div>
           </div>
           <div class="muted" style="margin-top: 8px;">Ticks archivados: <span class="mono" id="ticks_collector_total_forex2">0</span></div>
@@ -249,11 +249,11 @@
       </div>
     </div>
 
-    <!-- Gráfico EURUSD -->
+    <!-- Gráfico R_100 -->
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
-          <div class="big">Precio en Tiempo Real (últimos 200 ticks) - <span id="simbolo_forex" class="mono">EURUSD</span></div>
+          <div class="big">R_100 - Precio en Tiempo Real (últimos 200 ticks)</div>
           <div class="muted">Eje X: ticks · Eje Y: precio</div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -262,21 +262,40 @@
         </div>
       </div>
       
-      <!-- Controles de EMAs EURUSD -->
+      <!-- Controles de EMAs R_100 -->
       <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <label style="font-size: 12px; color: #6b7280; font-weight: 500;">EMA Rápida:</label>
-          <input type="number" id="ema_fast_period_forex" value="9" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
+          <input type="number" id="ema_fast_period_forex" value="50" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <label style="font-size: 12px; color: #6b7280; font-weight: 500;">EMA Lenta:</label>
-          <input type="number" id="ema_slow_period_forex" value="21" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
+          <input type="number" id="ema_slow_period_forex" value="100" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
         </div>
         <button id="ema_update_btn_forex" style="padding: 6px 12px; background: #111827; color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Actualizar EMAs</button>
       </div>
       
       <div class="chart-wrap" style="margin-top: 10px;">
         <canvas id="ticks_chart_forex"></canvas>
+      </div>
+      <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos 200 ticks recibidos</div>
+    </div>
+
+    <!-- Gráfico R_100 -->
+    <div class="card" style="margin-top: 14px;">
+      <div class="row">
+        <div>
+          <div class="big">R_100 - Precio en tiempo real</div>
+          <div class="muted">Índice sintético Deriv · EMA Rápida (50) · EMA Lenta (100)</div>
+        </div>
+        <div>
+          <div class="mono" id="ticks_count_r100">0 ticks</div>
+          <div class="mono" id="ticks_current_price_r100">—</div>
+        </div>
+      </div>
+      
+      <div class="chart-wrap" style="margin-top: 10px;">
+        <canvas id="ticks_chart_r100"></canvas>
       </div>
       <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos 200 ticks recibidos</div>
     </div>
@@ -735,7 +754,8 @@
       }
 
       // ===== GRÁFICAS TICKS (FOREX) =====
-        "EURUSD": { chart: null, emaFast: 9, emaSlow: 21, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null }
+        "EURUSD": { chart: null, emaFast: 9, emaSlow: 21, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null },
+        "R_100": { chart: null, emaFast: 50, emaSlow: 100, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null }
       };
 
       function resetEmaCache(simbolo) {
@@ -1046,11 +1066,11 @@
             debugEl.style.display = "none";
           }
           
-          // Actualizar gráficos de ticks para forex
+          // Actualizar gráficos de ticks para forex y R_100
           console.log("[REFRESCAR] ticksPorActivo:", ticksPorActivo);
           console.log("[REFRESCAR] cuentas:", cuentas);
           actualizarTicksCollectorUI(cuentas);
-          for (const simbolo of ["frxEURUSD"]) {
+          for (const simbolo of ["frxEURUSD", "R_100"]) {
             const ticks = ticksPorActivo[simbolo] || [];
             const cuentaData = cuentas[simbolo];
             console.log(`[REFRESCAR] ${simbolo}: ${ticks.length} ticks, cuenta:`, cuentaData ? "existe" : "no existe");
