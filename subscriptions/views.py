@@ -185,8 +185,11 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
 class SuscripcionViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar suscripciones."""
     serializer_class = SuscripcionSerializer
-    
+    permission_classes = [permissions.IsAuthenticated]
+
     def get_queryset(self):
+        if not self.request.user.is_authenticated:
+            return Suscripcion.objects.none()
         if self.request.user.is_superuser:
             return Suscripcion.objects.all()
         return Suscripcion.objects.filter(tenant=self.request.user.tenant)
@@ -295,8 +298,11 @@ class TenantViewSet(viewsets.ModelViewSet):
 class LogAuditoriaViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet para logs de auditoria."""
     serializer_class = LogAuditoriaSerializer
-    
+    permission_classes = [permissions.IsAuthenticated]
+
     def get_queryset(self):
+        if not self.request.user.is_authenticated:
+            return LogAuditoria.objects.none()
         if self.request.user.is_superuser:
             return LogAuditoria.objects.all()
         return LogAuditoria.objects.filter(tenant=self.request.user.tenant)

@@ -7,8 +7,8 @@ from . import views
 app_name = "gestion_riesgo"
 
 urlpatterns = [
-    path("", views.dashboard, name="dashboard"),
-    path("eurusd/", views.dashboard_eurusd, name="dashboard_eurusd"),
+    path("panel/", views.dashboard, name="dashboard"),
+    path("panel/eurusd/", views.dashboard_eurusd, name="dashboard_eurusd"),
     path("api/estado/", views.estado_json, name="estado_json"),
     path("api/estado_eurusd/", views.estado_eurusd_json, name="estado_eurusd_json"),
     path("api/balance/", views.balance_json, name="balance_json"),
