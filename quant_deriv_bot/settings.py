@@ -61,6 +61,8 @@ INSTALLED_APPS = [
     "gestion_riesgo",
     # APP DE SUSCRIPCIONES (Multi-tenant)
     "subscriptions",
+    # PÁGINAS PÚBLICAS
+    "pages",
 ]
 
 MIDDLEWARE = [
@@ -78,7 +80,7 @@ ROOT_URLCONF = "quant_deriv_bot.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

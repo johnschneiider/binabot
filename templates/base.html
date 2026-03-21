@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Plataforma institucional de trading cuantitativo automatizado para Deriv." />
+    <title>{% block title %}QUANT·DERIV — Plataforma Institucional{% endblock %}</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg-primary: #0a0e1a;
+        --bg-secondary: #0f1525;
+        --bg-tertiary: #141d30;
+        --bg-card: #111827;
+        --bg-card-hover: #1a2438;
+        --border: #1e2d4a;
+        --border-light: #243552;
+        --text-primary: #dde3ed;
+        --text-secondary: #8a9ab5;
+        --text-muted: #4a5a72;
+        --accent: #3b82f6;
+        --accent-light: #60a5fa;
+        --accent-dim: #1e3a5f;
+        --accent-bg: rgba(59,130,246,0.08);
+        --green: #22c55e;
+        --green-bg: rgba(34,197,94,0.08);
+        --red: #ef4444;
+        --red-bg: rgba(239,68,68,0.08);
+        --yellow: #eab308;
+        --yellow-bg: rgba(234,179,8,0.08);
+        --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+      }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        font-family: var(--font-sans);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      a { color: var(--accent-light); text-decoration: none; transition: color 0.15s; }
+      a:hover { color: #fff; text-decoration: underline; }
+
+      ::selection { background: var(--accent-dim); color: #fff; }
+
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+      ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+      /* ===== NAVBAR ===== */
+      .navbar {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        height: 58px;
+        background: rgba(10,14,26,0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 clamp(16px, 4vw, 40px);
+        z-index: 1000;
+      }
+
+      .navbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        font-weight: 700;
+        color: #fff;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+      }
+      .navbar-brand .dot { color: var(--accent-light); }
+      .navbar-badge {
+        font-size: 9px;
+        font-weight: 600;
+        background: var(--accent-dim);
+        color: var(--accent-light);
+        padding: 2px 6px;
+        border-radius: 2px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        border: 1px solid var(--border-light);
+        margin-left: 4px;
+      }
+
+      .navbar-links {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        list-style: none;
+      }
+      .navbar-links a {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        border: 1px solid transparent;
+        border-radius: 2px;
+        transition: all 0.15s;
+        letter-spacing: 0.2px;
+      }
+      .navbar-links a:hover { color: var(--text-primary); background: var(--bg-tertiary); border-color: var(--border); text-decoration: none; }
+      .navbar-links a.active { color: var(--accent-light); background: var(--accent-bg); border-color: var(--accent-dim); }
+      .navbar-links a svg { width: 14px; height: 14px; }
+
+      .navbar-toggle {
+        display: none;
+        background: none;
+        border: 1px solid var(--border-light);
+        border-radius: 2px;
+        padding: 6px 10px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      /* ===== MAIN ===== */
+      .main-content { flex: 1; padding-top: 58px; }
+
+      /* ===== FOOTER ===== */
+      .footer {
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border);
+        padding: 28px clamp(16px, 4vw, 40px);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 20px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .footer-brand { font-weight: 600; letter-spacing: 0.5px; color: var(--text-secondary); }
+      .footer-sep { margin: 0 8px; opacity: 0.4; }
+      .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
+      .footer-links a { color: var(--text-muted); font-size: 12px; }
+      .footer-links a:hover { color: var(--text-secondary); }
+
+      /* ===== RESPONSIVE ===== */
+      @media (max-width: 768px) {
+        .navbar-toggle { display: block; }
+        .navbar-links {
+          display: none;
+          position: absolute;
+          top: 58px; left: 0; right: 0;
+          background: rgba(10,14,26,0.98);
+          border-bottom: 1px solid var(--border);
+          flex-direction: column;
+          align-items: stretch;
+          padding: 8px;
+          gap: 4px;
+        }
+        .navbar-links.open { display: flex; }
+        .navbar-links a { padding: 10px 14px; border-radius: 2px; }
+        .footer { flex-direction: column; align-items: flex-start; gap: 12px; }
+      }
+    </style>
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body>
+    <nav class="navbar">
+      <a href="{% url 'pages:index' %}" class="navbar-brand">
+        <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+          <rect width="26" height="26" fill="var(--accent-dim)"/>
+          <rect x="1" y="1" width="24" height="24" stroke="var(--border-light)" stroke-width="0.5"/>
+          <path d="M6 20L13 6L20 20" stroke="var(--accent-light)" stroke-width="2" stroke-linecap="square"/>
+          <path d="M8.5 15H17.5" stroke="var(--accent-light)" stroke-width="1.5" stroke-linecap="square"/>
+        </svg>
+        QUANT<span class="dot">·</span>DERIV
+        <span class="navbar-badge">v2.0</span>
+      </a>
+
+      <button class="navbar-toggle" onclick="document.querySelector('.navbar-links').classList.toggle('open')" aria-label="Menú">☰</button>
+
+      <ul class="navbar-links">
+        <li><a href="{% url 'pages:index' %}" class="{% if request.resolver_match.url_name == 'index' %}active{% endif %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+          Inicio
+        </a></li>
+        <li><a href="{% url 'gestion_riesgo:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a></li>
+        <li><a href="{% url 'gestion_riesgo:dashboard_eurusd' %}" class="{% if request.resolver_match.url_name == 'dashboard_eurusd' %}active{% endif %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          EUR/USD
+        </a></li>
+        <li><a href="{% url 'subscriptions:plan_list' %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          Suscripciones
+        </a></li>
+        <li><a href="/admin/" target="_blank">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="0"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          Admin
+        </a></li>
+      </ul>
+    </nav>
+
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+      <div>
+        <span class="footer-brand">QUANT·DERIV</span>
+        <span class="footer-sep">|</span>
+        Plataforma institucional de trading cuantitativo automatizado
+        <span class="footer-sep">|</span>
+        © {% now "Y" %}
+      </div>
+      <div class="footer-links">
+        <a href="{% url 'gestion_riesgo:dashboard' %}">Dashboard</a>
+        <a href="{% url 'subscriptions:plan_list' %}">Suscripciones</a>
+        <a href="/admin/">Administración</a>
+        <a href="/api/sse/" target="_blank">API SSE</a>
+      </div>
+    </footer>
+
+    <script>
+      document.querySelector('.navbar-toggle')?.addEventListener('click', function() {
+        document.querySelector('.navbar-links').classList.toggle('open');
+      });
+    </script>
+    {% block extra_body %}{% endblock %}
+  </body>
+</html>

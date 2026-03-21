@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard EUR/USD · QUANT·DERIV{% endblock %}
+
+{% block extra_head %}
+<style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; background: #f5f5f5; }
+      .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+      .header h1 { margin: 0; font-size: 24px; }
+      .badge { display: inline-block; padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; }
+      .ok { background: #d1fae5; color: #065f46; }
+      .bad { background: #fee2e2; color: #991b1b; }
+      .neutral { background: #dbeafe; color: #1e40af; }
+      .warn { background: #fef3c7; color: #92400e; }
+      
+      .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+      .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      .card-title { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+      .big { font-size: 28px; font-weight: 700; }
+      .mono { font-family: ui-monospace, monospace; }
+      
+      .signal-box { padding: 20px; border-radius: 12px; text-align: center; margin-top: 16px; }
+      .signal-call { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border: 2px solid #059669; }
+      .signal-put { background: linear-gradient(135deg, #fee2e2, #fecaca); border: 2px solid #dc2626; }
+      .signal-none { background: #f3f4f6; border: 2px solid #d1d5db; }
+      
+      .indicator-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+      .indicator-row:last-child { border-bottom: none; }
+      
+      .chart-wrap { position: relative; height: 300px; margin-top: 16px; }
+      
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+      th { background: #f9fafb; font-weight: 600; color: #374151; }
+      .win { color: #059669; }
+      .loss { color: #dc2626; }
+      
+      .btn { padding: 8px 16px; background: #111827; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600; }
+      .btn:hover { background: #374151; }
+      .btn-secondary { background: #fff; color: #111827; border: 1px solid #e5e7eb; }
+      .btn-secondary:hover { background: #f9fafb; }
+      
+      @media (max-width: 1024px) {
+        .grid { grid-template-columns: repeat(2, 1fr); }
+      }
+      @media (max-width: 640px) {
+        .grid { grid-template-columns: 1fr; }
+        body { margin: 12px; }
+      }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="header">
+      <div>
+        <h1>Bot EURUSD · EMA 35</h1>
+        <div class="mono" style="color: #6b7280; margin-top: 4px;">Estrategia: Tendencia + Pullback + Confirmación</div>
+      </div>
+      <div>
+        <span class="badge ok" id="status_badge">CONECTADO</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Precio Actual -->
+      <div class="card">
+        <div class="card-title">Precio EURUSD</div>
+        <div class="big mono" id="precio">—</div>
+        <div class="mono" style="color: #6b7280; margin-top: 4px;" id="hora">—</div>
+      </div>
+      
+      <!-- EMA 35 -->
+      <div class="card">
+        <div class="card-title">EMA 35</div>
+        <div class="big mono" id="ema35">—</div>
+        <div class="mono" style="color: #6b7280; margin-top: 4px;" id="ema35_diff">—</div>
+      </div>
+      
+      <!-- Tendencia -->
+      <div class="card">
+        <div class="card-title">Tendencia</div>
+        <div class="big" id="tendencia">—</div>
+        <div class="mono" style="color: #6b7280; margin-top: 4px;" id="pendiente">—</div>
+      </div>
+      
+      <!-- Señal -->
+      <div class="card">
+        <div class="card-title">Señal</div>
+        <div class="big" id="senal">—</div>
+        <div class="mono" style="color: #6b7280; margin-top: 4px;" id="senal_razon">—</div>
+      </div>
+    </div>
+
+    <!-- Señal Destacada -->
+    <div class="signal-box signal-none" id="signal_box">
+      <div style="font-size: 14px; color: #6b7280;">Señal Actual</div>
+      <div style="font-size: 32px; font-weight: 700; margin-top: 8px;" id="signal_text">ESPERANDO DATOS</div>
+      <div style="font-size: 14px; margin-top: 8px; color: #6b7280;" id="signal_detail">—</div>
+    </div>
+
+    <!-- Métricas -->
+    <div class="grid" style="margin-top: 16px;">
+      <div class="card">
+        <div class="card-title">Operaciones Hoy</div>
+        <div class="big mono" id="ops_hoy">0</div>
+        <div class="mono" style="color: #6b7280;">Wins: <span id="wins_hoy">0</span> | Loss: <span id="loss_hoy">0</span></div>
+      </div>
+      
+      <div class="card">
+        <div class="card-title">Winrate (Hoy)</div>
+        <div class="big mono" id="winrate_hoy">—%</div>
+      </div>
+      
+      <div class="card">
+        <div class="card-title">PnL Acumulado</div>
+        <div class="big mono" id="pnl_total">$0.00</div>
+      </div>
+      
+      <div class="card">
+        <div class="card-title">Capital Actual</div>
+        <div class="big mono" id="capital">$100.00</div>
+      </div>
+    </div>
+
+    <!-- Gráfico de Precio -->
+    <div class="card" style="margin-top: 16px;">
+      <div class="card-title">Precio EURUSD (Tiempo Real)</div>
+      <div class="chart-wrap">
+        <canvas id="precio_chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Últimas Operaciones -->
+    <div class="card" style="margin-top: 16px;">
+      <div class="card-title">Últimas Operaciones</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Dirección</th>
+            <th>Entrada</th>
+            <th>Salida</th>
+            <th>Resultado</th>
+            <th>PnL</th>
+          </tr>
+        </thead>
+        <tbody id="ops_table">
+          <tr><td colspan="6" style="text-align: center; color: #6b7280;">Sin operaciones aún</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Controles -->
+    <div style="margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap;">
+      <button class="btn" id="btn_iniciar">Iniciar Bot</button>
+      <button class="btn btn-secondary" id="btn_detener">Detener Bot</button>
+      <button class="btn btn-secondary" id="btn_backtest">Ejecutar Backtest</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+      // Configuración del gráfico
+      let precioChart = null;
+      const preciosData = { labels: [], data: [] };
+      const emaData = { labels: [], data: [] };
+      
+      function initChart() {
+        const ctx = document.getElementById('precio_chart').getContext('2d');
+        precioChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [{
+              label: 'Precio',
+              data: [],
+              borderColor: '#111827',
+              backgroundColor: 'rgba(17,24,39,0.1)',
+              fill: true,
+              tension: 0.1,
+              pointRadius: 0,
+              borderWidth: 2,
+            }, {
+              label: 'EMA 35',
+              data: [],
+              borderColor: '#059669',
+              borderDash: [5, 5],
+              pointRadius: 0,
+              borderWidth: 2,
+              fill: false,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: { grid: { display: false } },
+              y: { grid: { display: true } }
+            }
+          }
+        });
+      }
+      
+      function actualizarGrafico(precio, ema, hora) {
+        preciosData.labels.push(hora);
+        preciosData.data.push(precio);
+        emaData.labels.push(hora);
+        emaData.data.push(ema);
+        
+        // Mantener últimos 100 puntos
+        if (preciosData.labels.length > 100) {
+          preciosData.labels.shift();
+          preciosData.data.shift();
+          emaData.labels.shift();
+          emaData.data.shift();
+        }
+        
+        if (precioChart) {
+          precioChart.data.labels = preciosData.labels;
+          precioChart.data.datasets[0].data = preciosData.data;
+          precioChart.data.datasets[1].data = emaData.data;
+          precioChart.update('none');
+        }
+      }
+      
+      function actualizarUI(data) {
+        // Precio
+        document.getElementById('precio').textContent = data.precio ? data.precio.toFixed(5) : '—';
+        document.getElementById('hora').textContent = data.hora || '—';
+        
+        // EMA
+        document.getElementById('ema35').textContent = data.ema35 ? data.ema35.toFixed(5) : '—';
+        const diff = data.precio && data.ema35 ? (data.precio - data.ema35).toFixed(5) : '—';
+        document.getElementById('ema35_diff').textContent = `Δ: ${diff}`;
+        
+        // Tendencia
+        const tendenciaEl = document.getElementById('tendencia');
+        const pendienteEl = document.getElementById('pendiente');
+        
+        if (data.tendencia) {
+          tendenciaEl.textContent = data.tendencia;
+          tendenciaEl.style.color = data.tendencia === 'ALCISTA' ? '#059669' : (data.tendencia === 'BAJISTA' ? '#dc2626' : '#6b7280');
+          pendienteEl.textContent = `Pendiente: ${data.pendiente?.toFixed(6) || '—'}`;
+        } else {
+          tendenciaEl.textContent = '—';
+          pendienteEl.textContent = '—';
+        }
+        
+        // Señal
+        const senalEl = document.getElementById('senal');
+        const senalRazonEl = document.getElementById('senal_razon');
+        const signalBox = document.getElementById('signal_box');
+        const signalText = document.getElementById('signal_text');
+        const signalDetail = document.getElementById('signal_detail');
+        
+        if (data.senal) {
+          senalEl.textContent = data.senal;
+          senalEl.style.color = data.senal === 'CALL' ? '#059669' : (data.senal === 'PUT' ? '#dc2626' : '#6b7280');
+          senalRazonEl.textContent = data.senal_razon || '';
+          
+          signalText.textContent = data.senal === 'CALL' ? '🟢 CALL' : (data.senal === 'PUT' ? '🔴 PUT' : '⚪ NO OPERAR');
+          signalBox.className = 'signal-box ' + (data.senal === 'CALL' ? 'signal-call' : (data.senal === 'PUT' ? 'signal-put' : 'signal-none'));
+          signalDetail.textContent = data.senal_razon || '';
+        } else {
+          senalEl.textContent = '—';
+          senalRazonEl.textContent = '—';
+        }
+        
+        // Métricas
+        document.getElementById('ops_hoy').textContent = data.ops_hoy || 0;
+        document.getElementById('wins_hoy').textContent = data.wins_hoy || 0;
+        document.getElementById('loss_hoy').textContent = data.losses_hoy || 0;
+        document.getElementById('winrate_hoy').textContent = data.winrate_hoy ? data.winrate_hoy.toFixed(1) + '%' : '—%';
+        document.getElementById('pnl_total').textContent = '$' + (data.pnl_total || 0).toFixed(2);
+        document.getElementById('capital').textContent = '$' + (data.capital || 100).toFixed(2);
+        
+        // Actualizar gráfico
+        if (data.precio && data.ema35) {
+          actualizarGrafico(data.precio, data.ema35, data.hora);
+        }
+        
+        // Actualizar tabla de operaciones
+        if (data.operaciones && data.operaciones.length > 0) {
+          const tbody = document.getElementById('ops_table');
+          tbody.innerHTML = data.operaciones.map(op => `
+            <tr>
+              <td class="mono">${op.hora}</td>
+              <td class="mono" style="color: ${op.direccion === 'CALL' ? '#059669' : '#dc2626'}">${op.direccion}</td>
+              <td class="mono">${op.entrada?.toFixed(5) || '—'}</td>
+              <td class="mono">${op.salida?.toFixed(5) || '—'}</td>
+              <td class="${op.resultado === 'WIN' ? 'win' : 'loss'}">${op.resultado}</td>
+              <td class="mono ${op.pnl >= 0 ? 'win' : 'loss'}">${op.pnl?.toFixed(2) || '—'}</td>
+            </tr>
+          `).join('');
+        }
+      }
+      
+      // Simulación de datos (para pruebas)
+      function simularDatos() {
+        const now = new Date();
+        const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        
+        // Simular precio EURUSD (rango típico: 1.05-1.10)
+        const precio = 1.08 + Math.random() * 0.02;
+        
+        // Simular EMA (ligeramente diferente al precio)
+        const ema35 = precio + (Math.random() - 0.5) * 0.005;
+        
+        // Simular tendencia
+        const tendencias = ['ALCISTA', 'BAJISTA', 'FLAT'];
+        const tendencia = tendencias[Math.floor(Math.random() * 3)];
+        
+        // Simular señal ocasionalmente
+        const senales = ['NO_OPERAR', 'NO_OPERAR', 'NO_OPERAR', 'CALL', 'PUT'];
+        const senal = senales[Math.floor(Math.random() * senales.length)];
+        
+        return {
+          precio,
+          ema35,
+          tendencia,
+          pendiente: (precio - ema35) / 1000,
+          senal: senal === 'NO_OPERAR' ? null : senal,
+          senal_razon: senal === 'CALL' ? 'Cruce válido + pullback de 2 velas' : (senal === 'PUT' ? 'Cruce válido + confirmación' : 'Sin señal'),
+          hora,
+          ops_hoy: Math.floor(Math.random() * 10),
+          wins_hoy: Math.floor(Math.random() * 6),
+          losses_hoy: Math.floor(Math.random() * 4),
+          winrate_hoy: 60 + Math.random() * 20,
+          pnl_total: (Math.random() - 0.3) * 20,
+          capital: 100 + (Math.random() - 0.3) * 20,
+        };
+      }
+      
+      // Inicializar
+      initChart();
+      
+      // Simular actualización cada segundo (demo)
+      setInterval(() => {
+        actualizarUI(simularDatos());
+      }, 2000);
+      
+      // Botones
+      document.getElementById('btn_iniciar').addEventListener('click', () => {
+        alert('Iniciar bot: python manage.py bot_eurusd');
+      });
+      
+      document.getElementById('btn_detener').addEventListener('click', () => {
+        alert('Detener bot: Ctrl+C en la terminal');
+      });
+      
+      document.getElementById('btn_backtest').addEventListener('click', () => {
+        alert('Ejecutar backtest: python manage.py backtest_eurusd');
+      });
+    </script>
+{% endblock %}

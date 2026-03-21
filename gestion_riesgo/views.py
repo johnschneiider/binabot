@@ -786,10 +786,13 @@ def sse_stream(request):
                     data["cuenta"]["horario_bloqueado"] = bool(horas_bloqueadas and (hora_local_actual in horas_bloqueadas))
                     data["cuenta"]["horas_bloqueadas"] = sorted(list(horas_bloqueadas))
                 
-                # Obtener ticks
+                # Obtener ticks por activo (estructura esperada por el frontend)
                 ticks_window = 200
-                ticks_qs = TickDerivSnapshot.objects.filter(cuenta=cuenta).order_by("-epoch")[:ticks_window]
-                data["ticks"] = [{"precio": float(t.precio), "epoch": int(t.epoch)} for t in reversed(list(ticks_qs))]
+                ticks_por_activo = {}
+                if cuenta:
+                    ticks_qs = TickDerivSnapshot.objects.filter(cuenta=cuenta).order_by("-epoch")[:ticks_window]
+                    ticks_por_activo[simbolo] = [{"precio": float(t.precio), "epoch": int(t.epoch)} for t in reversed(list(ticks_qs))]
+                data["ticks_por_activo"] = ticks_por_activo
                 
                 # Obtener operaciones
                 ops_qs = (
