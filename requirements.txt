@@ -7,4 +7,27 @@ pandas>=2.2,<3
 lightgbm>=4.3,<5
 scikit-learn>=1.4,<2
 
+# Base de datos PostgreSQL
+psycopg2-binary>=2.9,<3
+
+# Multi-tenant y Suscripciones
+django-tenant-schemas>=1.12,<2
+django-tenants>=3.5,<4
+django-ses>=3.5,<4
+
+# Autenticación
+djangorestframework>=3.14,<4
+PyJWT>=2.8,<3
+cryptography>=42,<44
+
+# Pagos (Stripe)
+stripe>=8.0,<9
+dj-stripe>=2.8,<3
+
+# Utilidades
+celery>=5.3,<6
+redis>=5.0,<6
+django-cors-headers>=4.3,<5
+gunicorn>=21.0,<23
+
 

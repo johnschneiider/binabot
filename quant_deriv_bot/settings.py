@@ -18,6 +18,36 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "INSEGURO-PARA-DESARROLLO")
 DEBUG = (os.getenv("DJANGO_DEBUG", "False").strip().lower() in {"1", "true", "yes", "y"})
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
 
+# ===== BASE DE DATOS =====
+# Soporta PostgreSQL (producción) y SQLite (desarrollo)
+# Configurar en .env:
+#   DB_ENGINE=postgresql (producción)
+#   DB_ENGINE=sqlite3 (desarrollo)
+DB_ENGINE = os.getenv("DB_ENGINE", "sqlite3").strip()
+
+if DB_ENGINE == "postgresql":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("DB_NAME", "binary_bot").strip(),
+            "USER": os.getenv("DB_USER", "bot_user").strip(),
+            "PASSWORD": os.getenv("DB_PASSWORD", "").strip(),
+            "HOST": os.getenv("DB_HOST", "localhost").strip(),
+            "PORT": os.getenv("DB_PORT", "5432").strip(),
+            "CONN_MAX_AGE": 60,
+            "OPTIONS": {
+                "connect_timeout": 10,
+            },
+        }
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -29,6 +59,8 @@ INSTALLED_APPS = [
     "vector_variables",
     "vector_pesos",
     "gestion_riesgo",
+    # APP DE SUSCRIPCIONES (Multi-tenant)
+    "subscriptions",
 ]
 
 MIDDLEWARE = [
@@ -61,13 +93,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "quant_deriv_bot.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
-}
-
 LANGUAGE_CODE = "es-co"
 TIME_ZONE = "America/Bogota"
 USE_I18N = True
@@ -77,6 +102,10 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ===== AUTENTICACION =====
+# Modelo de usuario custom para multi-tenant
+AUTH_USER_MODEL = "subscriptions.Usuario"
 
 # ===== DERIV =====
 DERIV_APP_ID = os.getenv("DERIV_APP_ID", "1089").strip()

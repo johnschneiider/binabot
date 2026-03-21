@@ -805,7 +805,10 @@ def sse_stream(request):
                 )
                 
                 ops_list = list(ops_qs)
-                ops_key = str([(op.get("contract_id"), op.get("updated_at"), op.get("estado"), op.get("profit")) for op in ops_list])
+                # Convert datetime objects to strings before building ops_key
+                ops_key = str([(op.get("contract_id"), 
+                               op.get("updated_at").isoformat() if op.get("updated_at") else None, 
+                               op.get("estado"), op.get("profit")) for op in ops_list])
                 
                 if ops_key != last_ops_key:
                     last_ops_key = ops_key
@@ -813,6 +816,9 @@ def sse_stream(request):
                         epoch_ref = op.get("closed_epoch") or op.get("opened_epoch")
                         dt_local = _fecha_hora_colombia_desde_epoch(int(epoch_ref) if epoch_ref else None)
                         op["fecha_hora"] = dt_local.strftime("%Y-%m-%d %H:%M:%S") if dt_local else None
+                        # Convert updated_at datetime to string
+                        if op.get("updated_at"):
+                            op["updated_at"] = op["updated_at"].isoformat()
                     data["operaciones"] = ops_list
                     data["ops_changed"] = True
                 else:
