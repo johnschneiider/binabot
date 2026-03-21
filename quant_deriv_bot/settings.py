@@ -55,6 +55,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # THIRD-PARTY
+    "rest_framework",
     # APPS MODULARES (OBLIGATORIAS)
     "vector_variables",
     "vector_pesos",
@@ -308,5 +310,23 @@ EDGE_GUARD_MIN_LOSS_STREAK = int(os.getenv("EDGE_GUARD_MIN_LOSS_STREAK", "5"))
 # ===== LIMITADOR DE SESIÓN (anti-overtrading) =====
 RISK_MAX_TRADES_PER_HOUR = int(os.getenv("RISK_MAX_TRADES_PER_HOUR", "0"))  # 0=deshabilitado
 RISK_MAX_TRADES_PER_DAY = int(os.getenv("RISK_MAX_TRADES_PER_DAY", "0"))    # 0=deshabilitado
+
+# ===== DJANGO REST FRAMEWORK =====
+REST_FRAMEWORK = {
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 50,
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "VIEW_DESCRIPTION_FUNCTION": "rest_framework.views.get_view_description",
+    "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
+}
 
 
