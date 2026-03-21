@@ -1,0 +1,49 @@
+{% extends "admin_panel/base_admin.html" %}
+{% block title %}Operaciones · Panel Admin{% endblock %}
+{% block admin_content %}
+<div class="ap-page-title">Historial de Operaciones</div>
+<div class="ap-page-sub">Últimas 100 operaciones ejecutadas por el bot</div>
+
+<div class="ap-section">
+  <div class="ap-table-wrap">
+    <table class="ap-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Fecha</th>
+          <th>Activo</th>
+          <th>Tipo</th>
+          <th>Precio Entrada</th>
+          <th>Precio Salida</th>
+          <th>Resultado</th>
+          <th>Balance</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for op in operaciones %}
+        <tr>
+          <td class="mono">{{ op.id }}</td>
+          <td class="mono">{{ op.created_at|date:"d/m H:i" }}</td>
+          <td class="mono">{{ op.cuenta.simbolo|default:"R_100" }}</td>
+          <td><span class="badge badge-blue">{{ op.tipo }}</span></td>
+          <td class="mono">{{ op.precio_entrada|default:"—"|stringformat:"0.5f" }}</td>
+          <td class="mono">{{ op.precio_salida|default:"—"|stringformat:"0.5f" }}</td>
+          <td>
+            {% if op.resultado == "GANANCIA" %}
+              <span class="badge badge-green">GANANCIA</span>
+            {% elif op.resultado == "PERDIDA" %}
+              <span class="badge badge-red">PERDIDA</span>
+            {% else %}
+              <span class="badge badge-gray">{{ op.resultado|default:"—" }}</span>
+            {% endif %}
+          </td>
+          <td class="mono">${{ op.balance_resultante|default:"—"|stringformat:"0.2f" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" style="color:var(--text-4);text-align:center;padding:20px;">Sin operaciones registradas</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

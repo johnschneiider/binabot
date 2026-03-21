@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Panel de Administración · QUANT·DERIV{% endblock %}
+
+{% block extra_head %}
+<style>
+  .ap-body { display: flex; min-height: calc(100vh - 64px); }
+
+  /* SIDEBAR */
+  .ap-sidebar {
+    width: 220px; flex-shrink: 0;
+    background: var(--bg-2); border-right: 1px solid var(--border);
+    padding: 24px 0; position: sticky; top: 64px; height: calc(100vh - 64px); overflow-y: auto;
+  }
+  .ap-sidebar-section { margin-bottom: 24px; }
+  .ap-sidebar-title {
+    font-size: 10px; font-weight: 700; color: var(--text-4);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 0 20px 8px;
+  }
+  .ap-sidebar a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 20px; font-size: 13px; font-weight: 500;
+    color: var(--text-3); border-left: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .ap-sidebar a:hover { color: var(--text-1); background: var(--bg-3); }
+  .ap-sidebar a.active { color: var(--accent-light); background: rgba(59,130,246,0.08); border-left-color: var(--accent); }
+  .ap-sidebar a svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  /* MAIN */
+  .ap-main { flex: 1; padding: 32px clamp(16px, 4vw, 40px); overflow: auto; }
+  .ap-page-title { font-size: 22px; font-weight: 800; color: var(--text-1); margin-bottom: 4px; }
+  .ap-page-sub { font-size: 13px; color: var(--text-4); margin-bottom: 28px; }
+
+  /* STATS GRID */
+  .ap-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 32px; }
+  .ap-stat-card {
+    background: var(--bg-3); border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: 20px;
+    transition: border-color 0.15s;
+  }
+  .ap-stat-card:hover { border-color: var(--border-bright); }
+  .ap-stat-label { font-size: 11px; font-weight: 600; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+  .ap-stat-value { font-size: 28px; font-weight: 900; color: var(--text-1); letter-spacing: -0.5px; line-height: 1.1; }
+  .ap-stat-value.green { color: var(--green); }
+  .ap-stat-value.blue { color: var(--accent-light); }
+  .ap-stat-value.red { color: var(--red); }
+  .ap-stat-delta { font-size: 11px; color: var(--text-4); margin-top: 4px; }
+
+  /* SECTIONS */
+  .ap-section { margin-bottom: 32px; }
+  .ap-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .ap-section-title { font-size: 15px; font-weight: 700; color: var(--text-1); }
+
+  /* TABLE */
+  .ap-table-wrap { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+  .ap-table { width: 100%; border-collapse: collapse; }
+  .ap-table th {
+    text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 700;
+    color: var(--text-4); text-transform: uppercase; letter-spacing: 0.8px;
+    background: var(--bg-2); border-bottom: 1px solid var(--border);
+  }
+  .ap-table td { padding: 11px 16px; font-size: 13px; color: var(--text-2); border-bottom: 1px solid var(--border); }
+  .ap-table tr:last-child td { border-bottom: none; }
+  .ap-table tr:hover td { background: var(--bg-4); }
+  .ap-table .mono { font-family: var(--font-mono); font-size: 12px; }
+
+  /* BADGE */
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 100px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+  }
+  .badge-green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+  .badge-red { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
+  .badge-blue { background: var(--accent-bg); color: var(--accent-light); border: 1px solid var(--border-bright); }
+  .badge-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(234,179,8,0.2); }
+  .badge-gray { background: rgba(71,85,105,0.2); color: var(--text-4); border: 1px solid var(--border); }
+
+  /* LOGS */
+  .log-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .log-item:last-child { border-bottom: none; }
+  .log-time { font-family: var(--font-mono); color: var(--text-4); flex-shrink: 0; font-size: 11px; width: 140px; }
+  .log-user { color: var(--accent-light); font-weight: 600; flex-shrink: 0; width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-accion { color: var(--text-2); flex: 1; }
+  .log-accion span { color: var(--text-4); font-size: 11px; }
+
+  /* GRID 2 COL */
+  .ap-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* LOGOUT */
+  .ap-user-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .ap-user-name { font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .ap-user-role { font-size: 11px; color: var(--text-4); }
+  .ap-logout-btn { font-size: 12px; color: var(--red); background: none; border: 1px solid rgba(239,68,68,0.2); border-radius: var(--r-sm); padding: 5px 12px; cursor: pointer; transition: all 0.15s; font-family: var(--font); }
+  .ap-logout-btn:hover { background: var(--red-bg); }
+
+  /* PAGE CARDS */
+  .ap-card { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--r-md); padding: 24px; }
+  .ap-card-title { font-size: 15px; font-weight: 700; color: var(--text-1); margin-bottom: 16px; }
+
+  @media (max-width: 900px) {
+    .ap-body { flex-direction: column; }
+    .ap-sidebar { width: 100%; height: auto; position: static; flex-direction: row; overflow-x: auto; padding: 0; border-right: none; border-bottom: 1px solid var(--border); }
+    .ap-sidebar-section { display: flex; gap: 0; margin-bottom: 0; }
+    .ap-sidebar-title { display: none; }
+    .ap-sidebar a { padding: 12px 16px; border-left: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+    .ap-sidebar a.active { border-bottom-color: var(--accent); }
+    .ap-grid-2 { grid-template-columns: 1fr; }
+    .log-item { flex-wrap: wrap; }
+    .log-time { width: auto; }
+    .log-user { width: auto; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ap-body">
+  <!-- SIDEBAR -->
+  <aside class="ap-sidebar">
+    <div class="ap-user-bar">
+      <div>
+        <div class="ap-user-name">{{ request.user.username }}</div>
+        <div class="ap-user-role">Staff</div>
+      </div>
+    </div>
+    <div class="ap-sidebar-section">
+      <div class="ap-sidebar-title">General</div>
+      <a href="{% url 'admin_panel:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Overview
+      </a>
+      <a href="{% url 'admin_panel:cuentas' %}" class="{% if request.resolver_match.url_name == 'cuentas' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="0"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        Cuentas
+      </a>
+      <a href="{% url 'admin_panel:operaciones' %}" class="{% if request.resolver_match.url_name == 'operaciones' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Operaciones
+      </a>
+    </div>
+    <div class="ap-sidebar-section">
+      <div class="ap-sidebar-title">Plataforma</div>
+      <a href="{% url 'admin_panel:suscripciones' %}" class="{% if request.resolver_match.url_name == 'suscripciones' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        Suscripciones
+      </a>
+      <a href="{% url 'admin_panel:tenants' %}" class="{% if request.resolver_match.url_name == 'tenants' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        Tenants
+      </a>
+      <a href="{% url 'admin_panel:logs' %}" class="{% if request.resolver_match.url_name == 'logs' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Auditoría
+      </a>
+    </div>
+    <div class="ap-sidebar-section">
+      <div class="ap-sidebar-title">Sistema</div>
+      <a href="/admin/" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M2 12h2M20 12h2"/></svg>
+        Django Admin
+      </a>
+      <a href="{% url 'gestion_riesgo:dashboard' %}" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Bot Dashboard
+      </a>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <div class="ap-main">
+    {% block admin_content %}{% endblock %}
+  </div>
+</div>
+{% endblock %}

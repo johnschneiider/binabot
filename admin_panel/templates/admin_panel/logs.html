@@ -1,0 +1,23 @@
+{% extends "admin_panel/base_admin.html" %}
+{% block title %}Logs de Auditoría · Panel Admin{% endblock %}
+{% block admin_content %}
+<div class="ap-page-title">Logs de Auditoría</div>
+<div class="ap-page-sub">Registro de todas las acciones realizadas en la plataforma</div>
+
+<div class="ap-section">
+  <div class="ap-table-wrap">
+    {% for log in logs %}
+    <div class="log-item">
+      <span class="log-time">{{ log.fecha|date:"d/m/Y H:i:s" }}</span>
+      <span class="log-user">{{ log.usuario|default:"Sistema"|truncatechars:15 }}</span>
+      <span class="log-accion">
+        <span class="badge badge-blue" style="margin-right:8px;">{{ log.accion }}</span>
+        {{ log.descripcion|default:"" }}
+      </span>
+    </div>
+    {% empty %}
+    <div style="color:var(--text-4);text-align:center;padding:32px;font-size:13px;">Sin logs registrados</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

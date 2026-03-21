@@ -1,369 +1,179 @@
 {% extends "base.html" %}
 
-{% block title %}QUANT·DERIV — Plataforma Institucional de Trading Automatizado{% endblock %}
+{% block title %}QUANT·DERIV — Trading Algorítmico Institucional{% endblock %}
 
 {% block extra_head %}
 <style>
   /* ===== HERO ===== */
   .hero {
-    min-height: calc(100vh - 58px);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    min-height: calc(100vh - 64px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: clamp(60px, 10vw, 120px) clamp(16px, 5vw, 48px);
     position: relative;
-    overflow: hidden;
-    background: var(--bg-primary);
   }
   .hero::before {
     content: "";
-    position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(90deg, var(--border) 1px, transparent 1px),
-      linear-gradient(var(--border) 1px, transparent 1px);
-    background-size: 60px 60px;
-    opacity: 0.15;
-    pointer-events: none;
-  }
-  .hero::after {
-    content: "";
-    position: absolute;
-    top: -200px; right: -200px;
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
     width: 600px; height: 600px;
-    background: radial-gradient(ellipse, var(--accent-dim) 0%, transparent 70%);
-    opacity: 0.4;
+    background: radial-gradient(ellipse at center, rgba(59,130,246,0.12) 0%, transparent 70%);
     pointer-events: none;
-  }
-  .hero-inner {
-    position: relative;
-    z-index: 1;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: clamp(40px, 8vw, 80px) clamp(20px, 5vw, 60px);
   }
   .hero-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--accent-light);
-    margin-bottom: 24px;
-    font-family: var(--font-mono);
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent-light); margin-bottom: 24px;
+    background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2);
+    padding: 6px 16px; border-radius: 100px;
   }
-  .hero-eyebrow::before {
-    content: "";
-    width: 24px; height: 1px;
-    background: var(--accent-light);
+  .hero-eyebrow::before { content: ""; width: 6px; height: 6px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); }
+  .hero h1 {
+    font-size: clamp(36px, 7vw, 72px); font-weight: 900; color: #fff;
+    letter-spacing: -2px; line-height: 1.05; margin-bottom: 12px; max-width: 900px;
   }
-  .hero-title {
-    font-size: clamp(32px, 6vw, 64px);
-    font-weight: 800;
-    line-height: 1.05;
-    letter-spacing: -1.5px;
-    color: #fff;
-    margin-bottom: 8px;
+  .hero h1 span { background: linear-gradient(135deg, var(--accent-light) 0%, #93c5fd 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .hero-sub {
+    font-size: clamp(15px, 2vw, 18px); color: var(--text-3);
+    max-width: 620px; margin-bottom: 40px; line-height: 1.7;
   }
-  .hero-title span { color: var(--accent-light); }
-  .hero-subtitle {
-    font-size: clamp(13px, 2vw, 16px);
-    color: var(--text-secondary);
-    max-width: 560px;
-    line-height: 1.7;
-    margin-bottom: 40px;
-    font-family: var(--font-mono);
-    font-size: 13px;
+  .hero-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 48px; }
+  .hero-trust { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; justify-content: center; font-size: 13px; color: var(--text-4); }
+  .hero-trust span { display: flex; align-items: center; gap: 6px; }
+  .hero-trust svg { width: 14px; height: 14px; color: var(--green); }
+  .hero-stats {
+    display: flex; gap: 0; margin-top: 60px;
+    background: var(--bg-3); border: 1px solid var(--border);
+    border-radius: var(--r-lg); overflow: hidden;
+    max-width: 700px; width: 100%;
   }
-  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 11px 24px;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: 2px;
-    border: none;
-    cursor: pointer;
-    transition: all 0.15s;
-    font-family: var(--font-sans);
-    letter-spacing: 0.3px;
-    text-decoration: none;
-  }
-  .btn-primary {
-    background: var(--accent);
-    color: #fff;
-    border: 1px solid var(--accent);
-  }
-  .btn-primary:hover { background: var(--accent-light); border-color: var(--accent-light); color: #000; text-decoration: none; }
-  .btn-outline {
-    background: transparent;
-    color: var(--text-primary);
-    border: 1px solid var(--border-light);
-  }
-  .btn-outline:hover { background: var(--bg-tertiary); border-color: var(--text-muted); color: #fff; text-decoration: none; }
-  .btn svg { width: 15px; height: 15px; }
-
-  /* ===== MARQUEE STATS ===== */
-  .stats-bar {
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    padding: 0 clamp(16px, 4vw, 40px);
-    overflow: hidden;
-  }
-  .stats-inner {
-    display: flex;
-    align-items: stretch;
-    max-width: 1100px;
-    margin: 0 auto;
-    gap: 0;
-  }
-  .stat-item {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: 20px 32px;
+  .hero-stat {
+    flex: 1; padding: 24px 20px; text-align: center;
     border-right: 1px solid var(--border);
-    flex: 1;
-    min-width: 0;
   }
-  .stat-item:first-child { padding-left: 0; }
-  .stat-item:last-child { border-right: none; }
-  .stat-value {
-    font-size: clamp(20px, 3vw, 28px);
-    font-weight: 700;
-    color: #fff;
-    font-family: var(--font-mono);
-    line-height: 1.2;
-    letter-spacing: -0.5px;
+  .hero-stat:last-child { border-right: none; }
+  .hero-stat-num { font-size: clamp(24px, 4vw, 36px); font-weight: 900; color: #fff; letter-spacing: -1px; line-height: 1.1; }
+  .hero-stat-num.green { color: var(--green); }
+  .hero-stat-label { font-size: 12px; color: var(--text-4); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ===== TRUST BAR ===== */
+  .trust-bar {
+    background: var(--bg-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 28px clamp(16px, 5vw, 48px);
   }
-  .stat-value.green { color: var(--green); }
-  .stat-value.blue { color: var(--accent-light); }
-  .stat-label {
-    font-size: 11px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-weight: 500;
-    margin-top: 2px;
-    font-family: var(--font-mono);
+  .trust-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: clamp(24px, 5vw, 64px); flex-wrap: wrap; }
+  .trust-item { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--text-3); }
+  .trust-item svg { width: 20px; height: 20px; color: var(--accent-light); flex-shrink: 0; }
+
+  /* ===== HOW IT WORKS ===== */
+  .how-section { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); }
+  .how-grid { max-width: 1200px; margin: 48px auto 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+  .how-card { background: var(--bg-3); padding: 36px 28px; transition: background 0.2s; }
+  .how-card:hover { background: var(--bg-4); }
+  .how-num { font-size: 11px; font-weight: 800; color: var(--accent); letter-spacing: 2px; margin-bottom: 16px; }
+  .how-card h3 { font-size: 17px; font-weight: 700; color: var(--text-1); margin-bottom: 10px; }
+  .how-card p { font-size: 14px; color: var(--text-4); line-height: 1.65; }
+  .how-icon { width: 44px; height: 44px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; color: var(--accent-light); }
+  .how-icon svg { width: 20px; height: 20px; }
+
+  /* ===== FEATURES ===== */
+  .features-section { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .features-grid { max-width: 1200px; margin: 48px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+  .feature-card { background: var(--bg-3); padding: 32px 28px; transition: background 0.2s; }
+  .feature-card:hover { background: var(--bg-4); }
+  .feature-icon { width: 40px; height: 40px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+  .feature-icon.blue { background: rgba(59,130,246,0.1); color: var(--accent-light); border: 1px solid rgba(59,130,246,0.2); }
+  .feature-icon.green { background: rgba(16,185,129,0.1); color: var(--green-light); border: 1px solid rgba(16,185,129,0.2); }
+  .feature-icon.yellow { background: rgba(234,179,8,0.1); color: #fbbf24; border: 1px solid rgba(234,179,8,0.2); }
+  .feature-icon svg { width: 20px; height: 20px; }
+  .feature-card h3 { font-size: 15px; font-weight: 700; color: var(--text-1); margin-bottom: 8px; }
+  .feature-card p { font-size: 13px; color: var(--text-4); line-height: 1.65; }
+
+  /* ===== PRICING ===== */
+  .pricing-section { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); }
+  .pricing-center { max-width: 1100px; margin: 48px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .price-card {
+    background: var(--bg-3); border: 1px solid var(--border);
+    border-radius: var(--r-xl); padding: 32px 28px;
+    display: flex; flex-direction: column; gap: 0;
+    transition: all 0.2s; position: relative;
   }
+  .price-card:hover { border-color: var(--border-bright); background: var(--bg-4); transform: translateY(-2px); }
+  .price-card.featured { border-color: var(--accent); background: linear-gradient(180deg, rgba(59,130,246,0.08) 0%, var(--bg-3) 100%); box-shadow: 0 0 40px rgba(59,130,246,0.1); }
+  .price-card.featured::before {
+    content: "MÁS POPULAR";
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; font-weight: 800; letter-spacing: 1.5px;
+    background: var(--accent); color: #fff; padding: 4px 16px; border-radius: 100px;
+  }
+  .price-name { font-size: 14px; font-weight: 700; color: var(--text-1); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .price-desc { font-size: 13px; color: var(--text-4); margin-bottom: 20px; min-height: 36px; }
+  .price-amount { display: flex; align-items: baseline; gap: 4px; margin-bottom: 24px; }
+  .price-amount .currency { font-size: 18px; font-weight: 700; color: var(--text-3); }
+  .price-amount .amount { font-size: clamp(32px, 5vw, 44px); font-weight: 900; color: var(--text-1); letter-spacing: -1.5px; }
+  .price-amount .period { font-size: 13px; color: var(--text-4); }
+  .price-features { list-style: none; margin-bottom: 28px; flex: 1; }
+  .price-features li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-3); margin-bottom: 10px; }
+  .price-features li svg { width: 16px; height: 16px; color: var(--green); flex-shrink: 0; margin-top: 1px; }
+  .price-features li svg.close { color: var(--text-4); }
+  .price-features li.disabled { color: var(--text-4); }
+  .price-card .btn { width: 100%; justify-content: center; }
+  .price-card.featured .btn { background: var(--accent); border-color: var(--accent); }
+
+  /* ===== TESTIMONIAL ===== */
+  .testimonial-section { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .testimonial-card {
+    max-width: 760px; margin: 0 auto; text-align: center;
+  }
+  .testimonial-quote {
+    font-size: clamp(18px, 3vw, 24px); font-weight: 600; color: var(--text-1);
+    line-height: 1.5; margin-bottom: 28px; font-style: italic;
+  }
+  .testimonial-quote::before { content: ""; display: block; width: 40px; height: 40px; margin: 0 auto 20px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'%3E%3Cpath d='M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z'/%3E%3C/svg%3E") no-repeat center; opacity: 0.3; }
+  .testimonial-author { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .testimonial-avatar { width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, var(--accent) 0%, #1e40af 100%); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 18px; }
+  .testimonial-info { text-align: left; }
+  .testimonial-name { font-size: 14px; font-weight: 700; color: var(--text-1); }
+  .testimonial-role { font-size: 12px; color: var(--text-4); }
+  .testimonial-stats { display: flex; gap: 24px; justify-content: center; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .testi-stat { text-align: center; }
+  .testi-stat-num { font-size: 22px; font-weight: 800; color: var(--green); }
+  .testi-stat-label { font-size: 11px; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ===== CTA SECTION ===== */
+  .cta-section { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); text-align: center; }
+  .cta-inner { max-width: 600px; margin: 0 auto; }
+  .cta-section h2 { font-size: clamp(26px, 4vw, 38px); font-weight: 900; color: var(--text-1); letter-spacing: -0.5px; margin-bottom: 12px; }
+  .cta-section p { font-size: 16px; color: var(--text-3); margin-bottom: 32px; }
+  .cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
+  .cta-note { font-size: 12px; color: var(--text-4); }
+
+  /* ===== RISK DISCLAIMER ===== */
+  .risk-section { padding: clamp(40px, 6vw, 60px) clamp(16px, 5vw, 48px); background: var(--bg-0); border-top: 1px solid var(--border); }
+  .risk-inner { max-width: 900px; margin: 0 auto; }
+  .risk-box {
+    background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.2);
+    border-radius: var(--r-lg); padding: 28px 32px;
+  }
+  .risk-title { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; color: var(--red); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .risk-title svg { width: 18px; height: 18px; }
+  .risk-text { font-size: 13px; color: var(--text-4); line-height: 1.8; }
+  .risk-text strong { color: var(--text-3); }
 
   /* ===== SECTION HEADER ===== */
-  .section-header {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: clamp(40px, 6vw, 60px) clamp(20px, 5vw, 60px) 0;
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 20px;
-    flex-wrap: wrap;
-    border-top: 1px solid var(--border);
-    margin-top: clamp(40px, 6vw, 60px);
-  }
-  .section-title {
-    font-size: clamp(20px, 3vw, 26px);
-    font-weight: 700;
-    color: #fff;
-    letter-spacing: -0.5px;
-  }
-  .section-desc {
-    font-size: 13px;
-    color: var(--text-muted);
-    max-width: 400px;
-    line-height: 1.6;
-    font-family: var(--font-mono);
-  }
-
-  /* ===== FEATURES GRID ===== */
-  .features-grid {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 40px clamp(20px, 5vw, 60px) clamp(40px, 6vw, 60px);
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1px;
-    background: var(--border);
-    border: 1px solid var(--border);
-  }
-  .feature-card {
-    background: var(--bg-card);
-    padding: 32px 28px;
-    transition: background 0.15s;
-  }
-  .feature-card:hover { background: var(--bg-card-hover); }
-  .feature-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-  }
-  .feature-icon {
-    width: 36px; height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--accent-bg);
-    border: 1px solid var(--accent-dim);
-    border-radius: 2px;
-    color: var(--accent-light);
-    flex-shrink: 0;
-  }
-  .feature-icon svg { width: 18px; height: 18px; }
-  .feature-num {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-muted);
-    letter-spacing: 1px;
-  }
-  .feature-card h3 {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 10px;
-    letter-spacing: 0.2px;
-  }
-  .feature-card p {
-    font-size: 13px;
-    color: var(--text-secondary);
-    line-height: 1.65;
-  }
-  .feature-tag {
-    display: inline-block;
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 2px;
-    margin-top: 12px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    font-family: var(--font-mono);
-  }
-  .tag-blue { background: var(--accent-bg); color: var(--accent-light); border: 1px solid var(--accent-dim); }
-  .tag-green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
-  .tag-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(234,179,8,0.2); }
-  .tag-red { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
-
-  /* ===== ARCHITECTURE SECTION ===== */
-  .arch-section {
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    padding: clamp(40px, 6vw, 60px) clamp(20px, 5vw, 60px);
-  }
-  .arch-inner {
-    max-width: 1100px;
-    margin: 0 auto;
-  }
-  .arch-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 0;
-    margin-top: 32px;
-    border: 1px solid var(--border);
-  }
-  .arch-item {
-    padding: 28px 24px;
-    border-right: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    position: relative;
-  }
-  .arch-item:nth-child(3n) { border-right: none; }
-  .arch-item::before {
-    content: "";
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: var(--accent-dim);
-  }
-  .arch-item.blue::before { background: var(--accent); }
-  .arch-item.green::before { background: var(--green); }
-  .arch-item.yellow::before { background: var(--yellow); }
-  .arch-label {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: var(--text-muted);
-    margin-bottom: 8px;
-    font-family: var(--font-mono);
-  }
-  .arch-name {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 6px;
-  }
-  .arch-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
-
-  /* ===== CTA ===== */
-  .cta-section {
-    background: var(--bg-primary);
-    padding: clamp(50px, 8vw, 80px) clamp(20px, 5vw, 60px);
-    text-align: center;
-    border-top: 1px solid var(--border);
-  }
-  .cta-inner { max-width: 600px; margin: 0 auto; }
-  .cta-title {
-    font-size: clamp(22px, 4vw, 32px);
-    font-weight: 700;
-    color: #fff;
-    letter-spacing: -0.5px;
-    margin-bottom: 12px;
-  }
-  .cta-desc {
-    font-size: 13px;
-    color: var(--text-secondary);
-    line-height: 1.7;
-    margin-bottom: 32px;
-    font-family: var(--font-mono);
-  }
-
-  /* ===== QUICK LINKS ===== */
-  .quick-links {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 40px clamp(20px, 5vw, 60px);
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 8px;
-  }
-  .quick-link {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 16px 20px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    color: var(--text-primary);
-    font-size: 13px;
-    font-weight: 500;
-    transition: all 0.15s;
-    font-family: var(--font-mono);
-  }
-  .quick-link:hover { background: var(--bg-card-hover); border-color: var(--border-light); color: var(--accent-light); text-decoration: none; }
-  .quick-link svg { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
-  .quick-link:hover svg { color: var(--accent-light); }
+  .section-header { text-align: center; margin-bottom: 48px; }
+  .section-header .section-desc { margin: 0 auto; }
 
   /* ===== RESPONSIVE ===== */
-  @media (max-width: 900px) {
-    .stats-inner { flex-wrap: wrap; }
-    .stat-item { flex: 1 1 45%; border-bottom: 1px solid var(--border); }
-    .stat-item:nth-child(2n) { border-right: none; }
-    .arch-item:nth-child(3n) { border-right: 1px solid var(--border); }
-    .arch-item:nth-child(2n) { border-right: none; }
-  }
-  @media (max-width: 640px) {
-    .hero-actions { flex-direction: column; }
-    .btn { width: 100%; justify-content: center; }
-    .stat-item { flex: 1 1 100%; border-right: none !important; }
-    .features-grid { gap: 1px; }
-    .arch-item { border-right: none !important; }
+  @media (max-width: 768px) {
+    .hero-stats { flex-direction: column; border-radius: var(--r-md); }
+    .hero-stat { border-right: none; border-bottom: 1px solid var(--border); }
+    .hero-stat:last-child { border-bottom: none; }
+    .how-grid { grid-template-columns: 1fr; }
+    .pricing-center { grid-template-columns: 1fr; }
+    .testimonial-stats { flex-wrap: wrap; gap: 16px; }
+    .cta-btns { flex-direction: column; }
+    .hero-btns { flex-direction: column; width: 100%; }
+    .hero-btns .btn { width: 100%; }
   }
 </style>
 {% endblock %}
@@ -372,178 +182,304 @@
 
 <!-- HERO -->
 <section class="hero">
-  <div class="hero-inner">
-    <div class="hero-eyebrow">Plataforma Institucional · Trading Cuantitativo</div>
-    <h1 class="hero-title">QUANT<span>·</span>DERIV</h1>
-    <p class="hero-subtitle">
-      Arquitectura modular de trading algorítmico para el índice sintético R_100.<br>
-      Optimización por datos · Gestión de riesgo institucional · Dashboard en tiempo real.
-    </p>
-    <div class="hero-actions">
-      <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-primary">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-        Acceder al Dashboard
-      </a>
-      <a href="{% url 'subscriptions:planes-list' %}" class="btn btn-outline">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        Ver Planes
-      </a>
+  <div class="hero-eyebrow">Plataforma de Trading Algorítmico</div>
+  <h1>Opera con <span>precisión institucional</span> en mercados sintéticos</h1>
+  <p class="hero-sub">QUANT·DERIV es una plataforma de trading automatizado basada en estrategias cuantitativas optimizadas por datos. Selecciona operaciones con edge estadístico confirmado y gestiona el riesgo con estándares institucionales.</p>
+  <div class="hero-btns">
+    <button class="btn btn-primary" onclick="openAuth('register')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      Empezar Gratis
+    </button>
+    <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-outline">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Ver Dashboard
+    </a>
+  </div>
+  <div class="hero-trust">
+    <span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Sin tarjeta de crédito
+    </span>
+    <span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Plan gratuito para siempre
+    </span>
+    <span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Cancela cuando quieras
+    </span>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="hero-stat-num green">70%+</div>
+      <div class="hero-stat-label">Winrate · Hora Óptima</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-num">10%</div>
+      <div class="hero-stat-label">Meta Diaria Rentabilidad</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-num">635</div>
+      <div class="hero-stat-label">Traders Activos</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-num">R_100</div>
+      <div class="hero-stat-label">Índice Sintético</div>
     </div>
   </div>
 </section>
 
-<!-- STATS BAR -->
-<div class="stats-bar">
-  <div class="stats-inner">
-    <div class="stat-item">
-      <div class="stat-value blue">70%+</div>
-      <div class="stat-label">Winrate óptimo · 20:00 UTC</div>
+<!-- TRUST BAR -->
+<div class="trust-bar">
+  <div class="trust-inner">
+    <div class="trust-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Gestión de Riesgo Robusta
     </div>
-    <div class="stat-item">
-      <div class="stat-value">10%</div>
-      <div class="stat-label">Meta diaria de rentabilidad</div>
+    <div class="trust-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Horarios Optimizados por Datos
     </div>
-    <div class="stat-item">
-      <div class="stat-value green">&gt;60%</div>
-      <div class="stat-label">Winrate objetivo institucional</div>
+    <div class="trust-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Dashboard en Tiempo Real
     </div>
-    <div class="stat-item">
-      <div class="stat-value">R_100</div>
-      <div class="stat-label">Índice sintético principal</div>
+    <div class="trust-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+      Arquitectura Multi-Tenant
     </div>
   </div>
 </div>
+
+<!-- HOW IT WORKS -->
+<section class="how-section">
+  <div class="section-header">
+    <div class="section-label">Cómo Funciona</div>
+    <h2 class="section-title">Tres módulos, una máquina de precisión</h2>
+    <p class="section-desc">Arquitectura modular que separa el mercado, la estrategia y el riesgo en capas independientes — el principio de toda infraestructura institucional.</p>
+  </div>
+  <div class="how-grid">
+    <div class="how-card">
+      <div class="how-num">MÓDULO 01</div>
+      <div class="how-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </div>
+      <h3>vector_variables · El Mercado</h3>
+      <p>Captura ticks en tiempo real desde la API de Deriv WebSocket. Construye el vector de estado x(t) con indicadores técnicos: EMAs, gap de medias, pendiente y estructura del precio.</p>
+    </div>
+    <div class="how-card">
+      <div class="how-num">MÓDULO 02</div>
+      <div class="how-icon" style="background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.2);color:var(--green-light)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <h3>vector_pesos · La Estrategia</h3>
+      <p>Pesos w calibrados por backtesting con datos históricos. Genera la señal ŝ = wᵀx con umbrales adaptativos que solo activan operaciones con edge estadístico confirmado.</p>
+    </div>
+    <div class="how-card">
+      <div class="how-num">MÓDULO 03</div>
+      <div class="how-icon" style="background:rgba(234,179,8,0.1);border-color:rgba(234,179,8,0.2);color:#fbbf24">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <h3>gestion_riesgo · El Riesgo</h3>
+      <p>Riesgo no negociable. Circuit breakers, drawdown máximo, ciclos de take profit y stop loss. Bloqueo automático de horarios sin edge. Auto-pausa cuando las condiciones no son favorables.</p>
+    </div>
+  </div>
+</section>
 
 <!-- FEATURES -->
-<div class="section-header" style="margin-top: 0; border-top: none; padding-top: 0;">
-  <div></div>
-</div>
-<div class="section-header">
-  <h2 class="section-title">Capacidades del Sistema</h2>
-  <p class="section-desc">Arquitectura diseñada para operación institucional con estándares de robustness y control de riesgo.</p>
-</div>
+<section class="features-section">
+  <div class="section-header">
+    <div class="section-label">Capacidades</div>
+    <h2 class="section-title">Diseñado para máxima selectividad</h2>
+    <p class="section-desc">Cada componente del sistema está optimizado para un solo objetivo: maximizar el winrate manteniendo el riesgo bajo control.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <h3>Estrategia SPP</h3>
+      <p>Estructura + Pendiente + Pullback. Selecciona operaciones con edge estadístico confirmado. Máxima selectividad, mínimo ruido.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <h3>Circuit Breakers</h3>
+      <p>Protección multinivel: drawdown, pérdida por hora, pérdida por trade, ciclos de profit y stop loss. El bot se auto-pausa cuando las condiciones se deterioran.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+      <h3>Dashboard SSE</h3>
+      <p>Streaming en tiempo real con gráficos de ticks, operaciones, logs y estado del bot. Actualización continua sin recargar la página.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+      <h3>Horario Institucional</h3>
+      <p>Bloqueo automático de las 22 horas del día sin edge. Opera exclusivamente en la ventana 20:00–21:00 UTC donde se concentra el mayor winrate confirmado.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div>
+      <h3>Suscripciones Multi-Tenant</h3>
+      <p>Arquitectura SaaS con PostgreSQL. Cada tenant tiene sus propios usuarios, configuraciones y logs de auditoría completamente aislados.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+      <h3>Backtesting con Ticks</h3>
+      <p>Colección histórica de ticks para walk-forward analysis. Calibración continua de pesos y umbrales con datos reales del mercado sintético.</p>
+    </div>
+  </div>
+</section>
 
-<div class="features-grid">
-  <div class="feature-card">
-    <div class="feature-card-top">
-      <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-      <span class="feature-num">01</span>
-    </div>
-    <h3>Estrategia SPP Institucional</h3>
-    <p>Estructura + Pendiente + Pullback. Selecciona operaciones con edge estadístico confirmado. Máxima selectividad para maximizar winrate.</p>
-    <span class="feature-tag tag-blue">Estrategia</span>
+<!-- PRICING -->
+<section class="pricing-section" id="precios">
+  <div class="section-header">
+    <div class="section-label">Planes</div>
+    <h2 class="section-title">Elige tu plan</h2>
+    <p class="section-desc">Desde gratuito hasta institucional. Sin contratos, cancela cuando quieras.</p>
   </div>
-  <div class="feature-card">
-    <div class="feature-card-top">
-      <div class="feature-icon" style="background:var(--green-bg);border-color:rgba(34,197,94,0.2);color:var(--green)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-      <span class="feature-num">02</span>
+  <div class="pricing-center">
+    <!-- FREE -->
+    <div class="price-card">
+      <div class="price-name">Free</div>
+      <div class="price-desc">Para usuarios nuevos que quieren probar el sistema</div>
+      <div class="price-amount">
+        <span class="currency">$</span>
+        <span class="amount">0</span>
+        <span class="period">/ para siempre</span>
+      </div>
+      <ul class="price-features">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 1 cuenta de trading</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 1 símbolo (R_100)</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard en tiempo real</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 trades / día</li>
+        <li class="disabled"><svg class="close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin backtesting</li>
+        <li class="disabled"><svg class="close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin acceso API</li>
+      </ul>
+      <button class="btn btn-outline" onclick="openAuth('register')">Crear Cuenta Gratis</button>
     </div>
-    <h3>Gestión de Riesgo Robusta</h3>
-    <p> Circuit breakers, drawdown máximo, ciclos de take profit y stop loss. Auto-pausa inteligente cuando las condiciones de mercado no son favorables.</p>
-    <span class="feature-tag tag-green">Riesgo</span>
-  </div>
-  <div class="feature-card">
-    <div class="feature-card-top">
-      <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-      <span class="feature-num">03</span>
-    </div>
-    <h3>Dashboard en Tiempo Real</h3>
-    <p>SSE streaming con gráficos de ticks, operaciones, logs y estado del bot. Actualización continua sin recarga de página.</p>
-    <span class="feature-tag tag-blue">UI</span>
-  </div>
-  <div class="feature-card">
-    <div class="feature-card-top">
-      <div class="feature-icon" style="background:var(--yellow-bg);border-color:rgba(234,179,8,0.2);color:var(--yellow)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-      <span class="feature-num">04</span>
-    </div>
-    <h3>Horarios Optimizados</h3>
-    <p>Bloqueo automático de horas con bajo winrate. Opera exclusivamente en la ventana 20:00–21:00 UTC donde se concentra el mayor edge.</p>
-    <span class="feature-tag tag-yellow">Schedule</span>
-  </div>
-  <div class="feature-card">
-    <div class="feature-card-top">
-      <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div>
-      <span class="feature-num">05</span>
-    </div>
-    <h3>Arquitectura Multi-Tenant</h3>
-    <p>Modelo SaaS con PostgreSQL. Suscripciones, usuarios aislados por tenant, logs de auditoría y configuraciones independientes.</p>
-    <span class="feature-tag tag-blue">Infraestructura</span>
-  </div>
-  <div class="feature-card">
-    <div class="feature-card-top">
-      <div class="feature-icon" style="background:var(--red-bg);border-color:rgba(239,68,68,0.2);color:var(--red)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
-      <span class="feature-num">06</span>
-    </div>
-    <h3>Backtesting con Ticks</h3>
-    <p>Colección histórica de ticks para walk-forward analysis. Calibración de pesos y umbrales con datos reales del mercado sintético.</p>
-    <span class="feature-tag tag-red">Datos</span>
-  </div>
-</div>
 
-<!-- ARCHITECTURE -->
-<div class="arch-section">
-  <div class="arch-inner">
-    <div class="section-header" style="padding-top: 0; margin-top: 0; border-top: none;">
-      <h2 class="section-title">Arquitectura Modular</h2>
-      <p class="section-desc">Tres módulos independientes siguiendo el principio de separación de concerns.</p>
+    <!-- BÁSICO -->
+    <div class="price-card">
+      <div class="price-name">Básico</div>
+      <div class="price-desc">Para traders individuales que buscan resultados consistentes</div>
+      <div class="price-amount">
+        <span class="currency">$</span>
+        <span class="amount">29</span>
+        <span class="period">/ mes</span>
+      </div>
+      <ul class="price-features">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 3 cuentas de trading</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 3 símbolos</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard en tiempo real</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 50 trades / día</li>
+        <li class="disabled"><svg class="close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin backtesting</li>
+        <li class="disabled"><svg class="close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin acceso API</li>
+      </ul>
+      <button class="btn btn-outline" onclick="openAuth('register')">Elegir Básico</button>
     </div>
-    <div class="arch-grid">
-      <div class="arch-item blue">
-        <div class="arch-label">Módulo · El Mercado</div>
-        <div class="arch-name">vector_variables</div>
-        <div class="arch-desc">Estado del mercado. Vector de entrada x(t) desde ticks en tiempo real de Deriv WebSocket API.</div>
+
+    <!-- PRO - FEATURED -->
+    <div class="price-card featured">
+      <div class="price-name" style="color: var(--accent-light)">Pro</div>
+      <div class="price-desc">Para traders avanzados con acceso completo a herramientas</div>
+      <div class="price-amount">
+        <span class="currency">$</span>
+        <span class="amount">79</span>
+        <span class="period">/ mes</span>
       </div>
-      <div class="arch-item green">
-        <div class="arch-label">Módulo · La Estrategia</div>
-        <div class="arch-name">vector_pesos</div>
-        <div class="arch-desc">Decisión. Pesos w calibrados por backtesting. Señal ŝ = wᵀx con umbrales adaptativos.</div>
+      <ul class="price-features">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 cuentas de trading</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 símbolos</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard + Backtesting</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 200 trades / día</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Acceso API</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte prioritario</li>
+      </ul>
+      <button class="btn btn-primary" onclick="openAuth('register')">Elegir Pro</button>
+    </div>
+
+    <!-- INSTITUCIONAL -->
+    <div class="price-card">
+      <div class="price-name">Institucional</div>
+      <div class="price-desc">Para firms y equipos con acceso completo y white label</div>
+      <div class="price-amount">
+        <span class="currency">$</span>
+        <span class="amount">199</span>
+        <span class="period">/ mes</span>
       </div>
-      <div class="arch-item yellow">
-        <div class="arch-label">Módulo · El Riesgo</div>
-        <div class="arch-name">gestion_riesgo</div>
-        <div class="arch-desc">Riesgo innegociable. Drawdown, ciclos, circuit breakers, bloqueos horarios y stake dinámico.</div>
+      <ul class="price-features">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Cuentas ilimitadas</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Símbolos ilimitados</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> White label completo</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Backtesting avanzado</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte 24/7 dedicado</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> SLA garantizado</li>
+      </ul>
+      <button class="btn btn-outline" onclick="openAuth('register')">Elegir Institucional</button>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIAL -->
+<section class="testimonial-section">
+  <div class="testimonial-card">
+    <div class="section-label">Caso de Éxito</div>
+    <blockquote class="testimonial-quote">"Llevo 3 meses operando con el bot en el plan Pro. La clave está en dejarlo trabajar solo durante la hora óptima. No opero manualmente — dejo que la estrategia haga su trabajo. El mes pasado cerré con +8.2% de rentabilidad."</blockquote>
+    <div class="testimonial-author">
+      <div class="testimonial-avatar">MC</div>
+      <div class="testimonial-info">
+        <div class="testimonial-name">Martín C.</div>
+        <div class="testimonial-role">Trader Pro · Colombia · 3 meses usando QUANT·DERIV</div>
+      </div>
+    </div>
+    <div class="testimonial-stats">
+      <div class="testi-stat">
+        <div class="testi-stat-num">+8.2%</div>
+        <div class="testi-stat-label">Rentabilidad Mes</div>
+      </div>
+      <div class="testi-stat">
+        <div class="testi-stat-num">67%</div>
+        <div class="testi-stat-label">Winrate</div>
+      </div>
+      <div class="testi-stat">
+        <div class="testi-stat-num">3 trades/día</div>
+        <div class="testi-stat-label">Frecuencia</div>
+      </div>
+      <div class="testi-stat">
+        <div class="testi-stat-num">3h</div>
+        <div class="testi-stat-label">Tiempo/Día</div>
       </div>
     </div>
   </div>
-</div>
-
-<!-- QUICK LINKS -->
-<div class="section-header">
-  <h2 class="section-title">Accesos Rápidos</h2>
-  <div></div>
-</div>
-<div class="quick-links">
-  <a href="{% url 'gestion_riesgo:dashboard' %}" class="quick-link">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-    Dashboard R_100
-  </a>
-  <a href="{% url 'gestion_riesgo:dashboard_eurusd' %}" class="quick-link">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-    Dashboard EUR/USD
-  </a>
-  <a href="{% url 'subscriptions:planes-list' %}" class="quick-link">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-    Suscripciones
-  </a>
-  <a href="/admin/" class="quick-link" target="_blank">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="0"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-    Panel Admin
-  </a>
-</div>
+</section>
 
 <!-- CTA -->
-<div class="cta-section">
+<section class="cta-section">
   <div class="cta-inner">
-    <h2 class="cta-title">¿Listo para operar?</h2>
-    <p class="cta-desc">
-      Accede al dashboard y monitorea el bot en tiempo real.<br>
-      La plataforma está configurada para operar únicamente en horarios con edge estadístico confirmado.
-    </p>
-    <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-primary">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-      Ir al Dashboard
-    </a>
+    <div class="section-label">Empieza Hoy</div>
+    <h2>Tu próxima operación podría ser la correcta</h2>
+    <p>Crea tu cuenta gratis y accede al dashboard. Sin compromiso, sin tarjeta de crédito.</p>
+    <div class="cta-btns">
+      <button class="btn btn-primary" onclick="openAuth('register')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        Crear Cuenta Gratis
+      </button>
+      <a href="{% url 'subscriptions:planes-list' %}" class="btn btn-outline">Ver Todos los Planes</a>
+    </div>
+    <p class="cta-note">7 días de trial en planes de pago · Sin tarjeta de crédito · Cancela cuando quieras</p>
   </div>
-</div>
+</section>
+
+<!-- RISK DISCLAIMER -->
+<section class="risk-section">
+  <div class="risk-inner">
+    <div class="risk-box">
+      <div class="risk-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Aviso de Riesgo Obligatorio
+      </div>
+      <div class="risk-text">
+        <strong>El trading de opciones binarias y derivados financieros conlleva un alto nivel de riesgo y puede resultar en la pérdida total de su capital invertido.</strong> Las operaciones en mercados financieros sintéticos (como R_100 en Deriv) no están reguladas por las mismas autoridades financieras que los mercados tradicionales. <strong>No invierta jamás más de lo que esté dispuesto a perder completamente.</strong> El rendimiento pasado de cualquier estrategia de trading no garantiza resultados futuros. El bot cuantitativo QUANT·DERIV es una herramienta de asistencia que no elimina el riesgo inherente al trading. Los resultados mostrados en el dashboard (incluyendo winrate y rentabilidad) son históricos y no constituyen una promesa de rendimiento futuro. <strong>Es su responsabilidad evaluar su situación financiera antes de operar y buscar asesoría profesional si es necesario.</strong> QUANT·DERIV no es un asesor financiero registrado y no proporciona recomendaciones de inversión personalizadas. Operar con márgenes apalancados en mercados sintéticos puede resultar en pérdidas que excedan su depósito inicial.
+      </div>
+    </div>
+  </div>
+</section>
 
 {% endblock %}

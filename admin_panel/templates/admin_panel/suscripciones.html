@@ -1,0 +1,60 @@
+{% extends "admin_panel/base_admin.html" %}
+{% block title %}Suscripciones · Panel Admin{% endblock %}
+{% block admin_content %}
+<div class="ap-page-title">Suscripciones</div>
+<div class="ap-page-sub">Gestión de suscripciones de tenants</div>
+
+<div class="ap-stats" style="margin-bottom:24px;">
+  <div class="ap-stat-card">
+    <div class="ap-stat-label">Total</div>
+    <div class="ap-stat-value">{{ total_suscripciones }}</div>
+  </div>
+  <div class="ap-stat-card">
+    <div class="ap-stat-label">Activas</div>
+    <div class="ap-stat-value green">{{ susc_activas }}</div>
+  </div>
+</div>
+
+<div class="ap-section">
+  <div class="ap-table-wrap">
+    <table class="ap-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Tenant</th>
+          <th>Plan</th>
+          <th>Estado</th>
+          <th>Inicio</th>
+          <th>Fin</th>
+          <th>Periodicidad</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in suscripciones %}
+        <tr>
+          <td class="mono">{{ s.id }}</td>
+          <td>{{ s.tenant.nombre|default:s.tenant.slug|default:"—"|truncatechars:20 }}</td>
+          <td><span class="badge badge-blue">{{ s.plan.nombre|default:"—" }}</span></td>
+          <td>
+            {% if s.estado == "ACTIVA" %}
+              <span class="badge badge-green">ACTIVA</span>
+            {% elif s.estado == "CANCELADA" %}
+              <span class="badge badge-red">CANCELADA</span>
+            {% elif s.estado == "TRIAL" %}
+              <span class="badge badge-yellow">TRIAL</span>
+            {% else %}
+              <span class="badge badge-gray">{{ s.estado }}</span>
+            {% endif %}
+          </td>
+          <td class="mono">{{ s.fecha_inicio|date:"d/m/Y"|default:"—" }}</td>
+          <td class="mono">{{ s.fecha_fin|date:"d/m/Y"|default:"—" }}</td>
+          <td>{{ s.periodicidad|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" style="color:var(--text-4);text-align:center;padding:20px;">Sin suscripciones</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

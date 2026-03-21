@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Iniciar Sesión · Panel Admin · QUANT·DERIV{% endblock %}
+
+{% block extra_head %}
+<style>
+  .login-page {
+    min-height: calc(100vh - 64px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px 16px;
+  }
+  .login-box {
+    background: var(--bg-3); border: 1px solid var(--border);
+    border-radius: var(--r-xl); padding: 40px; width: 100%; max-width: 400px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.4);
+  }
+  .login-brand { display: flex; align-items: center; gap: 12px; justify-content: center; margin-bottom: 28px; }
+  .login-brand-name { font-size: 18px; font-weight: 900; color: #fff; letter-spacing: 1px; text-transform: uppercase; }
+  .login-brand-sep { color: var(--accent-light); font-weight: 300; }
+  .login-title { font-size: 20px; font-weight: 800; color: var(--text-1); text-align: center; margin-bottom: 6px; }
+  .login-sub { font-size: 13px; color: var(--text-4); text-align: center; margin-bottom: 28px; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-3); margin-bottom: 6px; letter-spacing: 0.3px; }
+  .form-group input {
+    width: 100%; padding: 12px 14px; font-size: 14px;
+    background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: var(--r-sm); color: var(--text-1);
+    font-family: var(--font); outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .form-group input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+  .login-error { background: var(--red-bg); border: 1px solid rgba(239,68,68,0.2); border-radius: var(--r-sm); padding: 10px 14px; font-size: 13px; color: var(--red); margin-bottom: 16px; }
+  .login-box .btn { width: 100%; }
+  .login-footer { text-align: center; font-size: 12px; color: var(--text-4); margin-top: 20px; }
+  .login-footer a { color: var(--accent-light); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-page">
+  <div class="login-box">
+    <div class="login-brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      </div>
+      <span class="login-brand-name">QUANT<span class="login-brand-sep">·</span>DERIV</span>
+    </div>
+    <h1 class="login-title">Panel de Administración</h1>
+    <p class="login-sub">Acceso restringido al personal autorizado</p>
+
+    {% if error %}
+    <div class="login-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group">
+        <label>Usuario</label>
+        <input type="text" name="username" placeholder="Nombre de usuario" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><rect x="3" y="11" width="18" height="11" rx="0"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Iniciar Sesión
+      </button>
+    </form>
+
+    <div class="login-footer">
+      <a href="{% url 'pages:index' %}">← Volver al inicio</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,126 @@
+{% extends "admin_panel/base_admin.html" %}
+
+{% block title %}Overview · Panel Admin{% endblock %}
+
+{% block admin_content %}
+<div class="ap-page-title">Overview</div>
+<div class="ap-page-sub">Resumen general de la plataforma QUANT·DERIV</div>
+
+<!-- STATS -->
+<div class="ap-stats">
+  <div class="ap-stat-card">
+    <div class="ap-stat-label">Total Cuentas</div>
+    <div class="ap-stat-value blue">{{ total_cuentas }}</div>
+  </div>
+  <div class="ap-stat-card">
+    <div class="ap-stat-label">Operaciones Totales</div>
+    <div class="ap-stat-value">{{ total_operaciones }}</div>
+    <div class="ap-stat-delta">{{ ops_hoy }} hoy · {{ ops_semana }} esta semana</div>
+  </div>
+  <div class="ap-stat-card">
+    <div class="ap-stat-label">Winrate Global</div>
+    <div class="ap-stat-value green">{{ winrate }}%</div>
+    <div class="ap-stat-delta">{{ wins }} ganadas · {{ losses }} perdidas</div>
+  </div>
+  <div class="ap-stat-card">
+    <div class="ap-stat-label">Tenants</div>
+    <div class="ap-stat-value">{{ total_tenants }}</div>
+    <div class="ap-stat-delta">{{ total_usuarios }} usuarios · {{ susc_activas }} suscripciones activas</div>
+  </div>
+</div>
+
+<div class="ap-grid-2">
+  <!-- RECENT OPERATIONS -->
+  <div class="ap-section">
+    <div class="ap-section-header">
+      <div class="ap-section-title">Operaciones Recientes</div>
+      <a href="{% url 'admin_panel:operaciones' %}" style="font-size:12px;color:var(--accent-light);">Ver todas →</a>
+    </div>
+    <div class="ap-table-wrap">
+      <table class="ap-table">
+        <thead>
+          <tr>
+            <th>Activo</th>
+            <th>Tipo</th>
+            <th>Resultado</th>
+            <th>Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for op in ops_recientes %}
+          <tr>
+            <td class="mono">{{ op.cuenta.simbolo|default:"R_100" }}</td>
+            <td><span class="badge badge-blue">{{ op.tipo }}</span></td>
+            <td>
+              {% if op.resultado == "GANANCIA" %}
+                <span class="badge badge-green">GANANCIA</span>
+              {% elif op.resultado == "PERDIDA" %}
+                <span class="badge badge-red">PERDIDA</span>
+              {% else %}
+                <span class="badge badge-gray">{{ op.resultado }}</span>
+              {% endif %}
+            </td>
+            <td class="mono">${{ op.balance_resultante|default:"—"|stringformat:"0.2f" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" style="color:var(--text-4);text-align:center;padding:20px;">Sin operaciones registradas</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- RECENT LOGS -->
+  <div class="ap-section">
+    <div class="ap-section-header">
+      <div class="ap-section-title">Logs de Auditoría</div>
+      <a href="{% url 'admin_panel:logs' %}" style="font-size:12px;color:var(--accent-light);">Ver todos →</a>
+    </div>
+    <div class="ap-table-wrap">
+      {% for log in logs_recientes %}
+      <div class="log-item">
+        <span class="log-time">{{ log.fecha|date:"d/m/Y H:i" }}</span>
+        <span class="log-user">{{ log.usuario|default:"Sistema"|truncatechars:12 }}</span>
+        <span class="log-accion">{{ log.accion }} <span>{{ log.descripcion|truncatechars:40 }}</span></span>
+      </div>
+      {% empty %}
+      <div style="color:var(--text-4);text-align:center;padding:20px;font-size:13px;">Sin logs registrados</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- BALANCES -->
+<div class="ap-section">
+  <div class="ap-section-header">
+    <div class="ap-section-title">Balances Recientes</div>
+  </div>
+  <div class="ap-table-wrap">
+    <table class="ap-table">
+      <thead>
+        <tr>
+          <th>Cuenta</th>
+          <th>Balance</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in balances %}
+        <tr>
+          <td class="mono">{{ b.cuenta.simbolo|default:"R_100" }}</td>
+          <td class="mono">${{ b.balance|stringformat:"0.2f" }}</td>
+          <td class="mono">{{ b.epoch|date:"d/m/Y H:i:s" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" style="color:var(--text-4);text-align:center;padding:20px;">Sin registros de balance</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<form method="post" action="/api/auth/logout/" style="margin-top:32px;">
+  {% csrf_token %}
+  <button type="submit" class="ap-logout-btn">Cerrar Sesión</button>
+</form>
+{% endblock %}

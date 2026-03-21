@@ -1,0 +1,43 @@
+{% extends "admin_panel/base_admin.html" %}
+{% block title %}Tenants · Panel Admin{% endblock %}
+{% block admin_content %}
+<div class="ap-page-title">Tenants</div>
+<div class="ap-page-sub">{{ total_tenants }} tenants registrados en la plataforma</div>
+
+<div class="ap-section">
+  <div class="ap-table-wrap">
+    <table class="ap-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Slug</th>
+          <th>Usuarios</th>
+          <th>Fecha Creación</th>
+          <th>Activo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tenants %}
+        <tr>
+          <td class="mono">{{ t.id }}</td>
+          <td>{{ t.nombre|default:"—" }}</td>
+          <td class="mono">{{ t.slug|default:"—" }}</td>
+          <td class="mono">{{ t.usuarios.count }}</td>
+          <td class="mono">{{ t.fecha_creacion|date:"d/m/Y H:i"|default:"—" }}</td>
+          <td>
+            {% if t.activo %}
+              <span class="badge badge-green">Activo</span>
+            {% else %}
+              <span class="badge badge-red">Inactivo</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" style="color:var(--text-4);text-align:center;padding:20px;">Sin tenants</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

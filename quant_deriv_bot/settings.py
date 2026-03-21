@@ -65,6 +65,8 @@ INSTALLED_APPS = [
     "subscriptions",
     # PÁGINAS PÚBLICAS
     "pages",
+    # PANEL DE ADMINISTRACIÓN PROPIO
+    "admin_panel",
 ]
 
 MIDDLEWARE = [

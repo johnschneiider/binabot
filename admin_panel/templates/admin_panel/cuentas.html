@@ -1,0 +1,45 @@
+{% extends "admin_panel/base_admin.html" %}
+{% block title %}Cuentas · Panel Admin{% endblock %}
+{% block admin_content %}
+<div class="ap-page-title">Cuentas de Trading</div>
+<div class="ap-page-sub">Gestión de cuentas vinculadas a Deriv</div>
+
+<div class="ap-section">
+  <div class="ap-table-wrap">
+    <table class="ap-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Símbolo</th>
+          <th>Balance</th>
+          <th>Stake</th>
+          <th>Bloqueado</th>
+          <th>Ticks Colectados</th>
+          <th>Balance Mínimo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in cuentas %}
+        <tr>
+          <td class="mono">{{ c.id }}</td>
+          <td class="mono">{{ c.simbolo }}</td>
+          <td class="mono">${{ c.balance_actual|default:"0.00"|stringformat:"0.2f" }}</td>
+          <td class="mono">${{ c.stake|default:"1.0"|stringformat:"0.2f" }}</td>
+          <td>
+            {% if c.bloqueado %}
+              <span class="badge badge-red">Bloqueado</span>
+            {% else %}
+              <span class="badge badge-green">Activo</span>
+            {% endif %}
+          </td>
+          <td class="mono">{{ c.ticks_colector_total|default:0 }}</td>
+          <td class="mono">${{ c.balance_minimo|default:"0.00"|stringformat:"0.2f" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" style="color:var(--text-4);text-align:center;padding:20px;">Sin cuentas registradas</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
