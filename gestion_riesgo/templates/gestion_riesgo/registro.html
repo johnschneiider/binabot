@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Registro · QUANT·DERIV{% endblock %}
+
+{% block extra_head %}
+<style>
+  .reg-wrapper {
+    min-height: calc(100vh - 64px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px clamp(16px, 4vw, 48px);
+    background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(59,130,246,0.08) 0%, transparent 70%);
+  }
+  .reg-card {
+    width: 100%;
+    max-width: 560px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-xl);
+    padding: clamp(28px, 5vw, 48px);
+  }
+  .reg-header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .reg-header h1 {
+    font-size: clamp(22px, 4vw, 30px);
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  .reg-header p {
+    font-size: 14px;
+    color: var(--text-4);
+  }
+  .reg-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .reg-form-grid .full { grid-column: 1 / -1; }
+  @media (max-width: 480px) {
+    .reg-form-grid { grid-template-columns: 1fr; }
+    .reg-form-grid .full { grid-column: 1; }
+  }
+  .fgroup { margin-bottom: 16px; }
+  .fgroup label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-3);
+    margin-bottom: 6px;
+    letter-spacing: 0.3px;
+  }
+  .fgroup label span.req { color: var(--accent-light); margin-left: 2px; }
+  .fgroup input,
+  .fgroup select {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    color: var(--text-1);
+    font-size: 14px;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-sizing: border-box;
+  }
+  .fgroup input:focus,
+  .fgroup select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  }
+  .fgroup input.error,
+  .fgroup select.error {
+    border-color: var(--red);
+  }
+  .fgroup .err-msg {
+    font-size: 11px;
+    color: var(--red);
+    margin-top: 4px;
+  }
+  .fgroup select option { background: var(--bg-3); }
+  .reg-submit {
+    width: 100%;
+    padding: 14px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--r-md);
+    font-size: 15px;
+    font-weight: 700;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+    margin-top: 8px;
+  }
+  .reg-submit:hover {
+    background: var(--accent-light);
+    box-shadow: 0 4px 20px rgba(59,130,246,0.35);
+  }
+  .reg-footer {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-4);
+    margin-top: 20px;
+  }
+  .reg-footer a { color: var(--accent-light); font-weight: 600; }
+  .reg-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-light);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin: 24px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .reg-section-label:first-of-type { margin-top: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="reg-wrapper">
+  <div class="reg-card">
+    <div class="reg-header">
+      <h1>Crea tu cuenta</h1>
+      <p>Completa tus datos para unirte al fondo</p>
+    </div>
+
+    <form method="POST" action="." class="reg-form-grid">
+      {% csrf_token %}
+
+      <div class="reg-section-label">Datos de acceso</div>
+
+      <div class="fgroup full">
+        <label>Nombre de usuario <span class="req">*</span></label>
+        <input type="text" name="username" placeholder="Tu usuario único" value="{{ request.POST.username|default:'' }}"
+          class="{% if errors.username %}error{% endif %}" required minlength="3" autocomplete="username">
+        {% if errors.username %}<div class="err-msg">{{ errors.username }}</div>{% endif %}
+      </div>
+
+      <div class="fgroup">
+        <label>Correo electrónico <span class="req">*</span></label>
+        <input type="email" name="email" placeholder="tu@correo.com" value="{{ request.POST.email|default:'' }}"
+          class="{% if errors.email %}error{% endif %}" required autocomplete="email">
+        {% if errors.email %}<div class="err-msg">{{ errors.email }}</div>{% endif %}
+      </div>
+
+      <div class="fgroup">
+        <label>Contraseña <span class="req">*</span></label>
+        <input type="password" name="password" placeholder="Mínimo 8 caracteres"
+          class="{% if errors.password %}error{% endif %}" required minlength="8" autocomplete="new-password">
+        {% if errors.password %}<div class="err-msg">{{ errors.password }}</div>{% endif %}
+      </div>
+
+      <div class="fgroup full">
+        <label>Confirmar contraseña <span class="req">*</span></label>
+        <input type="password" name="password2" placeholder="Repite la contraseña"
+          class="{% if errors.password2 %}error{% endif %}" required autocomplete="new-password">
+        {% if errors.password2 %}<div class="err-msg">{{ errors.password2 }}</div>{% endif %}
+      </div>
+
+      <div class="reg-section-label">Información personal</div>
+
+      <div class="fgroup full">
+        <label>Nombre completo <span class="req">*</span></label>
+        <input type="text" name="nombre" placeholder="Como aparece en tu documento" value="{{ request.POST.nombre|default:'' }}"
+          class="{% if errors.nombre %}error{% endif %}" required>
+        {% if errors.nombre %}<div class="err-msg">{{ errors.nombre }}</div>{% endif %}
+      </div>
+
+      <div class="fgroup">
+        <label>Teléfono / WhatsApp <span class="req">*</span></label>
+        <input type="tel" name="telefono" placeholder="+57 300 123 4567" value="{{ request.POST.telefono|default:'' }}"
+          class="{% if errors.telefono %}error{% endif %}" required>
+        {% if errors.telefono %}<div class="err-msg">{{ errors.telefono }}</div>{% endif %}
+      </div>
+
+      <div class="fgroup">
+        <label>Fecha de nacimiento</label>
+        <input type="date" name="fecha_nacimiento" value="{{ request.POST.fecha_nacimiento|default:'' }}"
+          class="{% if errors.fecha_nacimiento %}error{% endif %}">
+        {% if errors.fecha_nacimiento %}<div class="err-msg">{{ errors.fecha_nacimiento }}</div>{% endif %}
+      </div>
+
+      <div class="fgroup">
+        <label>Género</label>
+        <select name="genero">
+          <option value="N" {% if request.POST.genero == 'N' %}selected{% endif %}>Prefiero no decir</option>
+          <option value="M" {% if request.POST.genero == 'M' %}selected{% endif %}>Masculino</option>
+          <option value="F" {% if request.POST.genero == 'F' %}selected{% endif %}>Femenino</option>
+          <option value="O" {% if request.POST.genero == 'O' %}selected{% endif %}>Otro</option>
+        </select>
+      </div>
+
+      <div class="fgroup">
+        <label>Nacionalidad</label>
+        <input type="text" name="nacionalidad" placeholder="País de origen" value="{{ request.POST.nacionalidad|default:'' }}">
+      </div>
+
+      <div class="fgroup full">
+        <label>Número de documento de identidad</label>
+        <input type="text" name="documento_identidad" placeholder="Cédula, pasaporte, etc." value="{{ request.POST.documento_identidad|default:'' }}">
+      </div>
+
+      <div class="reg-section-label">Sobre tu inversión</div>
+
+      <div class="fgroup">
+        <label>Capital objetivo a invertir (USD)</label>
+        <input type="number" name="capital_objetivo" placeholder="Ej: 5000" value="{{ request.POST.capital_objetivo|default:'0' }}" min="0" step="100">
+      </div>
+
+      <div class="fgroup">
+        <label>¿Cómo te enteraste de nosotros?</label>
+        <select name="como_se_entero">
+          <option value="">Selecciona una opción</option>
+          <option value="instagram" {% if request.POST.como_se_entero == 'instagram' %}selected{% endif %}>Instagram</option>
+          <option value="facebook" {% if request.POST.como_se_entero == 'facebook' %}selected{% endif %}>Facebook</option>
+          <option value="whatsapp" {% if request.POST.como_se_entero == 'whatsapp' %}selected{% endif %}>WhatsApp</option>
+          <option value="referido" {% if request.POST.como_se_entero == 'referido' %}selected{% endif %}>Un amigo / Referido</option>
+          <option value="google" {% if request.POST.como_se_entero == 'google' %}selected{% endif %}>Google / Búsqueda</option>
+          <option value="otro" {% if request.POST.como_se_entero == 'otro' %}selected{% endif %}>Otro</option>
+        </select>
+      </div>
+
+      <div class="fgroup full" style="margin-top: 8px;">
+        <button type="submit" class="reg-submit">
+          Crear mi cuenta →
+        </button>
+      </div>
+    </form>
+
+    <div class="reg-footer">
+      ¿Ya tienes cuenta? <a href="#" onclick="openAuth('login'); return false;">Inicia sesión</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

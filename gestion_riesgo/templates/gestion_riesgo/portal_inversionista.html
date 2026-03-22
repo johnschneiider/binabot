@@ -1,339 +1,439 @@
 {% extends "base.html" %}
 
-{% block title %}Mi Inversión · QUANT·DERIV{% endblock %}
+{% block title %}Portal · QUANT·DERIV{% endblock %}
 
 {% block extra_head %}
 <style>
-  .portal-hero {
-    padding: 40px clamp(16px, 4vw, 48px);
-    background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%);
+  /* ===== PORTAL LAYOUT ===== */
+  .portal-topbar {
+    position: sticky;
+    top: 64px;
+    z-index: 100;
+    background: rgba(5,8,16,0.92);
+    backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border);
+    padding: 12px clamp(16px, 4vw, 48px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
   }
-  .portal-welcome {
-    font-size: 12px; font-weight: 700; letter-spacing: 2px;
-    text-transform: uppercase; color: var(--accent-light); margin-bottom: 8px;
+  .portal-topbar-balance {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
-  .portal-name {
-    font-size: clamp(24px, 4vw, 36px); font-weight: 900; color: #fff;
-    letter-spacing: -0.5px; margin-bottom: 4px;
+  .portal-topbar-balance .balance-label {
+    font-size: 11px;
+    color: var(--text-4);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
   }
-  .portal-since {
-    font-size: 12px; color: var(--text-4);
+  .portal-topbar-balance .balance-val {
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: -1px;
   }
-  .portal-status {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25);
-    color: #34d399; font-size: 11px; font-weight: 700; padding: 4px 12px;
-    border-radius: 100px; margin-top: 12px; letter-spacing: 0.5px;
+  .portal-topbar-balance .balance-sub {
+    font-size: 11px;
+    color: var(--text-4);
   }
-  .portal-status-dot {
-    width: 6px; height: 6px; background: #34d399; border-radius: 50%;
-    animation: pulse-green 2s infinite;
+  .portal-topbar-balance .balance-gain {
+    font-size: 13px;
+    font-weight: 700;
+    {% if rendimiento_pct >= 0 %}
+    color: var(--green-light);
+    {% else %}
+    color: var(--red);
+    {% endif %}
   }
-  @keyframes pulse-green {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+  .portal-topbar-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .portal-topbar-actions .btn-sm {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-2);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .portal-topbar-actions .btn-sm:hover {
+    background: var(--bg-3);
+    border-color: var(--border-bright);
+    color: #fff;
+  }
+  .portal-topbar-actions .btn-deposit {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .portal-topbar-actions .btn-deposit:hover {
+    background: var(--accent-light);
+    border-color: var(--accent-light);
   }
 
-  .portal-body { padding: clamp(24px, 4vw, 48px) clamp(16px, 4vw, 48px); max-width: 1200px; margin: 0 auto; }
+  /* ===== PORTAL BODY ===== */
+  .portal-body {
+    padding: clamp(24px, 4vw, 40px) clamp(16px, 4vw, 48px);
+    max-width: 1200px;
+    margin: 0 auto;
+  }
 
+  /* ===== STATS ROW ===== */
   .portal-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
     margin-bottom: 24px;
   }
   .portal-stat-card {
-    background: var(--bg-2); border: 1px solid var(--border);
-    border-radius: var(--r-lg); padding: 20px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 16px 20px;
   }
   .portal-stat-label {
-    font-size: 11px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.8px; color: var(--text-4); margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-4);
+    margin-bottom: 8px;
   }
   .portal-stat-value {
-    font-size: clamp(22px, 4vw, 32px); font-weight: 900;
-    color: #fff; letter-spacing: -1px; line-height: 1.1;
+    font-size: clamp(20px, 3vw, 26px);
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
   }
-  .portal-stat-value.green { color: #34d399; }
+  .portal-stat-value.green { color: var(--green-light); }
   .portal-stat-value.blue { color: var(--accent-light); }
-  .portal-stat-sub { font-size: 11px; color: var(--text-4); margin-top: 6px; }
-  .portal-stat-badge {
-    display: inline-block; font-size: 10px; font-weight: 700;
-    padding: 2px 8px; border-radius: 100px; margin-top: 6px;
-  }
-  .badge-green { background: rgba(16,185,129,0.15); color: #34d399; }
-  .badge-blue { background: rgba(59,130,246,0.15); color: var(--accent-light); }
-  .badge-red { background: rgba(239,68,68,0.15); color: #f87171; }
+  .portal-stat-value.red { color: var(--red); }
+  .portal-stat-sub { font-size: 11px; color: var(--text-4); margin-top: 4px; }
 
+  /* ===== SECTIONS ===== */
   .portal-section {
-    background: var(--bg-2); border: 1px solid var(--border);
-    border-radius: var(--r-xl); padding: 24px; margin-bottom: 24px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-xl);
+    padding: 24px;
+    margin-bottom: 24px;
   }
   .portal-section-title {
-    font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 16px;
-    display: flex; align-items: center; gap: 8px;
+    font-size: 14px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
-  .portal-section-title svg { width: 18px; height: 18px; color: var(--accent-light); }
+  .portal-section-title svg { width: 16px; height: 16px; color: var(--accent-light); }
 
-  .chart-wrap-portal { height: 280px; background: var(--bg-3); border-radius: var(--r-lg); padding: 8px; margin-bottom: 16px; }
+  /* ===== CHARTS ===== */
+  .chart-wrap { height: 260px; background: var(--bg-3); border-radius: var(--r-lg); padding: 12px; position: relative; }
+  .chart-wrap-portal { height: 260px; background: var(--bg-3); border-radius: var(--r-lg); padding: 12px; }
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
 
+  /* ===== TABLES ===== */
   .portal-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .portal-table th {
-    padding: 10px 12px; font-size: 11px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-4);
-    border-bottom: 1px solid var(--border); text-align: left;
+    padding: 10px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-4);
+    border-bottom: 1px solid var(--border);
+    text-align: left;
   }
   .portal-table td {
-    padding: 10px 12px; color: var(--text-3);
+    padding: 10px 12px;
+    color: var(--text-3);
     border-bottom: 1px solid var(--border);
   }
   .portal-table tr:last-child td { border-bottom: none; }
-  .portal-table tr:hover td { background: var(--bg-4); }
+  .portal-table tr:hover td { background: var(--bg-3); }
   .portal-table .mono { font-family: monospace; }
-
-  .win { color: #34d399; }
-  .loss { color: #f87171; }
-  .neutral { color: var(--text-4); }
-
-  .portal-proj-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
+  .win { color: var(--green-light); }
+  .loss { color: var(--red); }
+  .pending { color: var(--accent-light); }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 100px;
   }
-  .portal-proj-card {
-    background: var(--bg-3); border: 1px solid var(--border);
-    border-radius: var(--r-lg); padding: 16px; text-align: center;
-  }
-  .portal-proj-period { font-size: 11px; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
-  .portal-proj-total { font-size: 22px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
-  .portal-proj-gain { font-size: 12px; color: #34d399; margin-top: 4px; }
-  .portal-proj-label { font-size: 10px; color: var(--text-4); margin-top: 4px; }
+  .badge-green { background: rgba(16,185,129,0.15); color: var(--green-light); }
+  .badge-blue { background: rgba(59,130,246,0.15); color: var(--accent-light); }
+  .badge-yellow { background: rgba(234,179,8,0.15); color: #eab308; }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
 
-  .portal-model-info {
-    background: var(--bg-3); border: 1px solid rgba(59,130,246,0.2);
-    border-radius: var(--r-lg); padding: 16px; margin-bottom: 16px;
+  /* ===== CTA BANNER ===== */
+  .portal-cta-banner {
+    background: linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(16,185,129,0.08) 100%);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: var(--r-xl);
+    padding: 24px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
   }
-  .portal-model-info p { font-size: 13px; color: var(--text-4); line-height: 1.6; margin-bottom: 10px; }
-  .portal-model-info strong { color: var(--text-2); }
-  .portal-model-info .highlight { color: var(--accent-light); font-weight: 700; }
-
-  .portal-disclaimer {
-    font-size: 11px; color: var(--text-4); line-height: 1.6;
-    padding: 12px; background: var(--bg-4); border-radius: var(--r-md);
-    margin-top: 12px;
+  .portal-cta-banner h3 { font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  .portal-cta-banner p { font-size: 13px; color: var(--text-3); }
+  .portal-cta-banner .btn {
+    padding: 10px 20px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--r-sm);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
+  .portal-cta-banner .btn:hover { background: var(--accent-light); color: #fff; }
 
-  .btn-sm { padding: 6px 14px; font-size: 12px; }
+  /* ===== EMPTY STATE ===== */
+  .empty-chart {
+    height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-4);
+    font-size: 13px;
+    text-align: center;
+    gap: 8px;
+  }
+  .empty-chart svg { width: 32px; height: 32px; opacity: 0.4; }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 640px) {
+    .portal-topbar { flex-direction: column; align-items: flex-start; }
+    .portal-stats { grid-template-columns: 1fr 1fr; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="portal-hero">
-  <div class="portal-welcome">Panel del Inversionista</div>
-  <div class="portal-name">{{ user.get_full_name|default:user.username }}</div>
-  <div class="portal-since">Desde {{ inversionista.created_at|date:"d MMM yyyy" }}</div>
-  <div class="portal-status">
-    <span class="portal-status-dot"></span>
-    {{ inversionista.get_estado_display }}
+<!-- TOP BAR: BALANCE + ACTIONS -->
+<div class="portal-topbar">
+  <div class="portal-topbar-balance">
+    <div>
+      <div class="balance-label">Mi capital</div>
+      <div class="balance-val">${{ inversionista.capital_actual|floatformat:0|default:"0" }}</div>
+      <div class="balance-sub">
+        Inicial: ${{ inversionista.capital_inicial|floatformat:0 }} &nbsp;|&nbsp;
+        <span class="balance-gain">
+          {% if rendimiento_pct >= 0 %}+{% endif %}{{ rendimiento_pct|floatformat:2 }}%
+        </span>
+      </div>
+    </div>
+  </div>
+  <div class="portal-topbar-actions">
+    <a href="{% url 'gestion_riesgo:depositar' %}" class="btn-sm btn-deposit">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Depositar
+    </a>
+    <a href="{% url 'gestion_riesgo:retirar' %}" class="btn-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+      Retirar
+    </a>
+    <a href="{% url 'gestion_riesgo:registro' %}" class="btn-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Mi perfil
+    </a>
   </div>
 </div>
 
 <div class="portal-body">
 
-  <!-- STATS PRINCIPALES -->
+  <!-- CTA: si no ha depositado nunca -->
+  {% if inversionista.capital_inicial <= 0 %}
+  <div class="portal-cta-banner">
+    <div>
+      <h3>¡Bienvenido, {{ inversionista.nombre|default:user.username }}!</h3>
+      <p>Tu cuenta está lista. Deposita tu capital para empezar a generar rendimientos.</p>
+    </div>
+    <a href="{% url 'gestion_riesgo:depositar' %}" class="btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Depositar ahora
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- STATS -->
   <div class="portal-stats">
     <div class="portal-stat-card">
-      <div class="portal-stat-label">Capital actual</div>
-      <div class="portal-stat-value">${{ inversionista.capital_actual|floatformat:0|default:"0" }}</div>
-      <div class="portal-stat-sub">Inicial: ${{ inversionista.capital_inicial|floatformat:0 }}</div>
+      <div class="portal-stat-label">Capital invertido</div>
+      <div class="portal-stat-value">${{ inversionista.capital_actual|floatformat:0 }}</div>
+      <div class="portal-stat-sub">Tu participación en el fondo</div>
     </div>
     <div class="portal-stat-card">
       <div class="portal-stat-label">Ganancia acumulada</div>
-      <div class="portal-stat-value {% if ganancia_total > 0 %}green{% endif %}">
+      <div class="portal-stat-value {% if ganancia_total > 0 %}green{% elif ganancia_total < 0 %}red{% endif %}">
         {% if ganancia_total > 0 %}+{% endif %}${{ ganancia_total|floatformat:0 }}
       </div>
-      <div class="portal-stat-sub">{{ inversionista.fee_performance_pct }}% sobre ganancia acumulada</div>
+      <div class="portal-stat-sub">{{ fee_pendiente|floatformat:0 }} fee (25%)</div>
     </div>
     <div class="portal-stat-card">
-      <div class="portal-stat-label">Fee 25% (pendiente)</div>
-      <div class="portal-stat-value blue">${{ fee_pendiente|floatformat:0 }}</div>
-      <div class="portal-stat-sub">Sobre ganancia acumulada</div>
+      <div class="portal-stat-label">Retorno total</div>
+      <div class="portal-stat-value {% if rendimiento_pct >= 0 %}green{% else %}red{% endif %}">
+        {% if rendimiento_pct >= 0 %}+{% endif %}{{ rendimiento_pct|floatformat:2 }}%
+      </div>
+      <div class="portal-stat-sub">Desde que empezaste</div>
     </div>
     <div class="portal-stat-card">
-      <div class="portal-stat-label">Ganancia neta estimada</div>
-      <div class="portal-stat-value {% if ganancia_neta > 0 %}green{% endif %}">
-        {% if ganancia_neta > 0 %}+{% endif %}${{ ganancia_neta|floatformat:0 }}
-      </div>
-      <div class="portal-stat-sub">Después del fee</div>
+      <div class="portal-stat-label">Capital del fondo</div>
+      <div class="portal-stat-value blue">${{ balance_fondo|floatformat:0 }}</div>
+      <div class="portal-stat-sub">Total administrado {{ moneda }}</div>
     </div>
   </div>
 
-  <!-- COMO FUNCIONA EL MODELO -->
-  <div class="portal-section">
-    <div class="portal-section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      Cómo funciona
-    </div>
-    <div class="portal-model-info">
-      <p>
-        Tu capital está en tu cuenta de la plataforma regulada — vos sos el titular y podés retirarlo cuando quieras.
-        Nosotros cobramos el <strong>{{ inversionista.fee_performance_pct }}% sobre la ganancia acumulada</strong>.
-      </p>
-      <p>
-        El retorno anual proyectado es del <strong>25%</strong>.
-        Si retiras parte del capital, el cálculo se ajusta automáticamente al saldo restante.
-      </p>
-      <p>
-        <strong>Importante:</strong> estos números son una referencia basada en el rendimiento observado históricamente.
-        Habrá períodos con resultados negativos. Lo importante es la consistencia a largo plazo.
-      </p>
-    </div>
-  </div>
-
-  <!-- PROYECCIONES -->
-  <div class="portal-section">
-    <div class="portal-section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Proyecciones estimativas (25% anual proyectado)
-    </div>
-    <div class="portal-proj-grid" id="proj-grid">
-      <div class="portal-proj-card">
-        <div class="portal-proj-period">1 año</div>
-        <div class="portal-proj-total">$—</div>
-        <div class="portal-proj-gain" id="proj-gain-1">+ $—</div>
-        <div class="portal-proj-label" id="proj-label-1">neto después del fee</div>
+  <!-- CHARTS -->
+  <div class="chart-grid" style="margin-bottom: 24px;">
+    <!-- Chart 1: Rendimiento mensual del FONDO (barras) -->
+    <div class="portal-section">
+      <div class="portal-section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Rendimiento mensual del fondo
       </div>
-      <div class="portal-proj-card">
-        <div class="portal-proj-period">2 años</div>
-        <div class="portal-proj-total">$—</div>
-        <div class="portal-proj-gain" id="proj-gain-2">+ $—</div>
-        <div class="portal-proj-label" id="proj-label-2">neto después del fee</div>
+      <div class="chart-wrap-portal">
+        <canvas id="fondoChart"></canvas>
       </div>
-      <div class="portal-proj-card">
-        <div class="portal-proj-period">3 años</div>
-        <div class="portal-proj-total">$—</div>
-        <div class="portal-proj-gain" id="proj-gain-3">+ $—</div>
-        <div class="portal-proj-label" id="proj-label-3">neto después del fee</div>
-      </div>
-      <div class="portal-proj-card">
-        <div class="portal-proj-period">5 años</div>
-        <div class="portal-proj-total">$—</div>
-        <div class="portal-proj-gain" id="proj-gain-5">+ $—</div>
-        <div class="portal-proj-label" id="proj-label-5">neto después del fee</div>
+      <div id="fondo-empty" class="empty-chart" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        Sin datos de rendimiento del fondo aún
       </div>
     </div>
-    <div class="portal-disclaimer">
-      Estas proyecciones son estimativas basadas en el retorno anual observado históricamente (25%).
-      No garantizan resultados futuros. El trading conlleva riesgos y puede haber períodos con pérdidas.
+
+    <!-- Chart 2: Mi curva de capital (línea con marcadores) -->
+    <div class="portal-section">
+      <div class="portal-section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Mi curva de capital
+      </div>
+      <div class="chart-wrap-portal">
+        <canvas id="capitalChart"></canvas>
+      </div>
+      <div id="capital-empty" class="empty-chart" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><polyline points="18.5 8 13 13.5 9.5 10 6 14"/></svg>
+        Depósito para ver tu curva
+      </div>
     </div>
   </div>
 
-  <!-- GRAFICO DE CAPITAL -->
-  <div class="portal-section">
-    <div class="portal-section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Curva de capital
+  <!-- DEPOSITOS Y RETIROS RECIENTES -->
+  <div class="chart-grid">
+    {% if inversionista.capital_inicial > 0 %}
+    <div class="portal-section">
+      <div class="portal-section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Depósitos
+      </div>
+      {% if inversionista.depositos.all %}
+      <div style="overflow-x:auto;">
+        <table class="portal-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Monto</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in inversionista.depositos.all|slice:":5" %}
+            <tr>
+              <td class="mono">{{ d.fecha_creado|date:"d MMM yyyy" }}</td>
+              <td class="mono win">+${{ d.monto|floatformat:0 }}</td>
+              <td>
+                {% if d.estado == 'CONFIRMADO' %}
+                <span class="badge badge-green">{{ d.get_estado_display }}</span>
+                {% elif d.estado == 'PENDIENTE' %}
+                <span class="badge badge-yellow">{{ d.get_estado_display }}</span>
+                {% else %}
+                <span class="badge badge-red">{{ d.get_estado_display }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-chart">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Sin depósitos aún
+      </div>
+      {% endif %}
     </div>
-    <div class="chart-wrap-portal">
-      <canvas id="capitalChart"></canvas>
-    </div>
-  </div>
 
-  <!-- RENDIMIENTO DIARIO -->
-  {% if rendimientos %}
-  <div class="portal-section">
-    <div class="portal-section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      Rendimiento diario
+    <div class="portal-section">
+      <div class="portal-section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+        Retiros
+      </div>
+      {% if inversionista.retiros.all %}
+      <div style="overflow-x:auto;">
+        <table class="portal-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Monto</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in inversionista.retiros.all|slice:":5" %}
+            <tr>
+              <td class="mono">{{ r.fecha_solicitud|date:"d MMM yyyy" }}</td>
+              <td class="mono loss">-${{ r.monto|floatformat:0 }}</td>
+              <td>
+                {% if r.estado == 'COMPLETADO' %}
+                <span class="badge badge-green">{{ r.get_estado_display }}</span>
+                {% elif r.estado == 'EN_PROCESO' %}
+                <span class="badge badge-yellow">{{ r.get_estado_display }}</span>
+                {% else %}
+                <span class="badge badge-blue">{{ r.get_estado_display }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-chart">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+        Sin retiros solicitados
+      </div>
+      {% endif %}
     </div>
-    <div style="overflow-x: auto;">
-      <table class="portal-table">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Capital inicio</th>
-            <th>Capital fin</th>
-            <th>Ganancia día</th>
-            <th>Rendimiento %</th>
-            <th>Trades (W/L)</th>
-            <th>Winrate</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in rendimientos %}
-          <tr>
-            <td>{{ r.fecha|date:"d MMM yyyy" }}</td>
-            <td class="mono">${{ r.capital_inicio_dia|floatformat:0 }}</td>
-            <td class="mono">${{ r.capital_fin_dia|floatformat:0 }}</td>
-            <td class="mono {% if r.ganancia_dia > 0 %}win{% elif r.ganancia_dia < 0 %}loss{% else %}neutral{% endif %}">
-              {% if r.ganancia_dia > 0 %}+{% endif %}${{ r.ganancia_dia|floatformat:0 }}
-            </td>
-            <td class="mono {% if r.rendimiento_pct > 0 %}win{% elif r.rendimiento_pct < 0 %}loss{% else %}neutral{% endif %}">
-              {% if r.rendimiento_pct > 0 %}+{% endif %}{{ r.rendimiento_pct|floatformat:2 }}%
-            </td>
-            <td class="mono">{{ r.trades_count }} ({{ r.trades_wins }}W/{{ r.trades_losses }}L)</td>
-            <td class="mono {% if r.winrate >= 54 %}win{% elif r.winrate < 50 %}loss{% else %}neutral{% endif %}">
-              {{ r.winrate|floatformat:1 }}%
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- LIQUIDACIONES -->
-  {% if liquidaciones %}
-  <div class="portal-section">
-    <div class="portal-section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-      Historial de liquidaciones
-    </div>
-    <table class="portal-table">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th>Tipo</th>
-          <th>Ganancia bruta</th>
-          <th>Monto</th>
-          <th>Estado</th>
-          <th>Notas</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for l in liquidaciones %}
-        <tr>
-          <td>{{ l.fecha|date:"d MMM yyyy" }}</td>
-          <td>{{ l.get_tipo_display }}</td>
-          <td class="mono">${{ l.ganancia_bruta|floatformat:0 }}</td>
-          <td class="mono {% if l.tipo == 'COBRO_FEE' %}blue{% else %}green{% endif %}">
-            {% if l.tipo == 'COBRO_FEE' %}-{% else %}+{% endif %}${{ l.monto|floatformat:0 }}
-          </td>
-          <td>
-            {% if l.confirmado %}
-            <span class="badge-green portal-stat-badge">Confirmado</span>
-            {% else %}
-            <span class="badge-blue portal-stat-badge">Pendiente</span>
-            {% endif %}
-          </td>
-          <td class="neutral">{{ l.observaciones|default:"—" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
-
-  <!-- CONFIGURACION -->
-  <div class="portal-section">
-    <div class="portal-section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-      Configuración
-    </div>
-    <a href="{% url 'gestion_riesgo:crear_inversionista' %}" class="btn btn-outline btn-sm">
-      Editar perfil y cuenta Deriv
-    </a>
+    {% endif %}
   </div>
 
 </div>
@@ -341,71 +441,149 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 (function() {
+  var fondoChart = null;
   var capitalChart = null;
 
   function fmt(n) {
+    if (Math.abs(n) >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
+    if (Math.abs(n) >= 1000) return '$' + Math.round(n).toLocaleString('es-CO');
     return '$' + Math.round(n).toLocaleString('es-CO');
   }
 
-  function loadChart() {
-    var url = "{% url 'gestion_riesgo:api_rendimiento_inversionista' %}?dias=90";
-    fetch(url)
+  // --- FONDO CHART (barras mensuales) ---
+  function loadFondoChart() {
+    fetch("{% url 'gestion_riesgo:api_fondo_stats' %}")
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (!data.labels || data.labels.length === 0) return;
+        var emptyEl = document.getElementById('fondo-empty');
+        var wrap = emptyEl ? emptyEl.parentElement.querySelector('.chart-wrap-portal') : null;
 
-        var capital = data.capital_actual || data.capital_inicial || 100000;
-        var ANNUAL_RETURN = 0.25;
-        var years = [1, 2, 3, 5];
+        if (!data.labels || data.labels.length === 0) {
+          if (emptyEl) emptyEl.style.display = 'flex';
+          if (wrap) wrap.style.display = 'none';
+          return;
+        }
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (wrap) wrap.style.display = 'block';
 
-        years.forEach(function(y, i) {
-          var grossTotal = capital * Math.pow(1 + ANNUAL_RETURN, y);
-          var grossGain = grossTotal - capital;
-          var feeAmount = grossGain * 0.25;
-          var netGain = grossGain - feeAmount;
-          var total = capital + netGain;
-          var gainEl = document.getElementById('proj-gain-' + y);
-          var labelEl = document.getElementById('proj-label-' + y);
-          var card = document.querySelectorAll('.portal-proj-card')[i];
-          if (card) {
-            card.querySelector('.portal-proj-total').textContent = fmt(total);
-            if (gainEl) gainEl.textContent = '+ ' + fmt(netGain) + ' neto';
-            if (labelEl) labelEl.textContent = '+$' + Math.round(feeAmount).toLocaleString('es-CO') + ' fee';
-          }
+        var ctx = document.getElementById('fondoChart');
+        if (!ctx) return;
+
+        if (fondoChart) fondoChart.destroy();
+
+        var colors = data.rendimiento_pct.map(function(v) {
+          return v >= 0 ? 'rgba(16,185,129,0.7)' : 'rgba(239,68,68,0.7)';
+        });
+        var borderColors = data.rendimiento_pct.map(function(v) {
+          return v >= 0 ? '#34d399' : '#f87171';
         });
 
-        // Chart
+        fondoChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.labels,
+            datasets: [{
+              label: 'Rendimiento %',
+              data: data.rendimiento_pct,
+              backgroundColor: colors,
+              borderColor: borderColors,
+              borderWidth: 1,
+              borderRadius: 4,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function(ctx) {
+                    return ctx.raw.toFixed(2) + '%';
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                ticks: { color: '#6b7280', font: { size: 9 }, maxRotation: 0, maxTicksLimit: 12 },
+                grid: { color: 'rgba(255,255,255,0.04)' },
+              },
+              y: {
+                ticks: {
+                  color: '#6b7280',
+                  font: { size: 10 },
+                  callback: function(v) { return v.toFixed(1) + '%'; }
+                },
+                grid: { color: 'rgba(255,255,255,0.04)' },
+              },
+            },
+          },
+        });
+      })
+      .catch(function(e) { console.error('[FONDO CHART]', e); });
+  }
+
+  // --- CAPITAL CHART (línea con marcadores de %) ---
+  function loadCapitalChart() {
+    fetch("{% url 'gestion_riesgo:api_mis_rendimientos' %}?dias=90")
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var emptyEl = document.getElementById('capital-empty');
+        var wrap = emptyEl ? emptyEl.parentElement.querySelector('.chart-wrap-portal') : null;
+
+        if (!data.labels || data.labels.length === 0) {
+          if (emptyEl) emptyEl.style.display = 'flex';
+          if (wrap) wrap.style.display = 'none';
+          return;
+        }
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (wrap) wrap.style.display = 'block';
+
         var ctx = document.getElementById('capitalChart');
         if (!ctx) return;
 
         if (capitalChart) capitalChart.destroy();
 
+        var capitalData = data.capital;
+        var pctData = data.rendimiento_pct;
+
         capitalChart = new Chart(ctx, {
           type: 'line',
           data: {
             labels: data.labels,
-            datasets: [{
-              label: 'Capital ($)',
-              data: data.capital,
-              borderColor: '#60a5fa',
-              backgroundColor: 'rgba(59,130,246,0.10)',
-              fill: true,
-              tension: 0.3,
-              pointRadius: 0,
-              pointHoverRadius: 4,
-              borderWidth: 2,
-            }, {
-              label: 'Ganancia acumulada ($)',
-              data: data.ganancia,
-              borderColor: '#34d399',
-              backgroundColor: 'rgba(16,185,129,0.08)',
-              fill: true,
-              tension: 0.3,
-              pointRadius: 0,
-              pointHoverRadius: 4,
-              borderWidth: 2,
-              borderDash: [4, 4],
-            }],
+            datasets: [
+              {
+                label: 'Capital ($)',
+                data: capitalData,
+                borderColor: '#60a5fa',
+                backgroundColor: 'rgba(59,130,246,0.08)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                borderWidth: 2,
+                yAxisID: 'y',
+              },
+              {
+                label: 'Retorno (%)',
+                data: pctData,
+                borderColor: '#34d399',
+                backgroundColor: 'transparent',
+                fill: false,
+                tension: 0.3,
+                pointRadius: function(context) {
+                  var idx = context.dataIndex;
+                  var total = context.dataset.data.length;
+                  return (idx === 0 || idx === total - 1 || idx % Math.ceil(total / 10) === 0) ? 4 : 0;
+                },
+                pointBackgroundColor: '#34d399',
+                borderWidth: 2,
+                borderDash: [4, 4],
+                yAxisID: 'y1',
+              },
+            ],
           },
           options: {
             responsive: true,
@@ -421,35 +599,46 @@
               tooltip: {
                 callbacks: {
                   label: function(ctx) {
-                    return ctx.dataset.label + ': ' + fmt(ctx.raw);
+                    if (ctx.datasetIndex === 0) return 'Capital: ' + fmt(ctx.raw);
+                    return 'Retorno: ' + ctx.raw.toFixed(2) + '%';
                   }
                 }
               }
             },
             scales: {
               x: {
-                display: true,
-                ticks: { color: '#6b7280', maxTicksLimit: 12, font: { size: 10 }, maxRotation: 0 },
+                ticks: { color: '#6b7280', maxTicksLimit: 10, font: { size: 10 }, maxRotation: 0 },
                 grid: { color: 'rgba(255,255,255,0.04)' },
               },
               y: {
-                display: true,
+                type: 'linear',
+                position: 'left',
+                ticks: {
+                  color: '#6b7280',
+                  font: { size: 10 },
+                  callback: function(v) { return '$' + (v / 1000).toFixed(0) + 'K'; }
+                },
+                grid: { color: 'rgba(255,255,255,0.04)' },
+              },
+              y1: {
+                type: 'linear',
                 position: 'right',
                 ticks: {
                   color: '#6b7280',
                   font: { size: 10 },
-                  callback: function(v) { return '$' + (v / 1000000).toFixed(1) + 'M'; }
+                  callback: function(v) { return v.toFixed(1) + '%'; }
                 },
-                grid: { color: 'rgba(255,255,255,0.04)' },
+                grid: { drawOnChartArea: false },
               },
             },
           },
         });
       })
-      .catch(function(e) { console.error('[INVESTOR CHART]', e); });
+      .catch(function(e) { console.error('[CAPITAL CHART]', e); });
   }
 
-  loadChart();
+  loadFondoChart();
+  loadCapitalChart();
 })();
 </script>
 {% endblock %}

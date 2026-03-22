@@ -21,12 +21,16 @@ from django.db.models.functions import Coalesce
 from .models import (
     Inversionista, RendimientoDiario, Liquidacion,
     BalanceInversionista, Cuenta, OperacionDeriv,
+    Deposito, Retiro, RendimientoFondo,
 )
 import json
 import time
 import queue
 
 from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, Operacion, TickDerivSnapshot, TickDerivHistorico
+from django.contrib.auth.models import User
+from django.contrib.auth import login
+from django.contrib.auth.hashers import make_password
 import subprocess
 
 # cola para SSE
@@ -1197,4 +1201,408 @@ def liquidar_inversionista(request, inv_id):
         return redirect("gestion_riesgo:portal_inversionista")
 
     return JsonResponse({"error": "Metodo no permitido"}, status=405)
+
+
+# ============================================================
+# REGISTRO KYC
+# ============================================================
+
+@require_http_methods(["GET", "POST"])
+def registro_inversionista(request):
+    if request.user.is_authenticated:
+        return redirect("gestion_riesgo:portal_inversionista")
+
+    errors = {}
+
+    if request.method == "POST":
+        username = request.POST.get("username", "").strip()
+        email = request.POST.get("email", "").strip()
+        password = request.POST.get("password", "")
+        password2 = request.POST.get("password2", "")
+        nombre = request.POST.get("nombre", "").strip()
+        telefono = request.POST.get("telefono", "").strip()
+        fecha_nacimiento = request.POST.get("fecha_nacimiento", "").strip()
+        nacionalidad = request.POST.get("nacionalidad", "").strip()
+        genero = request.POST.get("genero", "N")
+        documento = request.POST.get("documento_identidad", "").strip()
+        capital_objetivo = request.POST.get("capital_objetivo", "0").strip()
+        como_se_entero = request.POST.get("como_se_entero", "").strip()
+
+        if not username:
+            errors["username"] = "El nombre de usuario es requerido."
+        elif User.objects.filter(username=username).exists():
+            errors["username"] = "Este nombre de usuario ya está registrado."
+        elif len(username) < 3:
+            errors["username"] = "Mínimo 3 caracteres."
+
+        if not email:
+            errors["email"] = "El correo es requerido."
+        elif User.objects.filter(email=email).exists():
+            errors["email"] = "Este correo ya está registrado."
+        elif not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
+            errors["email"] = "Correo inválido."
+
+        if not password:
+            errors["password"] = "La contraseña es requerida."
+        elif len(password) < 8:
+            errors["password"] = "Mínimo 8 caracteres."
+
+        if password != password2:
+            errors["password2"] = "Las contraseñas no coinciden."
+
+        if not nombre:
+            errors["nombre"] = "El nombre completo es requerido."
+
+        if not telefono:
+            errors["telefono"] = "El teléfono es requerido."
+
+        dob = None
+        if fecha_nacimiento:
+            try:
+                dob = datetime.strptime(fecha_nacimiento, "%Y-%m-%d").date()
+            except ValueError:
+                errors["fecha_nacimiento"] = "Formato de fecha inválido (YYYY-MM-DD)."
+
+        cap_obj = 0.0
+        if capital_objetivo:
+            try:
+                cap_obj = float(capital_objetivo)
+            except ValueError:
+                pass
+
+        if not errors:
+            user = User.objects.create(
+                username=username,
+                email=email,
+                password=make_password(password),
+                first_name=nombre,
+            )
+
+            Inversionista.objects.create(
+                user=user,
+                nombre=nombre,
+                telefono=telefono,
+                fecha_nacimiento=dob,
+                nacionalidad=nacionalidad,
+                genero=genero,
+                documento_identidad=documento,
+                capital_objetivo=cap_obj,
+                como_se_entero=como_se_entero,
+                capital_inicial=0.0,
+                capital_actual=0.0,
+            )
+
+            login(request, user)
+            return redirect("gestion_riesgo:portal_inversionista")
+
+    return render(request, "gestion_riesgo/registro.html", {"errors": errors})
+
+
+# ============================================================
+# PORTAL DEL INVERSIONISTA
+# ============================================================
+
+@login_required
+def portal_inversionista(request):
+    try:
+        inv = request.user.inversionista
+    except Inversionista.DoesNotExist:
+        return redirect("gestion_riesgo:registro")
+
+    cuenta = Cuenta.objects.first()
+    balance_fondo = float(cuenta.balance_deriv) if cuenta and cuenta.balance_deriv else 0.0
+    moneda = cuenta.moneda_deriv if cuenta else "USD"
+
+    dias_activos = inv.balance_history.count()
+    ganancia_total = float(inv.ganancia_acumulada)
+    fee_pendiente = ganancia_total * 0.25
+    ganancia_neta = ganancia_total - fee_pendiente
+    rendimiento_pct = inv.rendimiento_pct
+
+    depositos_confirmados = inv.depositos.filter(estado=Deposito.Estado.CONFIRMADO).count()
+    retiros = inv.retiros.filter(estado__in=[Retiro.Estado.SOLICITADO, Retiro.Estado.EN_PROCESO]).count()
+
+    return render(request, "gestion_riesgo/portal_inversionista.html", {
+        "inversionista": inv,
+        "balance_fondo": balance_fondo,
+        "moneda": moneda,
+        "dias_activos": dias_activos,
+        "ganancia_total": ganancia_total,
+        "fee_pendiente": fee_pendiente,
+        "ganancia_neta": ganancia_neta,
+        "rendimiento_pct": rendimiento_pct,
+        "depositos_confirmados": depositos_confirmados,
+        "retiros_pendientes": retiros,
+    })
+
+
+# ============================================================
+# API: ESTADÍSTICAS DEL FONDO (para gráfico mensual)
+# ============================================================
+
+@login_required
+def api_fondo_stats(request):
+    meses = list(
+        RendimientoFondo.objects.order_by("anno", "mes")[:24]
+    )
+    meses.reverse()
+
+    labels = []
+    rendimiento_data = []
+    balance_data = []
+
+    for m in meses:
+        labels.append(f"{m.mes:02d}/{m.anno}")
+        rendimiento_data.append(round(float(m.rendimiento_pct), 2))
+        balance_data.append(round(float(m.balance_fin), 2))
+
+    cuenta = Cuenta.objects.first()
+    total_fondo = float(cuenta.balance_deriv) if cuenta and cuenta.balance_deriv else 0.0
+    max_fondo = float(cuenta.max_balance_deriv_historico) if cuenta and cuenta.max_balance_deriv_historico else 0.0
+    trades_total = sum(m.trades_count for m in meses)
+    wins_total = sum(m.trades_wins for m in meses)
+    wr_total = (wins_total / trades_total * 100) if trades_total > 0 else 0
+
+    return JsonResponse({
+        "labels": labels,
+        "rendimiento_pct": rendimiento_data,
+        "balance_fin": balance_data,
+        "total_fondo": total_fondo,
+        "max_fondo": max_fondo,
+        "trades_total": trades_total,
+        "winrate_total": round(wr_total, 1),
+    })
+
+
+# ============================================================
+# API: BALANCE PARA NAVBAR
+# ============================================================
+
+@login_required
+def api_navbar_balance(request):
+    try:
+        inv = request.user.inversionista
+    except Inversionista.DoesNotExist:
+        return JsonResponse({"capital": 0, "rendimiento_pct": 0}, status=404)
+
+    cuenta = Cuenta.objects.first()
+    balance_fondo = float(cuenta.balance_deriv) if cuenta and cuenta.balance_deriv else 0.0
+
+    return JsonResponse({
+        "capital": float(inv.capital_actual),
+        "capital_inicial": float(inv.capital_inicial),
+        "ganancia_acumulada": float(inv.ganancia_acumulada),
+        "rendimiento_pct": round(inv.rendimiento_pct, 2),
+        "balance_fondo": balance_fondo,
+    })
+
+
+# ============================================================
+# API: RENDIMIENTOS PROPIOS DEL INVERSIONISTA
+# ============================================================
+
+@login_required
+def api_mis_rendimientos(request):
+    try:
+        inv = request.user.inversionista
+    except Inversionista.DoesNotExist:
+        return JsonResponse({"error": "No existe"}, status=404)
+
+    dias = int(request.GET.get("dias", 90))
+    history = list(
+        inv.balance_history.order_by("fecha")[:dias]
+    )
+
+    labels = []
+    capital_data = []
+    ganancia_data = []
+    rendimiento_pct_data = []
+
+    for b in history:
+        labels.append(b.fecha.strftime("%d %b"))
+        capital_data.append(round(float(b.capital), 2))
+        ganancia_data.append(round(float(b.ganancia_acumulada), 2))
+        rendimiento_pct_data.append(round(float(b.rendimiento_dia_pct), 3))
+
+    return JsonResponse({
+        "labels": labels,
+        "capital": capital_data,
+        "ganancia": ganancia_data,
+        "rendimiento_pct": rendimiento_pct_data,
+        "capital_inicial": float(inv.capital_inicial),
+        "capital_actual": float(inv.capital_actual),
+        "rendimiento_pct_total": round(inv.rendimiento_pct, 2),
+    })
+
+
+# ============================================================
+# API: CREAR SOLICITUD DE DEPÓSITO
+# ============================================================
+
+@login_required
+def api_depositar(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    try:
+        inv = request.user.inversionista
+    except Inversionista.DoesNotExist:
+        return JsonResponse({"error": "No existe inversionista"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        data = request.POST
+
+    monto = float(data.get("monto", 0))
+    if monto < 10:
+        return JsonResponse({"error": "El monto mínimo es $10 USD"}, status=400)
+
+    bold_token = getattr(settings, "BOLD_API_TOKEN", "")
+    bold_endpoint = getattr(settings, "BOLD_API_ENDPOINT", "")
+
+    referencia = f"INV-{inv.id}-{int(time.time())}"
+
+    if bold_token and bold_endpoint:
+        try:
+            import requests as req
+            resp = req.post(
+                bold_endpoint,
+                headers={"Authorization": f"Bearer {bold_token}"},
+                json={
+                    "amount": monto,
+                    "reference": referencia,
+                    "currency": "USD",
+                },
+                timeout=15,
+            )
+            bold_data = resp.json()
+            if bold_data.get("status") == "APPROVED":
+                estado = Deposito.Estado.CONFIRMADO
+                inv.capital_actual = float(inv.capital_actual) + monto
+                inv.capital_inicial = float(inv.capital_inicial) + monto
+                inv.save()
+                notas = f"Confirmado vía Bold: {bold_data.get('transaction_id', '')}"
+            else:
+                estado = Deposito.Estado.PENDIENTE
+                notas = f"Bold response: {bold_data}"
+        except Exception as e:
+            estado = Deposito.Estado.PENDIENTE
+            notas = f"Error Bold: {str(e)[:200]}"
+    else:
+        estado = Deposito.Estado.PENDIENTE
+        notas = "Bold no configurado — pendiente de confirmar manualmente"
+
+    dep = Deposito.objects.create(
+        inversionista=inv,
+        monto=monto,
+        referencia=referencia,
+        estado=estado,
+        notas=notas,
+    )
+
+    return JsonResponse({
+        "ok": True,
+        "id": dep.id,
+        "referencia": referencia,
+        "estado": estado,
+        "monto": monto,
+    })
+
+
+# ============================================================
+# API: CREAR SOLICITUD DE RETIRO
+# ============================================================
+
+@login_required
+def api_retirar(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    try:
+        inv = request.user.inversionista
+    except Inversionista.DoesNotExist:
+        return JsonResponse({"error": "No existe inversionista"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        data = request.POST
+
+    monto = float(data.get("monto", 0))
+    destino = data.get("destino", "").strip()
+
+    if monto < 10:
+        return JsonResponse({"error": "El monto mínimo de retiro es $10 USD"}, status=400)
+
+    if monto > float(inv.capital_actual):
+        return JsonResponse({"error": "No tienes suficiente capital para este retiro"}, status=400)
+
+    ret = Retiro.objects.create(
+        inversionista=inv,
+        monto=monto,
+        destino=destino,
+        estado=Retiro.Estado.SOLICITADO,
+    )
+
+    return JsonResponse({
+        "ok": True,
+        "id": ret.id,
+        "estado": ret.estado,
+        "monto": monto,
+    })
+
+
+# ============================================================
+#  PÁGINA DE DEPÓSITO
+# ============================================================
+
+@login_required
+def depositar_view(request):
+    try:
+        inv = request.user.inversionista
+    except Inversionista.DoesNotExist:
+        return redirect("gestion_riesgo:registro")
+
+    depositos = list(
+        inv.depositos.order_by("-fecha_creado")[:10]
+    )
+
+    cuenta = Cuenta.objects.first()
+    balance_fondo = float(cuenta.balance_deriv) if cuenta and cuenta.balance_deriv else 0.0
+    moneda = cuenta.moneda_deriv if cuenta else "USD"
+
+    return render(request, "gestion_riesgo/depositar.html", {
+        "inversionista": inv,
+        "depositos": depositos,
+        "balance_fondo": balance_fondo,
+        "moneda": moneda,
+    })
+
+
+# ============================================================
+#  PÁGINA DE RETIRO
+# ============================================================
+
+@login_required
+def retirar_view(request):
+    try:
+        inv = request.user.inversionista
+    except Inversionista.DoesNotExist:
+        return redirect("gestion_riesgo:registro")
+
+    retiros = list(
+        inv.retiros.order_by("-fecha_solicitud")[:10]
+    )
+
+    cuenta = Cuenta.objects.first()
+    balance_fondo = float(cuenta.balance_deriv) if cuenta and cuenta.balance_deriv else 0.0
+    moneda = cuenta.moneda_deriv if cuenta else "USD"
+
+    return render(request, "gestion_riesgo/retirar.html", {
+        "inversionista": inv,
+        "retiros": retiros,
+        "balance_fondo": balance_fondo,
+        "moneda": moneda,
+    })
 

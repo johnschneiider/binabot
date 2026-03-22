@@ -17,8 +17,16 @@ urlpatterns = [
     path("api/ticks_colector/toggle/", views.ticks_colector_toggle, name="ticks_colector_toggle"),
     path("api/sse/", views.sse_stream, name="sse_stream"),
 
-    # Portal del Inversionista
-    path("inversionista/", views.portal_inversionista, name="portal_inversionista"),
+    # Registro KYC
+    path("registro/", views.registro_inversionista, name="registro"),
+    path("portal/", views.portal_inversionista, name="portal_inversionista"),
+    path("portal/api/fondo/", views.api_fondo_stats, name="api_fondo_stats"),
+    path("portal/api/mis-rendimientos/", views.api_mis_rendimientos, name="api_mis_rendimientos"),
+    path("portal/api/navbar/", views.api_navbar_balance, name="api_navbar_balance"),
+    path("portal/api/depositar/", views.api_depositar, name="api_depositar"),
+    path("portal/api/retirar/", views.api_retirar, name="api_retirar"),
+    path("portal/depositar/", views.depositar_view, name="depositar"),
+    path("portal/retirar/", views.retirar_view, name="retirar"),
     path("inversionista/crear/", views.crear_inversionista, name="crear_inversionista"),
     path("inversionista/api/rendimiento/", views.api_rendimiento_inversionista, name="api_rendimiento_inversionista"),
     path("inversionista/liquidar/<int:inv_id>/", views.liquidar_inversionista, name="liquidar_inversionista"),

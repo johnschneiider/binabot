@@ -15,21 +15,30 @@ class Inversionista(models.Model):
         PAUSADO = "PAUSADO", "Pausado"
         RETIRADO = "RETIRADO", "Retirado"
 
+    class Genero(models.TextChoices):
+        M = "M", "Masculino"
+        F = "F", "Femenino"
+        O = "O", "Otro"
+        N = "N", "Prefiero no decir"
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="inversionista")
     nombre = models.CharField(max_length=100, default="")
     telefono = models.CharField(max_length=20, blank=True, default="")
     whatsapp = models.CharField(max_length=20, blank=True, default="")
 
+    # KYC
+    fecha_nacimiento = models.DateField(null=True, blank=True)
+    nacionalidad = models.CharField(max_length=64, blank=True, default="")
+    genero = models.CharField(max_length=1, choices=Genero.choices, default=Genero.N)
+    documento_identidad = models.CharField(max_length=32, blank=True, default="")
+    capital_objetivo = models.FloatField(default=0.0)
+    como_se_entero = models.CharField(max_length=128, blank=True, default="")
+
     # Capital
     capital_inicial = models.FloatField(default=0.0)
     capital_actual = models.FloatField(default=0.0)
     ganancia_acumulada = models.FloatField(default=0.0)
-    ganancia_diaria = models.FloatField(default=0.0)
-
-    # Deriv
-    deriv_app_id = models.CharField(max_length=32, blank=True, default="1089")
-    deriv_api_token = models.CharField(max_length=128, blank=True, default="")
-    deriv_account_id = models.CharField(max_length=32, blank=True, default="")
+    ganancia_mes = models.FloatField(default=0.0)
 
     # Config
     rendimiento_diario_pct = models.FloatField(default=0.5)
@@ -52,6 +61,13 @@ class Inversionista(models.Model):
 
     def __str__(self) -> str:
         return f"Inversionista({self.user.username}) capital=${self.capital_actual:,.0f} estado={self.estado}"
+
+    @property
+    def rendimiento_pct(self) -> float:
+        """Retorno % del inversionista desde que entró."""
+        if self.capital_inicial <= 0:
+            return 0.0
+        return ((self.capital_actual - self.capital_inicial) / self.capital_inicial) * 100.0
 
 
 class RendimientoDiario(models.Model):
@@ -146,6 +162,99 @@ class BalanceInversionista(models.Model):
 
     def __str__(self) -> str:
         return f"BalanceInversionista({self.inversionista.user.username} {self.fecha}) ${self.capital:,.0f}"
+
+
+class Deposito(models.Model):
+    """
+    Registra depósitos de cada inversionista vía Bold.
+    """
+
+    class Estado(models.TextChoices):
+        PENDIENTE = "PENDIENTE", "Pendiente"
+        CONFIRMADO = "CONFIRMADO", "Confirmado"
+        RECHAZADO = "RECHAZADO", "Rechazado"
+        CANCELADO = "CANCELADO", "Cancelado"
+
+    inversionista = models.ForeignKey(Inversionista, on_delete=models.CASCADE, related_name="depositos")
+    monto = models.FloatField(default=0.0)
+    referencia = models.CharField(max_length=64, blank=True, default="")
+    estado = models.CharField(max_length=16, choices=Estado.choices, default=Estado.PENDIENTE)
+    metodo = models.CharField(max_length=32, blank=True, default="BOLD")
+    notas = models.TextField(blank=True, default="")
+    fecha_creado = models.DateTimeField(auto_now_add=True)
+    fecha_confirmado = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["inversionista", "-fecha_creado"]),
+            models.Index(fields=["referencia"]),
+            models.Index(fields=["estado"]),
+        ]
+        ordering = ["-fecha_creado"]
+
+    def __str__(self) -> str:
+        return f"Deposito({self.inversionista.user.username} ${self.monto:.0f} [{self.estado}])"
+
+
+class Retiro(models.Model):
+    """
+    Solicitudes de retiro de cada inversionista.
+    """
+
+    class Estado(models.TextChoices):
+        SOLICITADO = "SOLICITADO", "Solicitado"
+        EN_PROCESO = "EN_PROCESO", "En proceso"
+        COMPLETADO = "COMPLETADO", "Completado"
+        RECHAZADO = "RECHAZADO", "Rechazado"
+
+    inversionista = models.ForeignKey(Inversionista, on_delete=models.CASCADE, related_name="retiros")
+    monto = models.FloatField(default=0.0)
+    estado = models.CharField(max_length=16, choices=Estado.choices, default=Estado.SOLICITADO)
+    destino = models.CharField(max_length=256, blank=True, default="")
+    notas = models.TextField(blank=True, default="")
+    notas_admin = models.TextField(blank=True, default="")
+    fecha_solicitud = models.DateTimeField(auto_now_add=True)
+    fecha_proceso = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["inversionista", "-fecha_solicitud"]),
+            models.Index(fields=["estado"]),
+        ]
+        ordering = ["-fecha_solicitud"]
+
+    def __str__(self) -> str:
+        return f"Retiro({self.inversionista.user.username} ${self.monto:.0f} [{self.estado}])"
+
+
+class RendimientoFondo(models.Model):
+    """
+    Rendimiento mensual real del fondo (todas las operaciones).
+    Alimentado por el bot o manualmente para graficar la curva del fondo.
+    """
+
+    anno = models.IntegerField()
+    mes = models.IntegerField()
+    balance_inicio = models.FloatField(default=0.0)
+    balance_fin = models.FloatField(default=0.0)
+    ganancia = models.FloatField(default=0.0)
+    rendimiento_pct = models.FloatField(default=0.0)
+    trades_count = models.IntegerField(default=0)
+    trades_wins = models.IntegerField(default=0)
+    trades_losses = models.IntegerField(default=0)
+    winrate = models.FloatField(default=0.0)
+    observaciones = models.TextField(blank=True, default="")
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["-anno", "-mes"]),
+        ]
+        unique_together = [["anno", "mes"]]
+        ordering = ["-anno", "-mes"]
+
+    def __str__(self) -> str:
+        return f"RendimientoFondo({self.anno}-{self.mes:02d}) {self.rendimiento_pct:+.2f}%"
 
 
 class Cuenta(models.Model):
