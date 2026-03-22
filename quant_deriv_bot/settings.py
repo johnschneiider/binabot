@@ -92,6 +92,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "quant_deriv_bot.context_processors.auth_context",
             ],
         },
     },
@@ -112,6 +113,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ===== AUTENTICACION =====
 # Modelo de usuario custom para multi-tenant
 AUTH_USER_MODEL = "subscriptions.Usuario"
+LOGIN_URL = "/"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
 
 # ===== DERIV =====
 DERIV_APP_ID = os.getenv("DERIV_APP_ID", "1089").strip()
@@ -122,10 +126,10 @@ DERIV_ACCOUNT_ID = os.getenv("DERIV_ACCOUNT_ID", "").strip()
 DERIV_SYMBOL = os.getenv("DERIV_SYMBOL", "frxEURUSD").strip()
 DERIV_MODO_REAL = (os.getenv("DERIV_MODO_REAL", "False").strip().lower() in {"1", "true", "yes", "y"})
 DERIV_CONFIRMAR_REAL = os.getenv("DERIV_CONFIRMAR_REAL", "NO").strip().upper()
-DERIV_DURACION_TICKS = int(os.getenv("DERIV_DURACION_TICKS", "5"))
+DERIV_DURACION_TICKS = int(os.getenv("DERIV_DURACION_TICKS", "25"))
 # Para contratos por ticks (duration_unit="t") Deriv suele limitar a 1..10 (depende del market).
 # Esto evita que el bot intente enviar propuestas imposibles y quede en loop de reconexión.
-DERIV_MAX_DURACION_TICKS = int(os.getenv("DERIV_MAX_DURACION_TICKS", "10"))
+DERIV_MAX_DURACION_TICKS = int(os.getenv("DERIV_MAX_DURACION_TICKS", "25"))
 DERIV_MIN_STAKE = float(os.getenv("DERIV_MIN_STAKE", "1.0"))
 DERIV_MIN_STAKE_DINAMICO = float(os.getenv("DERIV_MIN_STAKE_DINAMICO", "0.35"))
 DERIV_DUR_ABS_MAX = int(os.getenv("DERIV_DUR_ABS_MAX", "10"))
@@ -152,13 +156,18 @@ TICKS_HIST_FLUSH_EVERY = int(os.getenv("TICKS_HIST_FLUSH_EVERY", "25"))
 TICKS_HIST_FLUSH_SECS = float(os.getenv("TICKS_HIST_FLUSH_SECS", "5.0"))
 
 # ===== ESTRATEGIA SPP (estructura + pendiente + pullback) =====
-# Estos valores se consumen desde `vector_pesos/senal_spp.py`.
-# Defaults conservadores ("modo banco"): menos trades, más selectividad.
-SPP_SLOPE_N = int(os.getenv("SPP_SLOPE_N", "7"))
+# Backtest OPTIMIZADO (29K ticks, Mar 2026):
+# MEJORES HORAS UTC: 22h(78.3% WR), 20h-22h(68.2% WR), 18h-19h-22h(63.4% WR)
+# HORAS BUENAS: 02h, 04h, 14h, 18h, 22h UTC
+# CONFIG OPTIMA: EMA(5,13), gap=0.30, slope=0.30, dur=20, CALL+PUT, cooldown=15
+# HORA LOCAL COLOMBIA (UTC-5): Buenos = 09, 13, 15, 17
+SPP_EMA_FAST = int(os.getenv("SPP_EMA_FAST", "5"))
+SPP_EMA_SLOW = int(os.getenv("SPP_EMA_SLOW", "13"))
+SPP_SLOPE_N = int(os.getenv("SPP_SLOPE_N", "5"))
 SPP_PULLBACK_MIN_TICKS = int(os.getenv("SPP_PULLBACK_MIN_TICKS", "4"))
 SPP_PULLBACK_MAX_TICKS = int(os.getenv("SPP_PULLBACK_MAX_TICKS", "7"))
 SPP_PULLBACK_DIST_FACTOR = float(os.getenv("SPP_PULLBACK_DIST_FACTOR", "0.45"))
-SPP_COOLDOWN_TICKS = int(os.getenv("SPP_COOLDOWN_TICKS", "80"))
+SPP_COOLDOWN_TICKS = int(os.getenv("SPP_COOLDOWN_TICKS", "15"))
 SPP_DYNAMIC_COOLDOWN = os.getenv("SPP_DYNAMIC_COOLDOWN", "true").lower() == "true"
 SPP_FATIGA_PRDIDAS = int(os.getenv("SPP_FATIGA_PRDIDAS", "3"))
 SPP_FATIGA_MULTIPLICADOR = float(os.getenv("SPP_FATIGA_MULTIPLICADOR", "1.5"))
@@ -173,8 +182,8 @@ SPP_SLOW_SLOPE_EPS_R10 = float(os.getenv("SPP_SLOW_SLOPE_EPS_R10", "0.0"))
 SPP_ESTRUCTURA_MIN_DELTA_R10 = float(os.getenv("SPP_ESTRUCTURA_MIN_DELTA_R10", "0.03"))
 SPP_RETAKE_MIN_DELTA_R10 = float(os.getenv("SPP_RETAKE_MIN_DELTA_R10", "0.015"))
 
-SPP_SLOPE_THRESHOLD_R100 = float(os.getenv("SPP_SLOPE_THRESHOLD_R100", "0.18"))
-SPP_MIN_EMA_GAP_R100 = float(os.getenv("SPP_MIN_EMA_GAP_R100", "0.35"))
+SPP_SLOPE_THRESHOLD_R100 = float(os.getenv("SPP_SLOPE_THRESHOLD_R100", "0.30"))
+SPP_MIN_EMA_GAP_R100 = float(os.getenv("SPP_MIN_EMA_GAP_R100", "0.30"))
 SPP_SLOW_SLOPE_EPS_R100 = float(os.getenv("SPP_SLOW_SLOPE_EPS_R100", "0.0"))
 SPP_ESTRUCTURA_MIN_DELTA_R100 = float(os.getenv("SPP_ESTRUCTURA_MIN_DELTA_R100", "0.15"))
 SPP_RETAKE_MIN_DELTA_R100 = float(os.getenv("SPP_RETAKE_MIN_DELTA_R100", "0.06"))

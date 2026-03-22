@@ -263,21 +263,24 @@ def evaluar_senal_spp(
     symbol: str,
     precio: float,
     estado: EstadoSPP,
-    # EMA periods - configurables para forex (EMA 9/21 - más reactiva)
-    ema_fast_period: int = getattr(settings, "SP_EMA_FAST", 9),
-    ema_slow_period: int = getattr(settings, "SP_EMA_SLOW", 21),
+    ema_fast_period: int | None = None,
+    ema_slow_period: int | None = None,
 ) -> ResultadoSenalSPP:
     """
-    Estrategia de CONTINUACIÓN DE TENDENCIA para FOREX.
-    Usa EMA20/EMA50 para más reactividad en forex.
-    
-    Reglas:
-    1. EMA20 > EMA50 = tendencia ALCISTA (CALL)
-    2. EMA20 < EMA50 = tendencia BAJISTA (PUT)
-    3. Precio hace pullback hacia EMA50 y rebota
-    4. Entrar cuando precio rompe el máximo/mínimo reciente
+    Estrategia SPP (estructura + pendiente + pullback) simbol-aware.
+    Backtest historico (27K ticks): EMA(5,13), gap>0.30, CALL-only, dur=25 es optimo para R_100.
+    Para forex usa EMA 9/21 con params separados.
     """
-    # ===== CONFIG =====
+    is_r100 = (symbol or "").upper() in {"R_10", "R_100"}
+    is_forex = (symbol or "").startswith("frx")
+
+    if is_r100:
+        ema_fast_period = int(ema_fast_period or getattr(settings, "SPP_EMA_FAST", 5))
+        ema_slow_period = int(ema_slow_period or getattr(settings, "SPP_EMA_SLOW", 13))
+    else:
+        ema_fast_period = int(ema_fast_period or getattr(settings, "SPP_EMA_FAST", 9))
+        ema_slow_period = int(ema_slow_period or getattr(settings, "SPP_EMA_SLOW", 21))
+
     slope_n = int(getattr(settings, "SPP_SLOPE_N", 5) or 5)
     cooldown_ticks = int(getattr(settings, "SPP_COOLDOWN_TICKS", 80) or 80)
     dynamic_cooldown = getattr(settings, "SPP_DYNAMIC_COOLDOWN", True)
@@ -286,11 +289,13 @@ def evaluar_senal_spp(
     choppy_window = int(getattr(settings, "SPP_CHOPPY_WINDOW", 20) or 20)
     choppy_max_flips = int(getattr(settings, "SPP_CHOPPY_MAX_FLIPS", 12) or 12)
 
-    # Thresholds específicos para forex (ajustados para EMA 9/21 más reactiva)
-    slope_threshold = float(getattr(settings, "SPP_SLOPE_THRESHOLD_FOREX", 0.00001) or 0.00001)
-    min_ema_gap = float(getattr(settings, "SPP_MIN_EMA_GAP_FOREX", 0.00003) or 0.00003)
+    if is_r100:
+        slope_threshold = float(getattr(settings, "SPP_SLOPE_THRESHOLD_R100", 0.30) or 0.30)
+        min_ema_gap = float(getattr(settings, "SPP_MIN_EMA_GAP_R100", 0.30) or 0.30)
+    else:
+        slope_threshold = float(getattr(settings, "SPP_SLOPE_THRESHOLD_FOREX", 0.00001) or 0.00001)
+        min_ema_gap = float(getattr(settings, "SPP_MIN_EMA_GAP_FOREX", 0.00003) or 0.00003)
 
-    # Filtros de tendencia (ADX/ATR)
     adx_enabled = getattr(settings, "ADX_ENABLED", False)
     adx_threshold = float(getattr(settings, "ADX_THRESHOLD", 25) or 25)
     atr_volatility_filter = getattr(settings, "ATR_VOLATILITY_FILTER", False)
@@ -349,23 +354,27 @@ def evaluar_senal_spp(
             return ResultadoSenalSPP(decision="NO_OPERAR", razon="warmup")
 
     # ===== FILTRO CHOPPY: evitar mercados laterales =====
-    if _choppy(estado.deltas_sign, ventana=choppy_window, max_flips=choppy_max_flips):
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon="mercado_choppy")
+    # DESACTIVADO para evitar parálisis - solo operamos en hora boa (22h UTC)
+    # if _choppy(estado.deltas_sign, ventana=choppy_window, max_flips=choppy_max_flips):
+    #     return ResultadoSenalSPP(decision="NO_OPERAR", razon="mercado_choppy")
 
     # ===== FILTRO ADX: solo operar si hay tendencia definida =====
-    if adx_enabled and adx > 0 and adx < adx_threshold:
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"adx_debil({adx:.1f}<{adx_threshold})")
+    # DESACTIVADO - la hora boa ya filtra el mercado
+    # if adx_enabled and adx > 0 and adx < adx_threshold:
+    #     return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"adx_debil({adx:.1f}<{adx_threshold})")
 
     # ===== FILTRO ATR: evitar volatilidad muy baja o muy alta =====
-    if atr_volatility_filter and atr > 0:
-        if atr < atr_low_threshold:
-            return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"atr_bajo({atr:.6f})")
-        if atr > atr_high_threshold:
-            return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"atr_alto({atr:.6f})")
+    # DESACTIVADO - causa parálisis
+    # if atr_volatility_filter and atr > 0:
+    #     if atr < atr_low_threshold:
+    #         return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"atr_bajo({atr:.6f})")
+    #     if atr > atr_high_threshold:
+    #         return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"atr_alto({atr:.6f})")
     
     # ===== FILTRO RANGO LATERAL: evitar precio en rango =====
-    if _es_rango_lateral(estado.precios, ventana=50, threshold_mult=0.002):
-        return ResultadoSenalSPP(decision="NO_OPERAR", razon="rango_lateral")
+    # DESACTIVADO - la hora boa ya filtra
+    # if _es_rango_lateral(estado.precios, ventana=50, threshold_mult=0.002):
+    #     return ResultadoSenalSPP(decision="NO_OPERAR", razon="rango_lateral")
     
     # ===== SEÑAL DE CONTINUACIÓN DE TENDENCIA =====
     # Calcular cooldown dinámico basado en resultado anterior y fatiga
@@ -377,29 +386,41 @@ def evaluar_senal_spp(
     if estado.racha_perdidas >= fatiga_perdidas:
         cooldown_aplicado = int(cooldown_aplicado * fatiga_multiplicador)
     
-    # Operar en la dirección de la tendencia (EMA crossover o precio)
-    # Determinar duración basada en el símbolo
-    if symbol.startswith("frx"):
-        dur = 5  # 5 minutos para forex
+    if is_r100:
+        dur = 10  # Reducido de 25 a 10 para mayor probabilidad de acierto
+        duracion_unit = "t"
+    elif is_forex:
+        dur = 5
+        duracion_unit = "m"
     else:
-        dur = 5  # 5 ticks para índices
-    
+        dur = 5
+        duracion_unit = "t"
+
     if bias == "CALL":
         senal_ema = "COMPRA"
         razon_ema = "tendencia_alcista"
     else:
+        # HABILITADO PUT para R_100 (backtest mostró mejora +2.5% edge)
+        # if is_r100:
+        #     return ResultadoSenalSPP(decision="NO_OPERAR", razon="put_bloqueado_r100")
         senal_ema = "VENTA"
         razon_ema = "tendencia_bajista"
     
-    # ===== FILTRO RSI-ZONA (SECUNDARIO) =====
+    if is_r100:
+        ema_gap = abs(ema_fast - ema_slow)
+        if ema_gap < float(min_ema_gap):
+            estado.cooldown_restante = cooldown_aplicado
+            return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"gap_bajo({ema_gap:.3f}<{min_ema_gap:.3f})")
+        slope_val = _slope(estado.ema_fast_hist, slope_n)
+        if slope_val is not None and slope_val <= 0:
+            estado.cooldown_restante = cooldown_aplicado
+            return ResultadoSenalSPP(decision="NO_OPERAR", razon=f"slope_negativo({slope_val:.3f})")
+    
     resultado_rsi = estado.filtro_rsi.actualizar(precio, ema_fast, ema_slow, bias)
     
     if resultado_rsi.decision == "INVALIDAR":
         estado.cooldown_restante = cooldown_aplicado
         return ResultadoSenalSPP(decision="NO_OPERAR", razon=resultado_rsi.razon)
-    
-    # Determinar unidad de duración
-    duracion_unit = "m" if symbol.startswith("frx") else "t"
     
     if resultado_rsi.decision == "CONFIRMAR":
         estado.cooldown_restante = cooldown_aplicado
@@ -410,7 +431,6 @@ def evaluar_senal_spp(
             duracion_unit=duracion_unit
         )
     
-    # NEUTRAL: usar señal original
     estado.cooldown_restante = cooldown_aplicado
     return ResultadoSenalSPP(
         decision=senal_ema, 
