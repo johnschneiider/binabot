@@ -121,7 +121,7 @@
 <section class="plans-hero">
   <div class="section-label">Planes y Precios</div>
   <h1>Elige tu plan</h1>
-  <p>Sin contratos a largo plazo. Cancela cuando quieras. Empieza gratis y escala según tus necesidades.</p>
+  <p>Sin contratos a largo plazo. Cancela cuando quieras. Empieza con 3 días de trial y escala según tus necesidades.</p>
 
   <div class="toggle-billing">
     <span>Mensual</span>
@@ -137,33 +137,6 @@
 <!-- PLANS -->
 <section class="plans-grid">
   <div class="plans-grid-inner">
-
-    <!-- FREE -->
-    <div class="plan-card">
-      <div class="plan-icon free">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-      </div>
-      <div class="plan-name">Free</div>
-      <div class="plan-desc">Para usuarios nuevos que quieren probar el sistema sin compromiso</div>
-      <div class="plan-price">
-        <span class="currency">$</span>
-        <span class="amount zero">0</span>
-        <span class="period">/ para siempre</span>
-      </div>
-      <div class="plan-divider"></div>
-      <ul class="plan-features">
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 1 cuenta de trading</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 1 símbolo (R_100)</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard en tiempo real</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 trades / día</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 1.000 ticks / día</li>
-        <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin backtesting</li>
-        <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin acceso API</li>
-        <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin soporte prioritario</li>
-      </ul>
-      <div class="plan-trial">Sin trial — acceso inmediato</div>
-      <button class="btn btn-outline" onclick="selectPlan('free')">Crear Cuenta Gratis</button>
-    </div>
 
     <!-- BÁSICO -->
     <div class="plan-card">
@@ -260,24 +233,23 @@
       <thead>
         <tr>
           <th>Característica</th>
-          <th>Free</th>
           <th>Básico</th>
           <th>Pro</th>
           <th>Institucional</th>
         </tr>
       </thead>
       <tbody>
-        <tr><td>Cuentas de trading</td><td>1</td><td>3</td><td>10</td><td>Ilimitadas</td></tr>
-        <tr><td>Símbolos activos</td><td>1</td><td>3</td><td>10</td><td>Ilimitados</td></tr>
-        <tr><td>Dashboard en tiempo real</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
-        <tr><td>Trades por día</td><td>10</td><td>50</td><td>200</td><td>Ilimitados</td></tr>
-        <tr><td>Ticks por día</td><td>1.000</td><td>10.000</td><td>50.000</td><td>Ilimitados</td></tr>
-        <tr><td>Backtesting</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
-        <tr><td>Walk-forward analysis</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
-        <tr><td>Acceso API REST</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
-        <tr><td>White label</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td></tr>
-        <tr><td>Soporte</td><td>Comunidad</td><td>Email</td><td>Prioritario</td><td>24/7 Dedicado</td></tr>
-        <tr><td>Trial gratis</td><td class="cmp-text">—</td><td>3 días</td><td>3 días</td><td>—</td></tr>
+        <tr><td>Cuentas de trading</td><td>3</td><td>10</td><td>Ilimitadas</td></tr>
+        <tr><td>Símbolos activos</td><td>3</td><td>10</td><td>Ilimitados</td></tr>
+        <tr><td>Dashboard en tiempo real</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
+        <tr><td>Trades por día</td><td>50</td><td>200</td><td>Ilimitados</td></tr>
+        <tr><td>Ticks por día</td><td>10.000</td><td>50.000</td><td>Ilimitados</td></tr>
+        <tr><td>Backtesting</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
+        <tr><td>Walk-forward analysis</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
+        <tr><td>Acceso API REST</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
+        <tr><td>White label</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td></tr>
+        <tr><td>Soporte</td><td>Email</td><td>Prioritario</td><td>24/7 Dedicado</td></tr>
+        <tr><td>Trial gratis</td><td>3 días</td><td>3 días</td><td>—</td></tr>
       </tbody>
     </table>
   </div>
@@ -320,12 +292,12 @@
 <!-- CTA -->
 <section class="plans-cta">
   <div class="plans-cta">
-    <h2>Empieza gratis hoy</h2>
-    <p>Sin tarjeta de crédito. Sin compromiso. Configúralo en 5 minutos.</p>
+    <h2>Prueba gratis por 3 días</h2>
+    <p>Sin compromiso. Sin tarjeta de crédito. Cancela cuando quieras.</p>
     <div class="plans-cta-btns">
-      <button class="btn btn-primary" onclick="selectPlan('free')">
+      <button class="btn btn-primary" onclick="selectPlan('basico')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-        Crear Cuenta Gratis
+        Comenzar Trial Gratis
       </button>
       <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-outline">Ver Dashboard</a>
     </div>
