@@ -484,8 +484,14 @@
         }
       }
 
-      function setRiesgoMotivo(m) {
-        setText("riesgo_motivo", (m && String(m).trim()) ? String(m) : "—");
+      function setRiesgoMotivo(m, horarioBloqueado) {
+        const hB = Boolean(horarioBloqueado);
+        if (hB) {
+          setText("riesgo_motivo", "HORARIO BLOQUEADO");
+        } else {
+          const texto = (m && String(m).trim() && String(m).trim() !== "—" && String(m).trim() !== "OK") ? String(m) : "—";
+          setText("riesgo_motivo", texto);
+        }
       }
 
       function actualizarPausaInfo(c) {
@@ -1016,7 +1022,7 @@
             setText("moneda_deriv", c.moneda_deriv || "—");
             setText("capital_actual", fmt2(c.capital_actual));
             setBloqueado(Boolean(c.bloqueado));
-            setRiesgoMotivo(c.riesgo_motivo_ui || c.riesgo_motivo || "—");
+            setRiesgoMotivo(c.riesgo_motivo_ui || c.riesgo_motivo || "—", c.horario_bloqueado);
             actualizarPausaInfo(c);
             actualizarHorarioBloqueado(c);
             // Ciclo: balance inicial y fecha de inicio legible
@@ -1406,7 +1412,7 @@
         setText("moneda_deriv", c.moneda_deriv || "—");
         setText("capital_actual", fmt2(c.capital_actual));
         setBloqueado(c.bloqueado);
-        setRiesgoMotivo(c.riesgo_motivo_ui || "—");
+        setRiesgoMotivo(c.riesgo_motivo_ui || "—", c.horario_bloqueado);
         
         // Actualizar info de pausa
         const elInfo = document.getElementById("ciclo_pausa_info");
