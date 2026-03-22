@@ -1112,6 +1112,9 @@
           const priceId = ids.price;
           
           if (ticks && ticks.length > 0) {
+            // Debug: ver si llegan ticks
+            console.log(`[GRAFICO ${simbolo}] Recibidos ${ticks.length} ticks`);
+            
             // Actualizar contador y precio actual
             setText(countId, `${ticks.length} ticks`);
             // Ordenar por epoch para asegurar orden correcto
@@ -1127,50 +1130,32 @@
             // Guardar datos para recalcular MAs después
             chartObj.lastTicks = ticksOrdenados;
             
-            // Asegurar que siempre mostramos hasta 200 ticks en el eje X
+            // Siempre mostrar exactamente 200 puntos (los últimos N ticks)
             const maxTicks = 200;
-            const ticksToShow = Math.min(ticksOrdenados.length, maxTicks);
-            const ticksParaGrafico = ticksOrdenados.slice(-ticksToShow);
+            const ticksParaGrafico = ticksOrdenados.slice(-maxTicks);
             
-            // Rellenar con nulls al inicio si hay menos de 200 ticks
-            const precios = [];
-            const ma1Data = [];
-            const ma2Data = [];
-            
-            if (ticksParaGrafico.length < maxTicks) {
-              const nullsCount = maxTicks - ticksParaGrafico.length;
-              for (let i = 0; i < nullsCount; i++) {
-                precios.push(null);
-                ma1Data.push(null);
-                ma2Data.push(null);
-              }
-            }
-            
-            // MA incremental por epoch (no recalcula el pasado)
+            // MA incremental por epoch
             actualizarMaCacheDesdeTicks(simbolo, ticksParaGrafico);
-            const preciosReales = ticksParaGrafico.map(t => Number(t.precio));
+            
+            // Construir arrays de datos
+            const preciosData = ticksParaGrafico.map(t => Number(t.precio));
             const ma1Valores = ticksParaGrafico.map(t => chartObj.ma1ByEpoch ? (chartObj.ma1ByEpoch.get(Number(t.epoch)) ?? null) : null);
             const ma2Valores = ticksParaGrafico.map(t => chartObj.ma2ByEpoch ? (chartObj.ma2ByEpoch.get(Number(t.epoch)) ?? null) : null);
             
-            // Agregar datos reales
-            precios.push(...preciosReales);
-            ma1Data.push(...ma1Valores);
-            ma2Data.push(...ma2Valores);
+            // Labels: tick #1 a #200 (o menos si no hay 200 ticks)
+            const labelsData = ticksParaGrafico.map((_, i) => i + 1);
             
-            // Actualizar labels de la leyenda con los periodos configurados
+            // Actualizar leyenda con periodos configurados
             chartObj.chart.data.datasets[1].label = "MA " + chartObj.ma1Period;
             chartObj.chart.data.datasets[2].label = "MA " + chartObj.ma2Period;
             
-            // Crear labels para 200 ticks
-            const labels = Array.from({ length: maxTicks }, (_, i) => i + 1);
-            
             // Actualizar gráfico
-            chartObj.chart.data.labels = labels;
-            chartObj.chart.data.datasets[0].data = precios;
-            chartObj.chart.data.datasets[1].data = ma1Data;
-            chartObj.chart.data.datasets[2].data = ma2Data;
+            chartObj.chart.data.labels = labelsData;
+            chartObj.chart.data.datasets[0].data = preciosData;
+            chartObj.chart.data.datasets[1].data = ma1Valores;
+            chartObj.chart.data.datasets[2].data = ma2Valores;
             
-            chartObj.chart.update('none'); // 'none' para animación más rápida (tiempo real)
+            chartObj.chart.update('none');
           } else {
             setText(countId, "0 ticks");
             setText(priceId, "—");
@@ -1357,9 +1342,12 @@
                   actualizarEstadoCuenta(data.cuenta);
                 }
                 
-                // Actualizar ticks
-                if (data.ticks) {
-                  actualizarTicksGrafico(data.ticks);
+                // Actualizar ticks del grafico R_100
+                const ticksPA = data.ticks_por_activo || {};
+                const ticksR100 = ticksPA["R_100"] || [];
+                if (ticksR100.length > 0) {
+                  window._lastTicksData = ticksR100;
+                  actualizarGraficoTicks("R_100", ticksR100, null);
                 }
                 
                 // Actualizar operaciones solo si cambiaron
@@ -1457,16 +1445,6 @@
         setText("senal_valor", nuevoValor !== null ? fmt2(nuevoValor) : "—");
         setSenalDecision(c.senal_decision);
         actualizarSenalUI(c);
-        
-        // Actualizar gráfico de ticks para R_100
-        if (window._lastTicksData) {
-          actualizarGraficoTicks("R_100", window._lastTicksData, null);
-        }
-      }
-      
-      function actualizarTicksGrafico(ticks) {
-        window._lastTicksData = ticks;
-        actualizarGraficoTicks("R_100", ticks, null);
       }
       
       // Iniciar conexión SSE
