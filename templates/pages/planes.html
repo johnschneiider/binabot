@@ -1,116 +1,151 @@
 {% extends "base.html" %}
 
-{% block title %}Planes y Precios · QUANT·DERIV{% endblock %}
+{% block title %}QUANT·DERIV — Trading cuantitativo para hacer crecer tu capital{% endblock %}
 
 {% block extra_head %}
 <style>
-  .plans-hero {
-    padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px);
+  .lp-hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px clamp(16px, 5vw, 48px);
     text-align: center;
-    background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%);
-    border-bottom: 1px solid var(--border);
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(59,130,246,0.12) 0%, transparent 70%);
+    position: relative;
+    overflow: hidden;
   }
-  .plans-hero h1 {
-    font-size: clamp(30px, 5vw, 48px); font-weight: 900; color: #fff;
-    letter-spacing: -1px; margin-bottom: 14px;
+  .lp-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.015'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    pointer-events: none;
   }
-  .plans-hero p { font-size: 16px; color: var(--text-3); max-width: 500px; margin: 0 auto 32px; }
-  .toggle-billing {
-    display: flex; align-items: center; justify-content: center; gap: 12px;
-    font-size: 13px; color: var(--text-3); margin-bottom: 48px;
+  .lp-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25);
+    color: #34d399; font-size: 12px; font-weight: 600; padding: 6px 14px;
+    border-radius: 100px; margin-bottom: 24px; letter-spacing: 0.3px;
   }
-  .toggle-billing input { display: none; }
-  .toggle-track {
-    width: 44px; height: 24px; background: var(--bg-4); border-radius: 100px;
-    border: 1px solid var(--border); position: relative; cursor: pointer;
-    transition: all 0.2s;
+  .lp-badge-dot {
+    width: 6px; height: 6px; background: #34d399; border-radius: 50%;
+    animation: pulse-green 2s infinite;
   }
-  .toggle-thumb {
-    position: absolute; top: 3px; left: 3px;
-    width: 16px; height: 16px; background: var(--text-3);
-    border-radius: 50%; transition: all 0.2s;
+  @keyframes pulse-green {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
   }
-  .toggle-billing input:checked + .toggle-track { background: var(--accent); border-color: var(--accent); }
-  .toggle-billing input:checked + .toggle-track .toggle-thumb { left: 23px; background: #fff; }
-  .save-badge { background: var(--green-bg); color: var(--green); border: 1px solid rgba(16,185,129,0.2); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 100px; }
+  .lp-hero h1 {
+    font-size: clamp(36px, 7vw, 72px);
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: -2px;
+    line-height: 1.05;
+    margin-bottom: 20px;
+    max-width: 800px;
+  }
+  .lp-hero h1 .accent { color: var(--accent-light); }
+  .lp-hero-sub {
+    font-size: clamp(16px, 2.5vw, 20px);
+    color: var(--text-3);
+    max-width: 560px;
+    margin-bottom: 12px;
+    line-height: 1.6;
+  }
+  .lp-hero-note {
+    font-size: 13px;
+    color: var(--text-4);
+    max-width: 480px;
+    margin-bottom: 36px;
+    line-height: 1.5;
+  }
+  .lp-cta-row {
+    display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+    margin-bottom: 48px;
+  }
+  .lp-stats {
+    display: flex; gap: clamp(24px, 5vw, 64px); flex-wrap: wrap; justify-content: center;
+    margin-top: 48px;
+  }
+  .lp-stat { text-align: center; }
+  .lp-stat-val { font-size: clamp(24px, 4vw, 36px); font-weight: 900; color: #fff; letter-spacing: -1px; }
+  .lp-stat-label { font-size: 12px; color: var(--text-4); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
 
-  .plans-grid { max-width: 1200px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px) clamp(60px, 8vw, 100px); }
-  .plans-grid-inner { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  /* HOW IT WORKS */
+  .lp-how { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); }
+  .lp-how-inner { max-width: 900px; margin: 0 auto; }
+  .lp-section-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--accent-light); text-transform: uppercase; margin-bottom: 10px; }
+  .lp-section-title { font-size: clamp(24px, 4vw, 36px); font-weight: 900; color: #fff; letter-spacing: -0.5px; margin-bottom: 48px; }
+  .lp-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+  .lp-step { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--r-xl); padding: 28px; }
+  .lp-step-num { font-size: 12px; font-weight: 800; color: var(--accent); letter-spacing: 1px; margin-bottom: 16px; }
+  .lp-step h3 { font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 10px; }
+  .lp-step p { font-size: 13px; color: var(--text-4); line-height: 1.6; }
 
-  .plan-card {
-    background: var(--bg-3); border: 1px solid var(--border);
-    border-radius: var(--r-xl); padding: 32px 28px;
-    display: flex; flex-direction: column; position: relative;
-    transition: all 0.2s;
+  /* CALCULATOR */
+  .lp-calc { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); }
+  .lp-calc-inner { max-width: 900px; margin: 0 auto; }
+  .lp-calc-card {
+    background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: var(--r-xl); padding: clamp(28px, 5vw, 48px);
   }
-  .plan-card:hover { border-color: var(--border-bright); background: var(--bg-4); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
-  .plan-card.featured { border-color: var(--accent); background: linear-gradient(160deg, rgba(59,130,246,0.06) 0%, var(--bg-3) 60%); box-shadow: 0 0 60px rgba(59,130,246,0.1); }
-  .plan-popular {
-    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-    font-size: 10px; font-weight: 800; letter-spacing: 1.5px;
-    background: var(--accent); color: #fff; padding: 4px 16px; border-radius: 100px;
-    white-space: nowrap;
-  }
-  .plan-icon { width: 44px; height: 44px; border-radius: var(--r-md); margin-bottom: 20px; display: flex; align-items: center; justify-content: center; }
-  .plan-icon.free { background: rgba(71,85,105,0.2); border: 1px solid rgba(71,85,105,0.3); color: var(--text-3); }
-  .plan-icon.basic { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); color: var(--accent-light); }
-  .plan-icon.pro { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); color: var(--accent-light); }
-  .plan-icon.inst { background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); color: #a78bfa; }
-  .plan-icon svg { width: 22px; height: 22px; }
-  .plan-name { font-size: 16px; font-weight: 800; color: var(--text-1); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-  .plan-desc { font-size: 13px; color: var(--text-4); margin-bottom: 24px; min-height: 36px; line-height: 1.5; }
-  .plan-price { display: flex; align-items: baseline; gap: 4px; margin-bottom: 24px; }
-  .plan-price .currency { font-size: 18px; font-weight: 700; color: var(--text-3); }
-  .plan-price .amount { font-size: clamp(32px, 5vw, 44px); font-weight: 900; color: var(--text-1); letter-spacing: -1.5px; }
-  .plan-price .amount.zero { font-size: clamp(32px, 5vw, 44px); }
-  .plan-price .period { font-size: 13px; color: var(--text-4); }
-  .plan-divider { height: 1px; background: var(--border); margin-bottom: 24px; }
-  .plan-features { list-style: none; flex: 1; margin-bottom: 28px; }
-  .plan-features li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-3); margin-bottom: 10px; line-height: 1.4; }
-  .plan-features li svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
-  .plan-features li svg.check { color: var(--green); }
-  .plan-features li svg.cross { color: var(--text-4); }
-  .plan-features li.disabled { color: var(--text-4); }
-  .plan-features li.disabled svg { color: var(--text-4); }
-  .plan-trial { font-size: 12px; color: var(--text-4); margin-bottom: 16px; text-align: center; }
-  .plan-card .btn { width: 100%; justify-content: center; }
-  .plan-card.featured .btn { background: var(--accent); border-color: var(--accent); box-shadow: 0 4px 20px rgba(59,130,246,0.3); }
-  .plan-card.featured .btn:hover { background: var(--accent-light); }
+  .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  @media (max-width: 640px) { .calc-grid { grid-template-columns: 1fr; } }
+  .calc-inputs label { display: block; font-size: 12px; font-weight: 600; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+  .calc-input-group { margin-bottom: 24px; }
+  .calc-input-wrap { position: relative; }
+  .calc-input-wrap .prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-4); font-size: 15px; font-weight: 600; pointer-events: none; }
+  .calc-input { width: 100%; padding: 12px 14px; background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--r-md); font-size: 20px; font-weight: 700; color: #fff; outline: none; box-sizing: border-box; }
+  .calc-input:focus { border-color: var(--accent); }
+  .calc-input.has-prefix { padding-left: 32px; }
+  .calc-results { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 24px; }
+  .calc-results-title { font-size: 13px; font-weight: 700; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 20px; }
+  .calc-month { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .calc-month:last-child { border-bottom: none; }
+  .calc-month-label { font-size: 13px; color: var(--text-4); }
+  .calc-month-total { font-size: 15px; font-weight: 700; color: #fff; }
+  .calc-month-gain { font-size: 12px; color: var(--green); margin-left: 8px; }
+  .calc-month-ideal { font-size: 11px; color: var(--text-4); }
+  .calc-disclaimer { font-size: 11px; color: var(--text-4); margin-top: 16px; line-height: 1.5; padding: 12px; background: var(--bg-4); border-radius: var(--r-md); }
+  .calc-highlight { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: var(--r-lg); padding: 16px; margin-bottom: 20px; }
+  .calc-highlight-label { font-size: 11px; color: var(--text-4); margin-bottom: 6px; }
+  .calc-highlight-val { font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -1px; }
+  .calc-highlight-sub { font-size: 12px; color: var(--text-4); margin-top: 4px; }
+  .calc-fee-note { font-size: 12px; color: var(--text-4); background: var(--bg-4); border-radius: var(--r-md); padding: 10px 12px; margin-top: 12px; line-height: 1.5; }
+
+  /* MODELO */
+  .lp-model { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); }
+  .lp-model-inner { max-width: 900px; margin: 0 auto; }
+  .lp-model-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 640px) { .lp-model-grid { grid-template-columns: 1fr; } }
+  .lp-model-card { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--r-xl); padding: 28px; }
+  .lp-model-card h3 { font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 12px; }
+  .lp-model-card p { font-size: 13px; color: var(--text-4); line-height: 1.6; margin-bottom: 16px; }
+  .lp-model-card .big { font-size: clamp(28px, 5vw, 40px); font-weight: 900; color: var(--accent-light); letter-spacing: -1px; }
+  .lp-model-card .sub { font-size: 12px; color: var(--text-4); margin-top: 4px; }
+  .lp-model-para { font-size: 14px; color: var(--text-3); line-height: 1.8; max-width: 700px; margin: 32px auto 0; }
 
   /* FAQ */
-  .faq-section { padding: clamp(60px, 8vw, 80px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); }
-  .faq-inner { max-width: 700px; margin: 0 auto; }
-  .faq-item { border-bottom: 1px solid var(--border); padding: 20px 0; }
-  .faq-q { font-size: 15px; font-weight: 700; color: var(--text-1); margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
-  .faq-q::after { content: "+"; font-size: 20px; color: var(--text-4); font-weight: 300; }
-  .faq-item.open .faq-q::after { content: "−"; }
-  .faq-a { font-size: 13px; color: var(--text-4); line-height: 1.7; display: none; padding-bottom: 8px; }
-  .faq-item.open .faq-a { display: block; }
+  .lp-faq { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); }
+  .lp-faq-inner { max-width: 700px; margin: 0 auto; }
+  .lp-faq-item { border-bottom: 1px solid var(--border); padding: 20px 0; }
+  .lp-faq-q { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+  .lp-faq-q::after { content: '+'; font-size: 20px; color: var(--text-4); font-weight: 300; transition: transform 0.2s; }
+  .lp-faq-item.open .lp-faq-q::after { transform: rotate(45deg); }
+  .lp-faq-a { font-size: 13px; color: var(--text-4); line-height: 1.7; display: none; padding-bottom: 8px; }
+  .lp-faq-item.open .lp-faq-a { display: block; }
 
-  /* CTA */
-  .plans-cta { padding: clamp(50px, 7vw, 80px) clamp(16px, 5vw, 48px); text-align: center; }
-  .plans-cta h2 { font-size: clamp(24px, 4vw, 36px); font-weight: 900; color: var(--text-1); letter-spacing: -0.5px; margin-bottom: 12px; }
-  .plans-cta p { font-size: 15px; color: var(--text-3); margin-bottom: 28px; }
-  .plans-cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-
-  /* COMPARISON TABLE */
-  .compare-section { padding: clamp(40px, 6vw, 60px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); }
-  .compare-inner { max-width: 1000px; margin: 0 auto; overflow-x: auto; }
-  .compare-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .compare-table th { padding: 12px 16px; font-size: 12px; font-weight: 700; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.8px; background: var(--bg-2); border-bottom: 1px solid var(--border); text-align: left; }
-  .compare-table td { padding: 12px 16px; color: var(--text-3); border-bottom: 1px solid var(--border); vertical-align: middle; }
-  .compare-table tr:hover td { background: var(--bg-4); }
-  .compare-table tr:hover td:first-child { border-left: 2px solid var(--accent); }
-  .compare-table td:first-child { color: var(--text-2); font-weight: 600; border-left: 2px solid transparent; }
-  .compare-table .cmp-check { color: var(--green); font-size: 16px; }
-  .compare-table .cmp-cross { color: var(--text-4); font-size: 16px; }
-  .compare-table .cmp-text { color: var(--text-4); font-size: 12px; }
+  /* CTA FINAL */
+  .lp-cta-final { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); text-align: center; background: radial-gradient(ellipse 60% 50% at 50% 100%, rgba(59,130,246,0.10) 0%, transparent 70%); border-top: 1px solid var(--border); }
+  .lp-cta-final h2 { font-size: clamp(28px, 5vw, 48px); font-weight: 900; color: #fff; letter-spacing: -1px; margin-bottom: 12px; }
+  .lp-cta-final p { font-size: 16px; color: var(--text-3); margin-bottom: 32px; max-width: 480px; margin-left: auto; margin-right: auto; }
 
   @media (max-width: 640px) {
-    .plans-cta-btns { flex-direction: column; }
-    .plans-cta-btns .btn { width: 100%; }
-    .compare-table { font-size: 12px; }
-    .compare-table th, .compare-table td { padding: 10px 12px; }
+    .lp-stats { gap: 32px; }
+    .lp-cta-row { flex-direction: column; align-items: stretch; }
+    .lp-cta-row .btn { width: 100%; justify-content: center; }
   }
 </style>
 {% endblock %}
@@ -118,208 +153,274 @@
 {% block content %}
 
 <!-- HERO -->
-<section class="plans-hero">
-  <div class="section-label">Planes y Precios</div>
-  <h1>Elige tu plan</h1>
-  <p>Sin contratos a largo plazo. Cancela cuando quieras. Empieza con 3 días de trial y escala según tus necesidades.</p>
-
-  <div class="toggle-billing">
-    <span>Mensual</span>
-    <label>
-      <input type="checkbox" id="billingToggle">
-      <div class="toggle-track"><div class="toggle-thumb"></div></div>
-    </label>
-    <span>Anual</span>
-    <span class="save-badge">Ahorra hasta 30%</span>
+<section class="lp-hero">
+  <div class="lp-badge">
+    <span class="lp-badge-dot"></span>
+    Trading cuantitativo activo · Deriv
   </div>
-</section>
-
-<!-- PLANS -->
-<section class="plans-grid">
-  <div class="plans-grid-inner">
-
-    <!-- BÁSICO -->
-    <div class="plan-card">
-      <div class="plan-icon basic">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      </div>
-      <div class="plan-name">Básico</div>
-      <div class="plan-desc">Para traders individuales que buscan resultados consistentes</div>
-      <div class="plan-price">
-        <span class="currency">$</span>
-        <span class="amount" data-monthly="29" data-annual="20">29</span>
-        <span class="period">/ <span class="period-label">mes</span></span>
-      </div>
-      <div class="plan-divider"></div>
-      <ul class="plan-features">
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 3 cuentas de trading</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 3 símbolos activos</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard en tiempo real</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 50 trades / día</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10.000 ticks / día</li>
-        <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin backtesting</li>
-        <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin acceso API</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte por email</li>
-      </ul>
-      <div class="plan-trial">3 días de trial gratis</div>
-      <button class="btn btn-outline" onclick="selectPlan('basico')">Comenzar con Básico</button>
+  <h1>Tu capital crece con <span class="accent">0.5% diario</span> en promedio</h1>
+  <p class="lp-hero-sub">
+    Gestionamos tu dinero con un bot cuantitativo que opera en índices синтетикс de Deriv. Sin promesas exageradas — el capital está protegido para que lo retires cuando quieras.
+  </p>
+  <p class="lp-hero-note">
+    0.5% diario es el promedio histórico. Puede haber días en 0% o negativos. No es una garantía — es el rendimiento promedio observado en más de 6 meses de operación.
+  </p>
+  <div class="lp-cta-row">
+    <button class="btn btn-primary" style="padding: 14px 28px; font-size: 15px;" onclick="document.getElementById('calculadora').scrollIntoView({behavior:'smooth'})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/></svg>
+      Calcular proyección
+    </button>
+    <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-outline" style="padding: 14px 28px; font-size: 15px;">
+      Ver dashboard en vivo
+    </a>
+  </div>
+  <div class="lp-stats">
+    <div class="lp-stat">
+      <div class="lp-stat-val">0.5%</div>
+      <div class="lp-stat-label">Rendimiento diario promedio</div>
     </div>
-
-    <!-- PRO -->
-    <div class="plan-card featured">
-      <div class="plan-popular">MÁS POPULAR</div>
-      <div class="plan-icon pro">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-      </div>
-      <div class="plan-name" style="color: var(--accent-light)">Pro</div>
-      <div class="plan-desc">Para traders avanzados con acceso completo a herramientas de análisis</div>
-      <div class="plan-price">
-        <span class="currency">$</span>
-        <span class="amount" data-monthly="79" data-annual="55">79</span>
-        <span class="period">/ <span class="period-label">mes</span></span>
-      </div>
-      <div class="plan-divider"></div>
-      <ul class="plan-features">
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 cuentas de trading</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 símbolos activos</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard + Backtesting</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 200 trades / día</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 50.000 ticks / día</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Acceso API REST</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte prioritario</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Walk-forward analysis</li>
-      </ul>
-      <div class="plan-trial">3 días de trial gratis</div>
-      <button class="btn btn-primary" onclick="selectPlan('pro')">Comenzar con Pro</button>
+    <div class="lp-stat">
+      <div class="lp-stat-val">25%</div>
+      <div class="lp-stat-label">Solo cobramos sobre ganancias</div>
     </div>
-
-    <!-- INSTITUCIONAL -->
-    <div class="plan-card">
-      <div class="plan-icon inst">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 7v1a3 3 0 006 0V7m0 1a3 3 0 006 0V7m0 1a3 3 0 006 0V7H3l2-4h14l2 4M5 21V10.87M19 21V10.87"/></svg>
-      </div>
-      <div class="plan-name">Institucional</div>
-      <div class="plan-desc">Para firms, equipos y clientes con necesidades de white label</div>
-      <div class="plan-price">
-        <span class="currency">$</span>
-        <span class="amount" data-monthly="199" data-annual="139">199</span>
-        <span class="period">/ <span class="period-label">mes</span></span>
-      </div>
-      <div class="plan-divider"></div>
-      <ul class="plan-features">
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Cuentas ilimitadas</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Símbolos ilimitados</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> White label completo</li>
-        <li><svg class="check" viewViewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Backtesting avanzado</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Tráficos ilimitados</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte 24/7 dedicado</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> SLA garantizado 99.9%</li>
-        <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Onboarding personalizado</li>
-      </ul>
-      <div class="plan-trial">Sin trial — contacto directo</div>
-      <button class="btn btn-outline" onclick="selectPlan('institucional')">Contactar Ventas</button>
+    <div class="lp-stat">
+      <div class="lp-stat-val">100%</div>
+      <div class="lp-stat-label">Capital protegido para retiro</div>
     </div>
   </div>
 </section>
 
-<!-- COMPARISON TABLE -->
-<section class="compare-section">
-  <div class="compare-inner">
-    <div class="section-header">
-      <div class="section-label">Comparación</div>
-      <h2 class="section-title">Todos los detalles</h2>
+<!-- COMO FUNCIONA -->
+<section class="lp-how">
+  <div class="lp-how-inner">
+    <div class="lp-section-label">Cómo funciona</div>
+    <h2 class="lp-section-title">3 pasos para hacer crecer tu dinero</h2>
+    <div class="lp-steps">
+      <div class="lp-step">
+        <div class="lp-step-num">PASO 1</div>
+        <h3>Depositas tu capital</h3>
+        <p> transfieres tu dinero a tu cuenta en Deriv (plataforma regulada). Tú mantienes la propiedad total de tus fondos en todo momento.</p>
+      </div>
+      <div class="lp-step">
+        <div class="lp-step-num">PASO 2</div>
+        <h3>Nosotros operamos con un bot cuantitativo</h3>
+        <p>El bot ejecuta operaciones automáticas en índices sintéticos siguiendo una estrategia con gestión de riesgo robusta. opera las 24 horas.</p>
+      </div>
+      <div class="lp-step">
+        <div class="lp-step-num">PASO 3</div>
+        <h3>Retiras cuando quieras</h3>
+        <p>Tu capital inicial está 100% disponible para retiro en cualquier momento. Los rendimientos generados se liquidan periódicamente.</p>
+      </div>
     </div>
-    <table class="compare-table">
-      <thead>
-        <tr>
-          <th>Característica</th>
-          <th>Básico</th>
-          <th>Pro</th>
-          <th>Institucional</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td>Cuentas de trading</td><td>3</td><td>10</td><td>Ilimitadas</td></tr>
-        <tr><td>Símbolos activos</td><td>3</td><td>10</td><td>Ilimitados</td></tr>
-        <tr><td>Dashboard en tiempo real</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
-        <tr><td>Trades por día</td><td>50</td><td>200</td><td>Ilimitados</td></tr>
-        <tr><td>Ticks por día</td><td>10.000</td><td>50.000</td><td>Ilimitados</td></tr>
-        <tr><td>Backtesting</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
-        <tr><td>Walk-forward analysis</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
-        <tr><td>Acceso API REST</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td><td class="cmp-check">✓</td></tr>
-        <tr><td>White label</td><td class="cmp-cross">✗</td><td class="cmp-cross">✗</td><td class="cmp-check">✓</td></tr>
-        <tr><td>Soporte</td><td>Email</td><td>Prioritario</td><td>24/7 Dedicado</td></tr>
-        <tr><td>Trial gratis</td><td>3 días</td><td>3 días</td><td>—</td></tr>
-      </tbody>
-    </table>
+  </div>
+</section>
+
+<!-- CALCULADORA -->
+<section class="lp-calc" id="calculadora">
+  <div class="lp-calc-inner">
+    <div class="lp-section-label">Proyecciones</div>
+    <h2 class="lp-section-title">Calcula cuánto podría crecer tu dinero</h2>
+    <div class="lp-calc-card">
+      <div class="calc-grid">
+        <!-- INPUTS -->
+        <div class="calc-inputs">
+          <div class="calc-input-group">
+            <label>Capital a invertir</label>
+            <div class="calc-input-wrap">
+              <span class="prefix">$</span>
+              <input type="number" id="calc-capital" class="calc-input has-prefix" value="1000000" min="100" step="1000">
+            </div>
+          </div>
+          <div class="calc-input-group">
+            <label>Rendimiento diario promedio</label>
+            <div class="calc-input-wrap">
+              <input type="number" id="calc-daily" class="calc-input" value="0.5" min="0.01" max="5" step="0.1" style="padding-left: 14px;">
+              <span class="prefix" style="left: auto; right: 14px;">%</span>
+            </div>
+          </div>
+          <div class="calc-fee-note">
+            <strong style="color: var(--text-2);">Nuestro modelo:</strong> cobramos el <strong style="color: var(--accent-light);">25% sobre la ganancia acumulada</strong>. Si no hay ganancia, no cobramos nada. Tu capital inicial está 100% protegido para que lo retires cuando quieras.
+          </div>
+        </div>
+        
+        <!-- RESULTADOS -->
+        <div class="calc-results">
+          <div class="calc-results-title">Proyección neta (después del 25%)</div>
+          
+          <div class="calc-highlight">
+            <div class="calc-highlight-label">Después de 12 meses</div>
+            <div class="calc-highlight-val" id="calc-12m-total">$4,766,931</div>
+            <div class="calc-highlight-sub" id="calc-12m-gain">+ $3,766,931 de ganancia</div>
+          </div>
+          
+          <div id="calc-months-list">
+          </div>
+          
+          <div class="calc-disclaimer">
+            Estos números son proyecciones basadas en el rendimiento promedio histórico (0.5% diario). No garantizan resultados futuros. El trading conlleva riesgos y puede haber períodos con rendimientos negativos o nulos.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MODELO DE COBRO -->
+<section class="lp-model">
+  <div class="lp-model-inner">
+    <div class="lp-section-label">Nuestro modelo</div>
+    <h2 class="lp-section-title">Simple y transparente</h2>
+    <div class="lp-model-grid">
+      <div class="lp-model-card">
+        <h3>Cobramos solo cuando ganas</h3>
+        <p>El 25% se aplica exclusivamente sobre la ganancia acumulada. Si tu capital no rindió, no pagás nada.</p>
+        <div class="big">25%</div>
+        <div class="sub">de la ganancia acumulada</div>
+      </div>
+      <div class="lp-model-card">
+        <h3>Tu capital está 100% protegido</h3>
+        <p>El capital inicial está en tu cuenta de Deriv — vos lo administrás. Podés retirarlo parcial o totalmente en cualquier momento.</p>
+        <div class="big">100%</div>
+        <div class="sub">del capital inicial protegido</div>
+      </div>
+      <div class="lp-model-card">
+        <h3>Rendimiento escala con tu capital</h3>
+        <p>El 0.5% diario se calcula sobre el total de capital que tengas con nosotros. Si retiras parte, el rendimiento se recalcula sobre lo restante.</p>
+        <div class="big">0.5%</div>
+        <div class="sub">diario sobre capital con nosotros</div>
+      </div>
+      <div class="lp-model-card">
+        <h3>Sin referrals. Sin comisiones.</h3>
+        <p>Somos una entidad inversionista. No pagamos comisiones por recomendar. Creemos en dejar que los resultados hablen solos.</p>
+        <div class="big">0%</div>
+        <div class="sub">comisión por referir</div>
+      </div>
+    </div>
+    <p class="lp-model-para">
+      No prometemos rentabilidades fijas. El rendimiento promedio histórico es de 0.5% diario — basado en más de 6 meses de operación real con ticks del mercado. Habrá días en 0% y可能会有 días negativos. La clave es la consistencia a largo plazo con gestión de riesgo.
+    </p>
   </div>
 </section>
 
 <!-- FAQ -->
-<section class="faq-section">
-  <div class="faq-inner">
-    <div class="section-header">
-      <div class="section-label">Preguntas Frecuentes</div>
-      <h2 class="section-title">Resolvemos tus dudas</h2>
+<section class="lp-faq">
+  <div class="lp-faq-inner">
+    <div class="lp-section-label">Preguntas frecuentes</div>
+    <h2 class="lp-section-title">Resolvemos tus dudas</h2>
+    
+    <div class="lp-faq-item">
+      <div class="lp-faq-q">¿Cómo ganan si cobran solo sobre ganancias?</div>
+      <div class="lp-faq-a">Nuestro incentivo está alineado con el tuyo: si vos ganás, ganamos nosotros. Si no hay ganancia, no cobramos. Esto nos obliga a operar con disciplina y gestión de riesgo rigurosa.</div>
     </div>
-    <div class="faq-item">
-      <div class="faq-q">¿Cómo funciona el trial gratuito?</div>
-      <div class="faq-a">Al registrarte con el plan Básico o Pro tendrás 3 días de acceso completo a todas las funcionalidades del plan sin costo. Al terminar el trial se renueva automáticamente a menos que canceles antes.</div>
+    <div class="lp-faq-item">
+      <div class="lp-faq-q">¿Puedo retirar mi capital en cualquier momento?</div>
+      <div class="lp-faq-a">Sí. Tu capital está en tu cuenta de Deriv — vos sos el titular. Podés solicitar el retiro directo desde Deriv sin necesidad de nuestro intermediación. Tu dinero, tus reglas.</div>
     </div>
-    <div class="faq-item">
-      <div class="faq-q">¿Puedo cambiar de plan en cualquier momento?</div>
-      <div class="faq-a">Sí. Puedes hacer upgrade o downgrade de tu plan en cualquier momento desde tu panel de usuario. Los cambios se aplican de inmediato y se ajustan prorrateados.</div>
+    <div class="lp-faq-item">
+      <div class="lp-faq-q">¿Qué pasa si el bot pierde dinero?</div>
+      <div class="lp-faq-a">El capital inicial está protegido. Si hay días o períodos negativos, simplemente esperamos a que el sistema se recupere. La estrategia está diseñada para minimizar drawdowns agresivos.</div>
     </div>
-    <div class="faq-item">
-      <div class="faq-q">¿Qué métodos de pago aceptan?</div>
-      <div class="faq-a">Aceptamos tarjetas de crédito y débito (Visa, Mastercard, Amex), PayPal y transferencia bancaria. Todos los pagos son procesados de forma segura a través de Stripe.</div>
+    <div class="lp-faq-item">
+      <div class="lp-faq-q">¿Qué plataforma usan?</div>
+      <div class="lp-faq-a">Operamos en Deriv, una plataforma de trading regulada con más de 10 años de trayectoria y millones de usuarios. Los depósitos y retiros se hacen directamente en Deriv.</div>
     </div>
-    <div class="faq-item">
-      <div class="faq-q">¿Es seguro el trading automatizado?</div>
-      <div class="faq-a">El bot ejecuta operaciones siguiendo una estrategia cuantitativa con gestión de riesgo robusta. Sin embargo, el trading de derivados conlleva riesgos inherentes. Nunca inviertas más de lo que puedas permitirte perder completamente.</div>
+    <div class="lp-faq-item">
+      <div class="lp-faq-q">¿Cuánto es el mínimo para empezar?</div>
+      <div class="lp-faq-a">Recomendamos empezar con al menos $100 USD o su equivalente en tu moneda local. El sistema funciona con cualquier capital, pero volúmenes mayores permiten una gestión de riesgo más eficiente.</div>
     </div>
-    <div class="faq-item">
-      <div class="faq-q">¿Qué es white label?</div>
-      <div class="faq-a">White label te permite usar la plataforma QUANT·DERIV con tu propia marca, colores y dominio. Ideal para firms de trading o asesores financieros que quieren ofrecer trading automatizado a sus clientes.</div>
+    <div class="lp-faq-item">
+      <div class="lp-faq-q">¿Cómo se liquida la ganancia?</div>
+      <div class="lp-faq-a">La ganancia se calcula sobre el rendimiento acumulado vs. el capital inicial. Al momento de retiro o cierre de período, se aplica el 25% sobre la ganancia bruta y el resto se transfiere a tu cuenta.</div>
     </div>
-    <div class="faq-item">
-      <div class="faq-q">¿Hay descuentos por pago anual?</div>
-      <div class="faq-a">Sí. Al pagar annually obtienes un 30% de descuento en el plan Básico y Pro. El plan Institucional tiene un 30% de descuento también.</div>
+    <div class="lp-faq-item">
+      <div class="lp-faq-q">¿Hay riesgo de perder todo el capital?</div>
+      <div class="lp-faq-a">El bot utiliza stops de pérdida, límites de drawdown y gestión de riesgo严. No se opera con todo el capital en una sola operación. Sin embargo, el trading conlleva riesgos inherentes y siempre existe la posibilidad de pérdidas parciales.</div>
     </div>
   </div>
 </section>
 
-<!-- CTA -->
-<section class="plans-cta">
-  <div class="plans-cta">
-    <h2>Prueba gratis por 3 días</h2>
-    <p>Sin compromiso. Sin tarjeta de crédito. Cancela cuando quieras.</p>
-    <div class="plans-cta-btns">
-      <button class="btn btn-primary" onclick="selectPlan('basico')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-        Comenzar Trial Gratis
-      </button>
-      <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-outline">Ver Dashboard</a>
-    </div>
+<!-- CTA FINAL -->
+<section class="lp-cta-final">
+  <h2>Empieza a hacer crecer tu dinero hoy</h2>
+  <p>Abre tu cuenta en Deriv y empieza a operar. Sin promesas — solo datos, disciplina y tiempo.</p>
+  <div class="lp-cta-row" style="justify-content: center;">
+    <a href="https://deriv.com" target="_blank" class="btn btn-primary" style="padding: 14px 32px; font-size: 15px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
+      Abrir cuenta en Deriv
+    </a>
+    <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-outline" style="padding: 14px 32px; font-size: 15px;">
+      Ver dashboard en vivo
+    </a>
   </div>
 </section>
 
 <script>
-  document.querySelectorAll('.faq-item').forEach(function(item) {
-    item.querySelector('.faq-q').addEventListener('click', function() {
+(function() {
+  var capInput = document.getElementById('calc-capital');
+  var dailyInput = document.getElementById('calc-daily');
+  var monthsList = document.getElementById('calc-months-list');
+  var total12El = document.getElementById('calc-12m-total');
+  var gain12El = document.getElementById('calc-12m-gain');
+  
+  function fmt(n) {
+    if (n >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
+    if (n >= 1000) return '$' + Math.round(n).toLocaleString('es-CO');
+    return '$' + Math.round(n).toLocaleString('es-CO');
+  }
+  
+  function calculate() {
+    var capital = parseFloat(capInput.value) || 1000000;
+    var dailyPct = parseFloat(dailyInput.value) || 0.5;
+    var daily = dailyPct / 100;
+    var months = 12;
+    var results = [];
+    
+    for (var m = 1; m <= months; m++) {
+      var days = m * 30;
+      var grossGain = capital * (Math.pow(1 + daily, days) - 1);
+      var netGain = grossGain * 0.75;
+      var total = capital + netGain;
+      results.push({
+        month: m,
+        total: total,
+        netGain: netGain,
+        capital: capital
+      });
+    }
+    
+    // Render 12m highlight
+    var r12 = results[11];
+    total12El.textContent = fmt(r12.total);
+    gain12El.textContent = '+ ' + fmt(r12.netGain) + ' de ganancia neta';
+    
+    // Render months list (3, 6, 9, 12)
+    var showMonths = [3, 6, 9, 12];
+    var html = '';
+    for (var i = 0; i < showMonths.length; i++) {
+      var m = showMonths[i];
+      var r = results[m - 1];
+      var idealGain = capital * (Math.pow(1 + daily, m * 30) - 1);
+      var pct = (idealGain / capital * 100).toFixed(1);
+      html += '<div class="calc-month">';
+      html += '<div><div class="calc-month-label">' + m + ' meses</div><div class="calc-month-ideal">+ ' + pct + '% bruto</div></div>';
+      html += '<div><span class="calc-month-total">' + fmt(r.total) + '</span><span class="calc-month-gain">+' + fmt(r.netGain) + '</span></div>';
+      html += '</div>';
+    }
+    monthsList.innerHTML = html;
+  }
+  
+  capInput.addEventListener('input', calculate);
+  dailyInput.addEventListener('input', calculate);
+  
+  // FAQ toggle
+  document.querySelectorAll('.lp-faq-item').forEach(function(item) {
+    item.querySelector('.lp-faq-q').addEventListener('click', function() {
       item.classList.toggle('open');
     });
   });
-
-  document.getElementById('billingToggle').addEventListener('change', function() {
-    var annual = this.checked;
-    document.querySelectorAll('.amount[data-monthly]').forEach(function(el) {
-      el.textContent = annual ? el.dataset.annual : el.dataset.monthly;
-    });
-    document.querySelectorAll('.period-label').forEach(function(el) {
-      el.textContent = annual ? 'año' : 'mes';
-    });
-  });
+  
+  calculate();
+})();
 </script>
 
 {% endblock %}
