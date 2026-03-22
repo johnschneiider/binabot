@@ -245,10 +245,10 @@
   <div class="portal-topbar-balance">
     <div>
       <div class="balance-label">Mi capital</div>
-      <div class="balance-val">${{ inversionista.capital_actual|floatformat:0|default:"0" }}</div>
+      <div class="balance-val" data-usd="{{ inversionista.capital_actual|floatformat:2|default:"0" }}">${{ inversionista.capital_actual|floatformat:0|default:"0" }}</div>
       <div class="balance-sub">
-        Inicial: ${{ inversionista.capital_inicial|floatformat:0 }} &nbsp;|&nbsp;
-        <span class="balance-gain">
+        Inicial: <span data-usd="{{ inversionista.capital_inicial|floatformat:2 }}">${{ inversionista.capital_inicial|floatformat:0 }}</span> &nbsp;|&nbsp;
+        <span data-usd-pct="{{ rendimiento_pct|floatformat:2 }}">
           {% if rendimiento_pct >= 0 %}+{% endif %}{{ rendimiento_pct|floatformat:2 }}%
         </span>
       </div>
@@ -290,26 +290,28 @@
   <div class="portal-stats">
     <div class="portal-stat-card">
       <div class="portal-stat-label">Capital invertido</div>
-      <div class="portal-stat-value">${{ inversionista.capital_actual|floatformat:0 }}</div>
+      <div class="portal-stat-value" data-usd="{{ inversionista.capital_actual|floatformat:2 }}">${{ inversionista.capital_actual|floatformat:0 }}</div>
       <div class="portal-stat-sub">Tu participación en el fondo</div>
     </div>
     <div class="portal-stat-card">
       <div class="portal-stat-label">Ganancia acumulada</div>
-      <div class="portal-stat-value {% if ganancia_total > 0 %}green{% elif ganancia_total < 0 %}red{% endif %}">
+      <div class="portal-stat-value {% if ganancia_total > 0 %}green{% elif ganancia_total < 0 %}red{% endif %}"
+           data-usd="{{ ganancia_total|floatformat:2 }}" data-signed="1">
         {% if ganancia_total > 0 %}+{% endif %}${{ ganancia_total|floatformat:0 }}
       </div>
-      <div class="portal-stat-sub">{{ fee_pendiente|floatformat:0 }} fee (25%)</div>
+      <div class="portal-stat-sub"><span data-usd="{{ fee_pendiente|floatformat:2 }}">${{ fee_pendiente|floatformat:0 }}</span> fee (25%)</div>
     </div>
     <div class="portal-stat-card">
       <div class="portal-stat-label">Retorno total</div>
-      <div class="portal-stat-value {% if rendimiento_pct >= 0 %}green{% else %}red{% endif %}">
+      <div class="portal-stat-value {% if rendimiento_pct >= 0 %}green{% else %}red{% endif %}"
+           data-usd-pct="{{ rendimiento_pct|floatformat:2 }}">
         {% if rendimiento_pct >= 0 %}+{% endif %}{{ rendimiento_pct|floatformat:2 }}%
       </div>
       <div class="portal-stat-sub">Desde que empezaste</div>
     </div>
     <div class="portal-stat-card">
       <div class="portal-stat-label">Capital del fondo</div>
-      <div class="portal-stat-value blue">${{ balance_fondo|floatformat:0 }}</div>
+      <div class="portal-stat-value blue" data-usd="{{ balance_fondo|floatformat:2 }}">${{ balance_fondo|floatformat:0 }}</div>
       <div class="portal-stat-sub">Total administrado {{ moneda }}</div>
     </div>
   </div>
@@ -369,7 +371,7 @@
             {% for d in inversionista.depositos.all|slice:":5" %}
             <tr>
               <td class="mono">{{ d.fecha_creado|date:"d MMM yyyy" }}</td>
-              <td class="mono win">+${{ d.monto|floatformat:0 }}</td>
+              <td class="mono win" data-usd="{{ d.monto|floatformat:2 }}" data-signed="1">+${{ d.monto|floatformat:0 }}</td>
               <td>
                 {% if d.estado == 'CONFIRMADO' %}
                 <span class="badge badge-green">{{ d.get_estado_display }}</span>
@@ -411,7 +413,7 @@
             {% for r in inversionista.retiros.all|slice:":5" %}
             <tr>
               <td class="mono">{{ r.fecha_solicitud|date:"d MMM yyyy" }}</td>
-              <td class="mono loss">-${{ r.monto|floatformat:0 }}</td>
+              <td class="mono loss" data-usd="{{ r.monto|floatformat:2 }}" data-signed="1">-${{ r.monto|floatformat:0 }}</td>
               <td>
                 {% if r.estado == 'COMPLETADO' %}
                 <span class="badge badge-green">{{ r.get_estado_display }}</span>
@@ -448,6 +450,25 @@
     if (Math.abs(n) >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
     if (Math.abs(n) >= 1000) return '$' + Math.round(n).toLocaleString('es-CO');
     return '$' + Math.round(n).toLocaleString('es-CO');
+  }
+
+  function getCurrencySymbol() {
+    var sel = localStorage.getItem('qd_currency') || 'USD';
+    var syms = {USD:'$', COP:'$', ARS:'$', MXN:'$', EUR:'€', GBP:'£', BRL:'R$', CLP:'$'};
+    return syms[sel] || '$';
+  }
+
+  function getCurrencyRate() {
+    var sel = localStorage.getItem('qd_currency') || 'USD';
+    var rates = {
+      'USD': 1, 'COP': 4200, 'ARS': 1200, 'MXN': 20,
+      'EUR': 0.92, 'GBP': 0.79, 'BRL': 5.8, 'CLP': 950,
+    };
+    return rates[sel] || 1;
+  }
+
+  function convertUsd(val) {
+    return val * getCurrencyRate();
   }
 
   // --- FONDO CHART (barras mensuales) ---
@@ -546,8 +567,9 @@
 
         if (capitalChart) capitalChart.destroy();
 
-        var capitalData = data.capital;
+        var capitalData = data.capital.map(convertUsd);
         var pctData = data.rendimiento_pct;
+        var sym = getCurrencySymbol();
 
         capitalChart = new Chart(ctx, {
           type: 'line',
@@ -555,7 +577,7 @@
             labels: data.labels,
             datasets: [
               {
-                label: 'Capital ($)',
+                label: 'Capital (' + sym + ')',
                 data: capitalData,
                 borderColor: '#60a5fa',
                 backgroundColor: 'rgba(59,130,246,0.08)',
@@ -599,7 +621,8 @@
               tooltip: {
                 callbacks: {
                   label: function(ctx) {
-                    if (ctx.datasetIndex === 0) return 'Capital: ' + fmt(ctx.raw);
+                    var sym = getCurrencySymbol();
+                    if (ctx.datasetIndex === 0) return 'Capital: ' + sym + ctx.raw.toLocaleString('es-CO');
                     return 'Retorno: ' + ctx.raw.toFixed(2) + '%';
                   }
                 }
@@ -616,7 +639,11 @@
                 ticks: {
                   color: '#6b7280',
                   font: { size: 10 },
-                  callback: function(v) { return '$' + (v / 1000).toFixed(0) + 'K'; }
+                  callback: function(v) {
+                    if (Math.abs(v) >= 1000000) return sym + (v / 1000000).toFixed(1) + 'M';
+                    if (Math.abs(v) >= 1000) return sym + (v / 1000).toFixed(0) + 'K';
+                    return sym + v.toFixed(0);
+                  }
                 },
                 grid: { color: 'rgba(255,255,255,0.04)' },
               },

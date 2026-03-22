@@ -98,6 +98,51 @@
         transition: all 0.2s; font-family: var(--font);
         display: flex; align-items: center; gap: 6px;
       }
+
+      /* ===== CURRENCY SELECTOR ===== */
+      .currency-selector {
+        position: relative;
+        display: inline-flex;
+      }
+      .currency-btn {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 12px;
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        color: var(--text-2);
+        font-size: 13px; font-weight: 700;
+        font-family: var(--font);
+        cursor: pointer;
+        transition: all 0.15s;
+        user-select: none;
+      }
+      .currency-btn:hover { border-color: var(--border-bright); color: #fff; background: var(--bg-3); }
+      .currency-btn svg.chevron { width: 10px; height: 10px; color: var(--text-4); transition: transform 0.2s; }
+      .currency-btn.open svg.chevron { transform: rotate(180deg); }
+      .currency-dropdown {
+        position: absolute; top: calc(100% + 6px); right: 0;
+        min-width: 200px;
+        background: var(--bg-2); border: 1px solid var(--border);
+        border-radius: var(--r-lg); padding: 6px;
+        box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+        display: none; z-index: 2000;
+      }
+      .currency-dropdown.open { display: block; }
+      .currency-option {
+        display: flex; align-items: center; gap: 10px;
+        padding: 9px 12px; border-radius: var(--r-md);
+        font-size: 13px; color: var(--text-2);
+        cursor: pointer; transition: background 0.15s;
+      }
+      .currency-option:hover { background: var(--bg-3); color: #fff; }
+      .currency-option.selected { background: rgba(59,130,246,0.12); color: var(--accent-light); }
+      .currency-option .flag { font-size: 18px; line-height: 1; }
+      .currency-option .code { font-weight: 700; }
+      .currency-option .name { font-size: 11px; color: var(--text-4); margin-left: auto; }
+      .currency-option .code.active { color: var(--accent-light); }
+      .currency-option.selected .code { color: var(--accent-light); }
+      }
       .btn-nav-ghost {
         background: transparent; color: var(--text-3); border: 1px solid var(--border);
       }
@@ -322,6 +367,16 @@
         </ul>
 
         <div class="navbar-actions" id="navbarAuth">
+          <!-- Currency Selector -->
+          <div class="currency-selector" id="currencySelector">
+            <button class="currency-btn" id="currencyBtn" onclick="toggleCurrencyDropdown()">
+              <span id="currencyFlag">🇺🇸</span>
+              <span id="currencyCode">USD</span>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="currency-dropdown" id="currencyDropdown"></div>
+          </div>
+
           <div class="navbar-auth-loading" style="width:120px;height:36px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-full);"></div>
           <button class="navbar-toggle" onclick="document.querySelector('.navbar-links').classList.toggle('open')">☰</button>
         </div>
@@ -646,7 +701,7 @@
                 <div class="ud-name">${auth.displayName || auth.username || 'Usuario'}</div>
                 <div class="ud-email">${auth.email || ''}</div>
                 <div style="margin-top:6px;">
-                  <span style="font-size:14px;font-weight:800;color:#fff;" id="navBalance"></span>
+                  <span style="font-size:14px;font-weight:800;color:#fff;" id="navBalance" data-usd="0">—</span>
                   <span style="font-size:11px;margin-left:6px;" id="navRend"></span>
                 </div>
               </div>
@@ -792,6 +847,185 @@
       function selectPlan(slug) {
         window.location.href = '/planes/';
       }
+
+      /* ===== CURRENCY CONVERTER ===== */
+      (function() {
+        var currencies = {};
+        var currentCurrency = 'USD';
+        var ratesLoaded = false;
+
+        function fmtCurrency(amount, cur) {
+          var c = currencies[cur];
+          if (!c) return '$' + amount.toFixed(2);
+          var converted = amount * c.rate;
+          var decimals = c.decimals || 2;
+          var formatted = c.symbol + converted.toLocaleString('es-CO', {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+          });
+          return formatted;
+        }
+
+        function roundCurrency(amount, cur) {
+          var c = currencies[cur];
+          if (!c) return Math.round(amount * 100) / 100;
+          return Math.round(amount * c.rate * Math.pow(10, c.decimals || 2)) / Math.pow(10, c.decimals || 2);
+        }
+
+        function convertElement(el, amount, fromUsd) {
+          var c = currencies[currentCurrency];
+          if (!c) return;
+          var converted = fromUsd ? (amount * c.rate) : amount;
+          var d = c.decimals || 2;
+          var formatted = c.symbol + converted.toLocaleString('es-CO', {
+            minimumFractionDigits: d,
+            maximumFractionDigits: d
+          });
+          el.textContent = formatted;
+        }
+
+        function applyCurrency() {
+          document.querySelectorAll('[data-usd]').forEach(function(el) {
+            var amt = parseFloat(el.getAttribute('data-usd'));
+            if (isNaN(amt)) return;
+            var isSigned = el.getAttribute('data-signed') === '1';
+            var c = currencies[currentCurrency];
+            if (!c) return;
+            var converted = amt * c.rate;
+            var d = c.decimals || 2;
+            var sign = isSigned && amt > 0 ? '+' : (amt < 0 ? '-' : '');
+            var absVal = Math.abs(converted);
+            var formatted = c.symbol + absVal.toLocaleString('es-CO', {
+              minimumFractionDigits: d,
+              maximumFractionDigits: d
+            });
+            el.textContent = sign + formatted;
+          });
+          document.querySelectorAll('[data-usd-pct]').forEach(function(el) {
+            var pct = parseFloat(el.getAttribute('data-usd-pct'));
+            if (isNaN(pct)) return;
+            var sign = pct > 0 ? '+' : '';
+            el.textContent = sign + pct.toFixed(2) + '%';
+            el.style.color = pct > 0 ? '#34d399' : (pct < 0 ? '#f87171' : '');
+          });
+        }
+
+        function initCurrency() {
+          currentCurrency = localStorage.getItem('qd_currency') || 'USD';
+          var savedFlag = localStorage.getItem('qd_currency_flag') || '🇺🇸';
+
+          var flagEl = document.getElementById('currencyFlag');
+          var codeEl = document.getElementById('currencyCode');
+          if (flagEl) flagEl.textContent = savedFlag;
+          if (codeEl) codeEl.textContent = currentCurrency;
+
+          fetch('/portal/api/moneda/')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              currencies = data.rates || {};
+              ratesLoaded = true;
+              renderDropdown();
+              applyCurrency();
+              updateNavbarBalance();
+            })
+            .catch(function() {
+              currencies = {
+                'USD': {rate: 1, symbol: '$', code: 'USD', decimals: 2},
+                'COP': {rate: 4200, symbol: '$', code: 'COP', decimals: 0},
+                'ARS': {rate: 1200, symbol: '$', code: 'ARS', decimals: 2},
+                'MXN': {rate: 20, symbol: '$', code: 'MXN', decimals: 2},
+                'EUR': {rate: 0.92, symbol: '€', code: 'EUR', decimals: 2},
+                'GBP': {rate: 0.79, symbol: '£', code: 'GBP', decimals: 2},
+                'BRL': {rate: 5.8, symbol: 'R$', code: 'BRL', decimals: 2},
+                'CLP': {rate: 950, symbol: '$', code: 'CLP', decimals: 0},
+              };
+              renderDropdown();
+              applyCurrency();
+            });
+        }
+
+        function renderDropdown() {
+          var dropdown = document.getElementById('currencyDropdown');
+          if (!dropdown) return;
+          var html = '';
+          Object.keys(currencies).forEach(function(code) {
+            var c = currencies[code];
+            var sel = code === currentCurrency ? 'selected' : '';
+            html += '<div class="currency-option ' + sel + '" onclick="selectCurrency(\'' + code + '\')">';
+            html += '<span class="flag">' + (c.flag || '💱') + '</span>';
+            html += '<span class="code">' + code + '</span>';
+            html += '<span class="name">' + c.name + '</span>';
+            html += '</div>';
+          });
+          dropdown.innerHTML = html;
+        }
+
+        window.selectCurrency = function(code) {
+          currentCurrency = code;
+          var c = currencies[code] || currencies['USD'];
+          localStorage.setItem('qd_currency', code);
+          localStorage.setItem('qd_currency_flag', c.flag || '💱');
+
+          var flagEl = document.getElementById('currencyFlag');
+          var codeEl = document.getElementById('currencyCode');
+          var btn = document.getElementById('currencyBtn');
+          if (flagEl) flagEl.textContent = c.flag || '💱';
+          if (codeEl) codeEl.textContent = code;
+          if (btn) btn.classList.remove('open');
+          document.getElementById('currencyDropdown').classList.remove('open');
+
+          renderDropdown();
+          applyCurrency();
+          updateNavbarBalance();
+        };
+
+        window.toggleCurrencyDropdown = function() {
+          var btn = document.getElementById('currencyBtn');
+          var dd = document.getElementById('currencyDropdown');
+          if (dd.classList.contains('open')) {
+            dd.classList.remove('open');
+            if (btn) btn.classList.remove('open');
+          } else {
+            dd.classList.add('open');
+            if (btn) btn.classList.add('open');
+          }
+        };
+
+        document.addEventListener('click', function(e) {
+          var sel = document.getElementById('currencySelector');
+          if (sel && !sel.contains(e.target)) {
+            var dd = document.getElementById('currencyDropdown');
+            var btn = document.getElementById('currencyBtn');
+            if (dd) dd.classList.remove('open');
+            if (btn) btn.classList.remove('open');
+          }
+        });
+
+        window.updateNavbarBalance = function() {
+          if (!ratesLoaded) return;
+          fetch('/portal/api/navbar/', {credentials:'same-origin'})
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) {
+              if (!data) return;
+              var capEl = document.getElementById('navBalance');
+              var pctEl = document.getElementById('navRend');
+              if (capEl) {
+                capEl.textContent = fmtCurrency(data.capital, currentCurrency);
+              }
+              if (pctEl) {
+                var pct = data.rendimiento_pct || 0;
+                var sign = pct >= 0 ? '+' : '';
+                pctEl.textContent = sign + pct.toFixed(2) + '%';
+                pctEl.style.color = pct >= 0 ? '#34d399' : '#f87171';
+              }
+            })
+            .catch(function() {});
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+          initCurrency();
+        });
+      })();
     </script>
     {% block extra_body %}{% endblock %}
   </body>

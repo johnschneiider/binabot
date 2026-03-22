@@ -23,6 +23,7 @@ urlpatterns = [
     path("portal/api/fondo/", views.api_fondo_stats, name="api_fondo_stats"),
     path("portal/api/mis-rendimientos/", views.api_mis_rendimientos, name="api_mis_rendimientos"),
     path("portal/api/navbar/", views.api_navbar_balance, name="api_navbar_balance"),
+    path("portal/api/moneda/", views.api_moneda, name="api_moneda"),
     path("portal/api/depositar/", views.api_depositar, name="api_depositar"),
     path("portal/api/retirar/", views.api_retirar, name="api_retirar"),
     path("portal/depositar/", views.depositar_view, name="depositar"),

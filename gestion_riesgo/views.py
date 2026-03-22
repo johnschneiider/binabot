@@ -28,9 +28,9 @@ import time
 import queue
 
 from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, Operacion, TickDerivSnapshot, TickDerivHistorico
-from django.contrib.auth.models import User
 from django.contrib.auth import login
 from django.contrib.auth.hashers import make_password
+from subscriptions.models import Usuario
 import subprocess
 
 # cola para SSE
@@ -1230,14 +1230,14 @@ def registro_inversionista(request):
 
         if not username:
             errors["username"] = "El nombre de usuario es requerido."
-        elif User.objects.filter(username=username).exists():
+        elif Usuario.objects.filter(username=username).exists():
             errors["username"] = "Este nombre de usuario ya está registrado."
         elif len(username) < 3:
             errors["username"] = "Mínimo 3 caracteres."
 
         if not email:
             errors["email"] = "El correo es requerido."
-        elif User.objects.filter(email=email).exists():
+        elif Usuario.objects.filter(email=email).exists():
             errors["email"] = "Este correo ya está registrado."
         elif not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
             errors["email"] = "Correo inválido."
@@ -1271,7 +1271,7 @@ def registro_inversionista(request):
                 pass
 
         if not errors:
-            user = User.objects.create(
+            user = Usuario.objects.create(
                 username=username,
                 email=email,
                 password=make_password(password),
@@ -1394,6 +1394,59 @@ def api_navbar_balance(request):
         "ganancia_acumulada": float(inv.ganancia_acumulada),
         "rendimiento_pct": round(inv.rendimiento_pct, 2),
         "balance_fondo": balance_fondo,
+    })
+
+
+# ============================================================
+# API: TASAS DE CAMBIO (base USD)
+# ============================================================
+
+EXCHANGE_RATES = {
+    "USD": {"rate": 1.0, "symbol": "$", "flag": "🇺🇸", "code": "USD", "name": "Dólar estadounidense", "decimals": 2},
+    "COP": {"rate": 4200.0, "symbol": "$", "flag": "🇨🇴", "code": "COP", "name": "Peso colombiano", "decimals": 0},
+    "ARS": {"rate": 1200.0, "symbol": "$", "flag": "🇦🇷", "code": "ARS", "name": "Peso argentino", "decimals": 2},
+    "MXN": {"rate": 20.0, "symbol": "$", "flag": "🇲🇽", "code": "MXN", "name": "Peso mexicano", "decimals": 2},
+    "EUR": {"rate": 0.92, "symbol": "€", "flag": "🇪🇺", "code": "EUR", "name": "Euro", "decimals": 2},
+    "GBP": {"rate": 0.79, "symbol": "£", "flag": "🇬🇧", "code": "GBP", "name": "Libra esterlina", "decimals": 2},
+    "BRL": {"rate": 5.80, "symbol": "R$", "flag": "🇧🇷", "code": "BRL", "name": "Real brasileño", "decimals": 2},
+    "CLP": {"rate": 950.0, "symbol": "$", "flag": "🇨🇱", "code": "CLP", "name": "Peso chileno", "decimals": 0},
+}
+
+
+def api_moneda(request):
+    """
+    Devuelve tasas de cambio y metadata de monedas disponibles.
+    Base: USD = 1.0
+    """
+    return JsonResponse({"base": "USD", "rates": EXCHANGE_RATES})
+
+
+def api_tasa(request):
+    """
+    Convierte un monto en USD a una moneda destino.
+    GET params: monto, moneda (código)
+    """
+    try:
+        monto = float(request.GET.get("monto", 0))
+        moneda = request.GET.get("moneda", "USD").upper()
+    except ValueError:
+        return JsonResponse({"error": "Parámetros inválidos"}, status=400)
+
+    if moneda not in EXCHANGE_RATES:
+        return JsonResponse({"error": "Moneda no soportada"}, status=400)
+
+    rate_info = EXCHANGE_RATES[moneda]
+    rate = rate_info["rate"]
+    convertido = round(monto * rate, rate_info["decimals"])
+
+    return JsonResponse({
+        "original": monto,
+        "convertido": convertido,
+        "moneda": moneda,
+        "tasa": rate,
+        "symbol": rate_info["symbol"],
+        "decimals": rate_info["decimals"],
+        "formatted": f"{rate_info['symbol']}{convertido:,.{rate_info['decimals']}f}".replace(",", "X").replace(".", ",").replace("X", "."),
     })
 
 

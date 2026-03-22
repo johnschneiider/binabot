@@ -161,14 +161,14 @@
     <h1>Depositar capital</h1>
     <p class="subtitle">Agrega fondos a tu cuenta para que el bot opere con ellos.</p>
 
-    <div class="balance-mini">
+        <div class="balance-mini">
       <div>
         <div class="label">Mi capital actual</div>
-        <div class="val">${{ inversionista.capital_actual|floatformat:0 }}</div>
+        <div class="val" data-usd="{{ inversionista.capital_actual|floatformat:2 }}">${{ inversionista.capital_actual|floatformat:0 }}</div>
       </div>
       <div style="text-align:right;">
         <div class="label">Fondo total</div>
-        <div class="val" style="color:var(--accent-light); font-size:16px;">${{ balance_fondo|floatformat:0 }}</div>
+        <div class="val" style="color:var(--accent-light); font-size:16px;" data-usd="{{ balance_fondo|floatformat:2 }}">${{ balance_fondo|floatformat:0 }}</div>
       </div>
     </div>
 
@@ -215,7 +215,7 @@
           {% for d in depositos %}
           <tr>
             <td class="mono">{{ d.fecha_creado|date:"d MMM yyyy" }}</td>
-            <td class="mono win">+${{ d.monto|floatformat:0 }}</td>
+            <td class="mono win" data-usd="{{ d.monto|floatformat:2 }}" data-signed="1">+${{ d.monto|floatformat:0 }}</td>
             <td>
               {% if d.estado == 'CONFIRMADO' %}<span class="badge badge-green">{{ d.get_estado_display }}</span>
               {% elif d.estado == 'PENDIENTE' %}<span class="badge badge-yellow">{{ d.get_estado_display }}</span>

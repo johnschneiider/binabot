@@ -131,14 +131,15 @@
     <h1>Retirar capital</h1>
     <p class="subtitle">Solicita el retiro de tu capital. Procesamos en 24-48h hábiles.</p>
 
-    <div class="balance-mini">
+        <div class="balance-mini">
       <div>
         <div class="label">Capital disponible</div>
-        <div class="val">${{ inversionista.capital_actual|floatformat:0 }}</div>
+        <div class="val" data-usd="{{ inversionista.capital_actual|floatformat:2 }}">${{ inversionista.capital_actual|floatformat:0 }}</div>
       </div>
       <div style="text-align:right;">
         <div class="label">Retorno</div>
-        <div class="val" style="color:var(--green-light); font-size:16px;">
+        <div class="val" style="color:var(--green-light); font-size:16px;"
+             data-usd-pct="{{ inversionista.rendimiento_pct|floatformat:2 }}">
           {% if inversionista.rendimiento_pct >= 0 %}+{% endif %}{{ inversionista.rendimiento_pct|floatformat:2 }}%
         </div>
       </div>
@@ -182,7 +183,7 @@
           {% for r in retiros %}
           <tr>
             <td class="mono">{{ r.fecha_solicitud|date:"d MMM yyyy" }}</td>
-            <td class="mono loss">-${{ r.monto|floatformat:0 }}</td>
+            <td class="mono loss" data-usd="{{ r.monto|floatformat:2 }}" data-signed="1">-${{ r.monto|floatformat:0 }}</td>
             <td>
               {% if r.estado == 'COMPLETADO' %}<span class="badge badge-green">{{ r.get_estado_display }}</span>
               {% elif r.estado == 'EN_PROCESO' %}<span class="badge badge-yellow">{{ r.get_estado_display }}</span>
