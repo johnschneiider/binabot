@@ -289,30 +289,16 @@
       <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos 200 ticks recibidos</div>
     </div>
 
-    <!-- Gráfico R_100 -->
+    <!-- TABLA DE OPERACIONES -->
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
-          <div class="big">R_100 - Precio en tiempo real</div>
-          <div class="muted">Índice sintético Deriv · EMA Rápida (50) · EMA Lenta (100)</div>
+          <div class="big">Historial de Operaciones</div>
+          <div class="muted">Ultimas 50 operaciones del bot</div>
         </div>
-        <div>
-          <div class="mono" id="ticks_count_r100">0 ticks</div>
-          <div class="mono" id="ticks_current_price_r100">—</div>
-        </div>
-      </div>
-      
-      <div class="chart-wrap" style="margin-top: 10px;">
-        <canvas id="ticks_chart_r100"></canvas>
-      </div>
-      <div class="muted" style="margin-top: 8px;">Actualización en tiempo real · Últimos 200 ticks recibidos</div>
-    </div>
-
-    <div class="card" style="margin-top: 14px;">
-      <div class="row">
-        <div>
-          <div class="big">Operaciones Deriv (reales, últimas 50)</div>
-          <div class="muted">Solo entradas ejecutadas por este bot · Muestra profit y moneda (afecta balance real)</div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span class="badge ok">REAL</span>
+          <span class="badge neutral">DEMO</span>
         </div>
       </div>
 
@@ -320,21 +306,21 @@
         <table>
           <thead>
             <tr>
-              <th>Activo</th>
+              <th>Cuenta</th>
               <th>Tipo</th>
               <th>Estado</th>
               <th>Profit</th>
               <th>Umbral</th>
               <th>Entrada</th>
               <th>Cierre</th>
-              <th>Duración</th>
-              <th>Fecha/Hora (Colombia)</th>
+              <th>Duracion</th>
+              <th>Fecha/Hora</th>
             </tr>
           </thead>
           <tbody id="tabla_operaciones_deriv">
             {% for op in operaciones_deriv %}
               <tr>
-                <td class="mono">{{ op.simbolo|default:"—" }}</td>
+                <td><span class="badge {% if op.simbolo == 'DEMO' %}neutral{% else %}ok{% endif %}">{{ op.simbolo|default:"REAL" }}</span></td>
                 <td class="mono">{{ op.contract_type|default:"—" }}</td>
                 <td>{{ op.estado }}</td>
                 <td class="mono">{{ op.profit|default:"—" }}</td>
@@ -357,7 +343,7 @@
                 </td>
               </tr>
             {% empty %}
-              <tr><td colspan="9" class="muted">Aún no hay operaciones Deriv.</td></tr>
+              <tr><td colspan="9" class="muted">Aun no hay operaciones.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -623,7 +609,7 @@
         const tbody = document.getElementById("tabla_operaciones_deriv");
         if (!tbody) return;
         if (!ops || ops.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="9" class="muted">Aún no hay operaciones Deriv.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="muted">Aun no hay operaciones.</td></tr>';
           return;
         }
         console.log("[RENDER OPS] Recibidas:", ops.length, "operaciones");
@@ -633,13 +619,17 @@
             : ((op.opened_epoch && op.closed_epoch) ? `${Number(op.closed_epoch) - Number(op.opened_epoch)}s` : "—");
           const fh = op.fecha_hora ? String(op.fecha_hora) : "—";
           const umbral = (op.umbral_usado === null || op.umbral_usado === undefined) ? "—" : Number(op.umbral_usado).toFixed(3);
-          const activo = op.simbolo ? String(op.simbolo) : "—";
+          const activo = op.simbolo ? String(op.simbolo) : "REAL";
           const tipo = (op.contract_type || "—");
           const entrada = (op.entry_spot === null || op.entry_spot === undefined) ? "—" : Number(op.entry_spot).toFixed(3);
           const cierre = (op.exit_spot === null || op.exit_spot === undefined) ? "—" : Number(op.exit_spot).toFixed(3);
+          // Badge para tipo de cuenta
+          const isDemo = activo === 'DEMO';
+          const badgeClass = isDemo ? 'badge neutral' : 'badge ok';
+          const badgeText = activo;
           return `
             <tr>
-              <td class="mono">${activo}</td>
+              <td><span class="${badgeClass}">${badgeText}</span></td>
               <td class="mono">${tipo}</td>
               <td>${op.estado}</td>
               <td class="mono">${(op.profit === null || op.profit === undefined) ? "—" : fmt2(op.profit)}</td>
