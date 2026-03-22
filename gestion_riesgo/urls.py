@@ -16,6 +16,13 @@ urlpatterns = [
     path("api/logs/", views.logs_json, name="logs_json"),
     path("api/ticks_colector/toggle/", views.ticks_colector_toggle, name="ticks_colector_toggle"),
     path("api/sse/", views.sse_stream, name="sse_stream"),
+
+    # Portal del Inversionista
+    path("inversionista/", views.portal_inversionista, name="portal_inversionista"),
+    path("inversionista/crear/", views.crear_inversionista, name="crear_inversionista"),
+    path("inversionista/api/rendimiento/", views.api_rendimiento_inversionista, name="api_rendimiento_inversionista"),
+    path("inversionista/liquidar/<int:inv_id>/", views.liquidar_inversionista, name="liquidar_inversionista"),
+    path("admin/inversionistas/", views.admin_inversionistas, name="admin_inversionistas"),
 ]
 
 

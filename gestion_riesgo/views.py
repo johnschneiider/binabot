@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime, timezone as dt_timezone, date
 import os
 import re
 import math
@@ -8,8 +8,8 @@ from pathlib import Path
 
 from django.conf import settings
 from django.utils import timezone
-from django.http import JsonResponse, FileResponse, HttpResponseNotFound
-from django.shortcuts import render
+from django.http import JsonResponse, FileResponse, HttpResponseNotFound, StreamingHttpResponse, HttpResponseForbidden
+from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.contrib.auth.decorators import login_required
@@ -17,7 +17,11 @@ from django.db.models import F
 from django.db.utils import OperationalError
 from django.db.models import Value
 from django.db.models.functions import Coalesce
-from django.http import StreamingHttpResponse
+
+from .models import (
+    Inversionista, RendimientoDiario, Liquidacion,
+    BalanceInversionista, Cuenta, OperacionDeriv,
+)
 import json
 import time
 import queue
@@ -1007,4 +1011,190 @@ def estado_eurusd_json(request):
         "capital": capital,
         "operaciones": operaciones,
     })
+
+
+# ============================================================
+# PORTAL DEL INVERSIONISTA
+# ============================================================
+
+@login_required
+def portal_inversionista(request):
+    """
+    Dashboard principal del inversionista.
+    Muestra capital, rendimiento, ganancias acumuladas y fee a pagar.
+    """
+    try:
+        inv = request.user.inversionista
+    except Inversionista.DoesNotExist:
+        return redirect("gestion_riesgo:crear_inversionista")
+
+    # Balance history (ultimos 90 dias)
+    balance_history = (
+        inv.balance_history.order_by("-fecha")[:90]
+    )
+    balance_history = list(reversed(balance_history))
+
+    # Rendimientos diarios (ultimos 30 dias)
+    rendimientos = list(
+        inv.rendimientos_diarios.order_by("-fecha")[:30]
+    )
+    rendimientos = list(reversed(rendimientos))
+
+    # Liquidaciones recientes
+    liquidaciones = list(
+        inv.liquidaciones.order_by("-fecha")[:10]
+    )
+
+    # Estadisticas
+    dias_activos = inv.rendimientos_diarios.count()
+    ganancia_total = float(inv.ganancia_acumulada)
+    fee_pendiente = ganancia_total * (float(inv.fee_performance_pct) / 100.0)
+    ganancia_neta = ganancia_total - fee_pendiente
+
+    # Proyeccion (rendimiento diario promedio)
+    if rendimientos:
+        ultimos_7 = rendimientos[-7:] if len(rendimientos) >= 7 else rendimientos
+        avg_daily = sum(float(r.rendimiento_pct) for r in ultimos_7) / len(ultimos_7)
+    else:
+        avg_daily = float(inv.rendimiento_diario_pct)
+
+    dias_mes = 30
+    ganancia_mes_estimada = float(inv.capital_actual) * ((1 + avg_daily / 100) ** dias_mes - 1)
+
+    return render(request, "gestion_riesgo/portal_inversionista.html", {
+        "inversionista": inv,
+        "balance_history": balance_history,
+        "rendimientos": rendimientos,
+        "liquidaciones": liquidaciones,
+        "dias_activos": dias_activos,
+        "ganancia_total": ganancia_total,
+        "fee_pendiente": fee_pendiente,
+        "ganancia_neta": ganancia_neta,
+        "avg_daily": avg_daily,
+        "ganancia_mes_estimada": ganancia_mes_estimada,
+    })
+
+
+@login_required
+def crear_inversionista(request):
+    """
+    Formulario para crear/editar perfil de inversionista.
+    """
+    try:
+        inv = request.user.inversionista
+    except Inversionista.DoesNotExist:
+        inv = None
+
+    if request.method == "POST":
+        capital = float(request.POST.get("capital_inicial", 0))
+        nombre = request.POST.get("nombre", "").strip()
+        telefono = request.POST.get("telefono", "").strip()
+        whatsapp = request.POST.get("whatsapp", "").strip()
+        deriv_api_token = request.POST.get("deriv_api_token", "").strip()
+        deriv_account_id = request.POST.get("deriv_account_id", "").strip()
+
+        if not inv:
+            inv = Inversionista(user=request.user)
+
+        inv.nombre = nombre
+        inv.telefono = telefono
+        inv.whatsapp = whatsapp
+        inv.deriv_api_token = deriv_api_token
+        inv.deriv_account_id = deriv_account_id
+        inv.capital_inicial = capital
+        inv.capital_actual = capital
+        inv.save()
+
+        return redirect("gestion_riesgo:portal_inversionista")
+
+    return render(request, "gestion_riesgo/crear_inversionista.html", {
+        "inversionista": inv,
+    })
+
+
+@login_required
+def api_rendimiento_inversionista(request):
+    """
+    API JSON para graficar rendimiento en tiempo real.
+    """
+    try:
+        inv = request.user.inversionista
+    except Inversionista.DoesNotExist:
+        return JsonResponse({"error": "No existe"}, status=404)
+
+    dias = int(request.GET.get("dias", 30))
+    history = list(
+        inv.balance_history.order_by("-fecha")[:dias]
+    )
+    history = list(reversed(history))
+
+    labels = []
+    capital_data = []
+    ganancia_data = []
+
+    for b in history:
+        labels.append(b.fecha.strftime("%d %b"))
+        capital_data.append(float(b.capital))
+        ganancia_data.append(float(b.ganancia_acumulada))
+
+    return JsonResponse({
+        "labels": labels,
+        "capital": capital_data,
+        "ganancia": ganancia_data,
+        "capital_actual": float(inv.capital_actual),
+        "capital_inicial": float(inv.capital_inicial),
+        "ganancia_acumulada": float(inv.ganancia_acumulada),
+        "fee_pendiente": float(inv.ganancia_acumulada) * (float(inv.fee_performance_pct) / 100),
+    })
+
+
+@login_required
+def admin_inversionistas(request):
+    """
+    Panel admin para ver todos los inversionistas (solo superusers).
+    """
+    if not request.user.is_superuser:
+        return HttpResponseForbidden("Solo administradores.")
+
+    invs = Inversionista.objects.select_related("user").order_by("-created_at")
+
+    return render(request, "gestion_riesgo/admin_inversionistas.html", {
+        "inversionistas": invs,
+    })
+
+
+@login_required
+def liquidar_inversionista(request, inv_id):
+    """
+    Registrar una liquidacion de fee para un inversionista.
+    Solo superusers o el propio inversionista.
+    """
+    if request.method == "POST":
+        try:
+            inv = Inversionista.objects.get(id=inv_id)
+        except Inversionista.DoesNotExist:
+            return JsonResponse({"error": "No existe"}, status=404)
+
+        if not request.user.is_superuser and request.user != inv.user:
+            return JsonResponse({"error": "Permiso denegado"}, status=403)
+
+        ganancia = float(request.POST.get("ganancia_bruta", 0))
+        monto = ganancia * (float(inv.fee_performance_pct) / 100.0)
+        tipo = request.POST.get("tipo", Liquidacion.Tipo.COBRO_FEE)
+        observaciones = request.POST.get("observaciones", "").strip()
+
+        liq = Liquidacion.objects.create(
+            inversionista=inv,
+            tipo=tipo,
+            ganancia_bruta=ganancia,
+            fee_pct=float(inv.fee_performance_pct),
+            monto=monto,
+            observaciones=observaciones,
+            fecha=date.today(),
+            confirmado=False,
+        )
+
+        return redirect("gestion_riesgo:portal_inversionista")
+
+    return JsonResponse({"error": "Metodo no permitido"}, status=405)
 

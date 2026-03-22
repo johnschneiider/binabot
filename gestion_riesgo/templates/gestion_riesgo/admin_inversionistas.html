@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Invers · QUANT·DERIV{% endblock %}
+
+{% block extra_head %}
+<style>
+  .admin-body { padding: 40px clamp(16px, 4vw, 48px); max-width: 1200px; margin: 0 auto; }
+  .admin-title { font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -0.5px; margin-bottom: 8px; }
+  .admin-sub { font-size: 14px; color: var(--text-4); margin-bottom: 32px; }
+  .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .admin-table th {
+    padding: 12px 14px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-4);
+    border-bottom: 1px solid var(--border); text-align: left;
+    background: var(--bg-2);
+  }
+  .admin-table td {
+    padding: 12px 14px; color: var(--text-3);
+    border-bottom: 1px solid var(--border);
+  }
+  .admin-table tr:hover td { background: var(--bg-4); }
+  .admin-table .mono { font-family: monospace; }
+  .win { color: #34d399; }
+  .loss { color: #f87171; }
+  .badge-sm { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; }
+  .badge-activo { background: rgba(16,185,129,0.15); color: #34d399; }
+  .badge-pausado { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  .badge-retirado { background: rgba(107,114,128,0.15); color: #9ca3af; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="admin-body">
+  <div class="admin-title">Inversionistas</div>
+  <div class="admin-sub">{{ inversionistas.count }} registrados</div>
+
+  <table class="admin-table">
+    <thead>
+      <tr>
+        <th>Usuario</th>
+        <th>Nombre</th>
+        <th>Estado</th>
+        <th>Capital inicial</th>
+        <th>Capital actual</th>
+        <th>Ganancia acum.</th>
+        <th>Fee 25%</th>
+        <th>Días activo</th>
+        <th>Creado</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for inv in inversionistas %}
+      <tr>
+        <td><a href="/admin/auth/user/{{ inv.user.id }}/change/" target="_blank" style="color: var(--accent-light);">{{ inv.user.username }}</a></td>
+        <td>{{ inv.nombre|default:"—" }}</td>
+        <td>
+          {% if inv.estado == 'ACTIVO' %}<span class="badge-sm badge-activo">ACTIVO</span>
+          {% elif inv.estado == 'PAUSADO' %}<span class="badge-sm badge-pausado">PAUSADO</span>
+          {% else %}<span class="badge-sm badge-retirado">RETIRADO</span>{% endif %}
+        </td>
+        <td class="mono">${{ inv.capital_inicial|floatformat:0 }}</td>
+        <td class="mono">${{ inv.capital_actual|floatformat:0 }}</td>
+        <td class="mono {% if inv.ganancia_acumulada > 0 %}win{% elif inv.ganancia_acumulada < 0 %}loss{% endif %}">
+          {% if inv.ganancia_acumulada > 0 %}+{% endif %}${{ inv.ganancia_acumulada|floatformat:0 }}
+        </td>
+        <td class="mono">${{ inv.ganancia_acumulada|floatformat:0 }}</td>
+        <td>{{ inv.rendimientos_diarios.count }}</td>
+        <td class="mono">{{ inv.created_at|date:"d MMM yy" }}</td>
+        <td>
+          <a href="{% url 'gestion_riesgo:portal_inversionista' %}" class="btn btn-outline btn-sm">Ver portal</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="10" style="text-align: center; color: var(--text-4);">No hay inversionistas registrados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

@@ -1,6 +1,151 @@
 from __future__ import annotations
 
 from django.db import models
+from django.conf import settings
+
+
+class Inversionista(models.Model):
+    """
+    Representa a un cliente/inversionista que deposita capital
+    para que el bot opere en Deriv.
+    """
+
+    class Estado(models.TextChoices):
+        ACTIVO = "ACTIVO", "Activo"
+        PAUSADO = "PAUSADO", "Pausado"
+        RETIRADO = "RETIRADO", "Retirado"
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="inversionista")
+    nombre = models.CharField(max_length=100, default="")
+    telefono = models.CharField(max_length=20, blank=True, default="")
+    whatsapp = models.CharField(max_length=20, blank=True, default="")
+
+    # Capital
+    capital_inicial = models.FloatField(default=0.0)
+    capital_actual = models.FloatField(default=0.0)
+    ganancia_acumulada = models.FloatField(default=0.0)
+    ganancia_diaria = models.FloatField(default=0.0)
+
+    # Deriv
+    deriv_app_id = models.CharField(max_length=32, blank=True, default="1089")
+    deriv_api_token = models.CharField(max_length=128, blank=True, default="")
+    deriv_account_id = models.CharField(max_length=32, blank=True, default="")
+
+    # Config
+    rendimiento_diario_pct = models.FloatField(default=0.5)
+    fee_performance_pct = models.FloatField(default=25.0)
+
+    # Estado
+    estado = models.CharField(max_length=16, choices=Estado.choices, default=Estado.ACTIVO)
+    observaciones = models.TextField(blank=True, default="")
+
+    # Auditoria
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user"]),
+            models.Index(fields=["estado"]),
+            models.Index(fields=["-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Inversionista({self.user.username}) capital=${self.capital_actual:,.0f} estado={self.estado}"
+
+
+class RendimientoDiario(models.Model):
+    """
+    Registro de rendimiento diario por inversionista.
+    Se calcula cada día (o bajo demanda) para tracking de P&L.
+    """
+
+    inversionista = models.ForeignKey(Inversionista, on_delete=models.CASCADE, related_name="rendimientos_diarios")
+    fecha = models.DateField()
+
+    capital_inicio_dia = models.FloatField(default=0.0)
+    capital_fin_dia = models.FloatField(default=0.0)
+    ganancia_dia = models.FloatField(default=0.0)
+    rendimiento_pct = models.FloatField(default=0.0)
+
+    balance_deriv = models.FloatField(null=True, blank=True)
+    trades_count = models.IntegerField(default=0)
+    trades_wins = models.IntegerField(default=0)
+    trades_losses = models.IntegerField(default=0)
+    winrate = models.FloatField(default=0.0)
+
+    observaciones = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["inversionista", "-fecha"]),
+            models.Index(fields=["-fecha"]),
+        ]
+        unique_together = [["inversionista", "fecha"]]
+
+    def __str__(self) -> str:
+        return f"Rendimiento({self.inversionista.user.username} {self.fecha}) gain={self.ganancia_dia:+.2f}%"
+
+
+class Liquidacion(models.Model):
+    """
+    Registro de liquidaciones (cobro del 25% sobre ganancias).
+    """
+
+    class Tipo(models.TextChoices):
+        COBRO_FEE = "COBRO_FEE", "Cobro de fee"
+        PAGO_INVERSIONISTA = "PAGO_INVERSIONISTA", "Pago a inversionista"
+        DEPOSITO = "DEPOSITO", "Depósito"
+        RETIRO = "RETIRO", "Retiro de capital"
+
+    inversionista = models.ForeignKey(Inversionista, on_delete=models.CASCADE, related_name="liquidaciones")
+    tipo = models.CharField(max_length=24, choices=Tipo.choices)
+
+    ganancia_bruta = models.FloatField(default=0.0)
+    fee_pct = models.FloatField(default=25.0)
+    monto = models.FloatField(default=0.0)
+    observaciones = models.TextField(blank=True, default="")
+
+    fecha = models.DateField()
+    confirmado = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["inversionista", "-fecha"]),
+        ]
+        ordering = ["-fecha"]
+
+    def __str__(self) -> str:
+        return f"Liquidacion({self.inversionista.user.username} {self.tipo} ${self.monto:,.0f})"
+
+
+class BalanceInversionista(models.Model):
+    """
+    Snapshot diario del balance para graficar la curva de capital.
+    """
+
+    inversionista = models.ForeignKey(Inversionista, on_delete=models.CASCADE, related_name="balance_history")
+    fecha = models.DateField()
+    capital = models.FloatField()
+    ganancia_acumulada = models.FloatField(default=0.0)
+    ganancia_diaria = models.FloatField(default=0.0)
+    rendimiento_dia_pct = models.FloatField(default=0.0)
+    epoch = models.BigIntegerField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["inversionista", "-fecha"]),
+        ]
+        unique_together = [["inversionista", "fecha"]]
+
+    def __str__(self) -> str:
+        return f"BalanceInversionista({self.inversionista.user.username} {self.fecha}) ${self.capital:,.0f}"
 
 
 class Cuenta(models.Model):
