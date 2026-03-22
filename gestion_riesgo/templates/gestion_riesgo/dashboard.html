@@ -262,7 +262,7 @@
       <div class="row">
         <div>
           <div class="big">R_100 - Precio en Tiempo Real (últimos 200 ticks)</div>
-          <div class="muted">Eje X: ticks · Eje Y: precio</div>
+          <div class="muted">Ticks del mercado</div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="muted" style="font-size: 11px;" id="ticks_count_forex">0 ticks</div>
@@ -273,12 +273,12 @@
       <!-- Controles de EMAs R_100 -->
       <div style="margin-top: 12px; padding: 12px; background: var(--bg-2); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <label style="font-size: 12px; color: var(--text-3); font-weight: 500;">EMA Rapida:</label>
-          <input type="number" id="ema_fast_period_forex" value="50" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; background: var(--bg-1); color: var(--text-1);" />
+          <label style="font-size: 12px; color: var(--text-3); font-weight: 500;">EMA (5):</label>
+          <input type="number" id="ema_fast_period_forex" value="5" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; background: var(--bg-1); color: var(--text-1);" />
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <label style="font-size: 12px; color: var(--text-3); font-weight: 500;">EMA Lenta:</label>
-          <input type="number" id="ema_slow_period_forex" value="100" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; background: var(--bg-1); color: var(--text-1);" />
+          <label style="font-size: 12px; color: var(--text-3); font-weight: 500;">EMA (13):</label>
+          <input type="number" id="ema_slow_period_forex" value="13" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; background: var(--bg-1); color: var(--text-1);" />
         </div>
         <button id="ema_update_btn_forex" style="padding: 6px 12px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Actualizar EMAs</button>
       </div>
@@ -755,7 +755,8 @@
 
       // ===== GRÁFICAS TICKS (FOREX) =====
       const charts = {
-        "R_10": { chart: null, emaFast: 9, emaSlow: 21, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null },
+        "R_100": { chart: null, emaFast: 5, emaSlow: 13, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null }
+      };,
         "R_100": { chart: null, emaFast: 50, emaSlow: 100, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null }
       };
 
@@ -842,7 +843,7 @@
         // Mapear simbolos a IDs de canvas en el HTML
         const symbolToCanvasId = {
           "R_10": "ticks_chart_forex",
-          "R_100": "ticks_chart_r100",
+          "R_100": "ticks_chart_forex",
         };
         const chartId = symbolToCanvasId[simbolo] || `ticks_chart_${simbolo.toLowerCase().replace("_", "")}`;
         const ctx = document.getElementById(chartId);
@@ -1069,17 +1070,19 @@
           } else if (debugEl) {
             debugEl.style.display = "none";
           }
-          
-          // Actualizar gráficos de ticks para forex y R_100
+           
+          // Actualizar grafico de ticks R_100 (el unico que tenemos)
           console.log("[REFRESCAR] ticksPorActivo:", ticksPorActivo);
-          console.log("[REFRESCAR] cuentas:", cuentas);
           actualizarTicksCollectorUI(cuentas);
-          for (const simbolo of ["R_10", "R_100"]) {
-            const ticks = ticksPorActivo[simbolo] || [];
-            const cuentaData = cuentas[simbolo];
-            console.log(`[REFRESCAR] ${simbolo}: ${ticks.length} ticks, cuenta:`, cuentaData ? "existe" : "no existe");
-            actualizarGraficoTicks(simbolo, ticks, cuentaData);
-          }
+          // Solo mostrar R_100 que es el simbolo activo
+          const simbolo = "R_100";
+          const ticks = ticksPorActivo[simbolo] || [];
+          console.log(`[REFRESCAR] ${simbolo}: ${ticks.length} ticks`);
+          actualizarGraficoTicks(simbolo, ticks, cuentas[simbolo]);
+        } catch (e) {
+          console.error("[REFRESCAR] Error:", e);
+        }
+      }
         } catch (e) {
           console.error("[REFRESCAR] Error:", e);
         }
@@ -1094,7 +1097,7 @@
           // Mapear simbolos a IDs de elementos en el HTML
           const symbolToIds = {
             "R_10": { chart: "ticks_chart_forex", count: "ticks_count_forex", price: "ticks_current_price_forex" },
-            "R_100": { chart: "ticks_chart_r100", count: "ticks_count_r100", price: "ticks_current_price_r100" },
+            "R_100": { chart: "ticks_chart_forex", count: "ticks_count_forex", price: "ticks_current_price_forex" },
           };
           const ids = symbolToIds[simbolo] || { count: "ticks_count_forex", price: "ticks_current_price_forex" };
           const countId = ids.count;
