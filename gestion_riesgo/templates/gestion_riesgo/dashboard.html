@@ -168,25 +168,24 @@
         </div>
       </div>
       <div class="card">
-        <div class="muted" id="senal_titulo">Señal / Estrategia</div>
-        <div class="row" style="margin-top: 6px; align-items: flex-start;">
-          <!-- ===== Layout estrategia antigua (wᵀx) ===== -->
-          <div id="senal_valor_wrap">
-            <div class="big mono" id="senal_valor">{% if cuenta and cuenta.senal_valor != None %}{{ cuenta.senal_valor }}{% else %}—{% endif %}</div>
-            <div class="muted" style="margin-top: 4px;">Intensidad de señal (wᵀx)</div>
+        <div class="row">
+          <div>
+            <div class="muted">Señal Actual</div>
+            <div class="big mono" id="senal_contador">—</div>
           </div>
-
-          {% if cuenta and cuenta.senal_decision %}
-            {% if cuenta.senal_decision == "COMPRA" %}
-              <div class="badge ok mono" id="senal_decision_badge">COMPRA</div>
-            {% elif cuenta.senal_decision == "VENTA" %}
-              <div class="badge bad mono" id="senal_decision_badge">VENTA</div>
+          <div id="senal_decision_wrap">
+            {% if cuenta and cuenta.senal_decision %}
+              {% if cuenta.senal_decision == "COMPRA" %}
+                <div class="badge ok mono" id="senal_decision_badge">COMPRA</div>
+              {% elif cuenta.senal_decision == "VENTA" %}
+                <div class="badge bad mono" id="senal_decision_badge">VENTA</div>
+              {% else %}
+                <div class="badge neutral mono" id="senal_decision_badge">NO_OPERAR</div>
+              {% endif %}
             {% else %}
-              <div class="badge neutral mono" id="senal_decision_badge">NO_OPERAR</div>
+              <div class="badge neutral mono" id="senal_decision_badge">—</div>
             {% endif %}
-          {% else %}
-            <div class="badge neutral mono" id="senal_decision_badge">—</div>
-          {% endif %}
+          </div>
         </div>
         <div class="muted" style="margin-top: 8px;" id="senal_contribuciones">—</div>
       </div>
@@ -892,11 +891,8 @@
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: {
-              duration: 300,
-            },
+            animation: false,
             plugins: {
-              crosshairPlugin: { color: "rgba(96,165,250,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
               legend: { display: false },
               tooltip: { enabled: false },
             },
@@ -1083,10 +1079,14 @@
           const ticks = ticksPorActivo[simbolo] || [];
           console.log(`[REFRESCAR] ${simbolo}: ${ticks.length} ticks`);
           actualizarGraficoTicks(simbolo, ticks, cuentas[simbolo]);
-        } catch (e) {
-          console.error("[REFRESCAR] Error:", e);
-        }
-      }
+          
+          // Contador de senales
+          const senalEl = document.getElementById("senal_contador");
+          const cuentaData = cuentas[simbolo];
+          if (senalEl && cuentaData) {
+            senalEl.textContent = cuentaData.senal_decision || "—";
+            senalEl.className = "big mono " + (cuentaData.senal_decision === "COMPRA" ? "ok" : cuentaData.senal_decision === "VENTA" ? "bad" : "neutral");
+          }
         } catch (e) {
           console.error("[REFRESCAR] Error:", e);
         }
