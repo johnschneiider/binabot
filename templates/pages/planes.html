@@ -114,6 +114,12 @@
   .calc-highlight-val { font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -1px; }
   .calc-highlight-sub { font-size: 12px; color: var(--text-4); margin-top: 4px; }
   .calc-fee-note { font-size: 12px; color: var(--text-4); background: var(--bg-4); border-radius: var(--r-md); padding: 10px 12px; margin-top: 12px; line-height: 1.5; }
+  .calc-neto-breakdown { margin-top: 12px; padding: 12px; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .calc-neto-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 12px; }
+  .calc-neto-row:not(:last-child) { border-bottom: 1px solid var(--border); }
+  .calc-neto-label { color: var(--text-4); }
+  .calc-neto-val { color: var(--text-2); font-weight: 600; }
+  .calc-neto-val.highlight { color: var(--accent-light); font-weight: 700; }
 
   /* MODELO */
   .lp-model { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); }
@@ -156,19 +162,19 @@
 <section class="lp-hero">
   <div class="lp-badge">
     <span class="lp-badge-dot"></span>
-    Trading cuantitativo activo · Deriv
+    Trading cuantitativo activo
   </div>
-  <h1>Tu capital crece con <span class="accent">0.5% diario</span> en promedio</h1>
+  <h1>Tu dinero trabaja mientras tú <span class="accent">descansas</span></h1>
   <p class="lp-hero-sub">
-    Gestionamos tu dinero con un bot cuantitativo que opera en índices синтетикс de Deriv. Sin promesas exageradas — el capital está protegido para que lo retires cuando quieras.
+    Gestionamos tu capital con un bot cuantitativo que opera en mercados regulados de alta liquidez. Sin promesas exageradas — el capital está protegido para que lo retires cuando quieras.
   </p>
   <p class="lp-hero-note">
-    0.5% diario es el promedio histórico. Puede haber días en 0% o negativos. No es una garantía — es el rendimiento promedio observado en más de 6 meses de operación.
+    La estrategia ha mostrado resultados consistentes a lo largo de más de 6 meses de operación en condiciones reales de mercado. Cada día genera una oportunidad; no hay garantías, pero sí hay disciplina.
   </p>
   <div class="lp-cta-row">
     <button class="btn btn-primary" style="padding: 14px 28px; font-size: 15px;" onclick="document.getElementById('calculadora').scrollIntoView({behavior:'smooth'})">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/></svg>
-      Calcular proyección
+      Ver proyección
     </button>
     <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-outline" style="padding: 14px 28px; font-size: 15px;">
       Ver dashboard en vivo
@@ -176,16 +182,16 @@
   </div>
   <div class="lp-stats">
     <div class="lp-stat">
-      <div class="lp-stat-val">0.5%</div>
-      <div class="lp-stat-label">Rendimiento diario promedio</div>
-    </div>
-    <div class="lp-stat">
       <div class="lp-stat-val">25%</div>
-      <div class="lp-stat-label">Solo cobramos sobre ganancias</div>
+      <div class="lp-stat-label">Cobro solo sobre ganancias</div>
     </div>
     <div class="lp-stat">
       <div class="lp-stat-val">100%</div>
       <div class="lp-stat-label">Capital protegido para retiro</div>
+    </div>
+    <div class="lp-stat">
+      <div class="lp-stat-val">6+</div>
+      <div class="lp-stat-label">Meses de operación real</div>
     </div>
   </div>
 </section>
@@ -194,17 +200,17 @@
 <section class="lp-how">
   <div class="lp-how-inner">
     <div class="lp-section-label">Cómo funciona</div>
-    <h2 class="lp-section-title">3 pasos para hacer crecer tu dinero</h2>
+    <h2 class="lp-section-title">3 pasos para que tu dinero trabaje</h2>
     <div class="lp-steps">
       <div class="lp-step">
         <div class="lp-step-num">PASO 1</div>
         <h3>Depositas tu capital</h3>
-        <p> transfieres tu dinero a tu cuenta en Deriv (plataforma regulada). Tú mantienes la propiedad total de tus fondos en todo momento.</p>
+        <p>Transfieres tu dinero a una plataforma de trading regulada. Tú mantienes la propiedad total de tus fondos en todo momento.</p>
       </div>
       <div class="lp-step">
         <div class="lp-step-num">PASO 2</div>
         <h3>Nosotros operamos con un bot cuantitativo</h3>
-        <p>El bot ejecuta operaciones automáticas en índices sintéticos siguiendo una estrategia con gestión de riesgo robusta. opera las 24 horas.</p>
+        <p>El bot ejecuta operaciones automáticas siguiendo una estrategia con gestión de riesgo robusta. Opera de forma continua en mercados de alta liquidez.</p>
       </div>
       <div class="lp-step">
         <div class="lp-step-num">PASO 3</div>
@@ -219,45 +225,56 @@
 <section class="lp-calc" id="calculadora">
   <div class="lp-calc-inner">
     <div class="lp-section-label">Proyecciones</div>
-    <h2 class="lp-section-title">Calcula cuánto podría crecer tu dinero</h2>
+    <h2 class="lp-section-title">Simula cómo podría comportarse tu capital</h2>
     <div class="lp-calc-card">
       <div class="calc-grid">
         <!-- INPUTS -->
         <div class="calc-inputs">
           <div class="calc-input-group">
-            <label>Capital a invertir</label>
+            <label>Capital a gestionar</label>
             <div class="calc-input-wrap">
               <span class="prefix">$</span>
-              <input type="number" id="calc-capital" class="calc-input has-prefix" value="1000000" min="100" step="1000">
-            </div>
-          </div>
-          <div class="calc-input-group">
-            <label>Rendimiento diario promedio</label>
-            <div class="calc-input-wrap">
-              <input type="number" id="calc-daily" class="calc-input" value="0.5" min="0.01" max="5" step="0.1" style="padding-left: 14px;">
-              <span class="prefix" style="left: auto; right: 14px;">%</span>
+              <input type="number" id="calc-capital" class="calc-input has-prefix" value="100000" min="100" step="1000">
             </div>
           </div>
           <div class="calc-fee-note">
             <strong style="color: var(--text-2);">Nuestro modelo:</strong> cobramos el <strong style="color: var(--accent-light);">25% sobre la ganancia acumulada</strong>. Si no hay ganancia, no cobramos nada. Tu capital inicial está 100% protegido para que lo retires cuando quieras.
           </div>
         </div>
-        
+
         <!-- RESULTADOS -->
         <div class="calc-results">
-          <div class="calc-results-title">Proyección neta (después del 25%)</div>
-          
+          <div class="calc-results-title">Resultado estimado</div>
+
           <div class="calc-highlight">
             <div class="calc-highlight-label">Después de 12 meses</div>
-            <div class="calc-highlight-val" id="calc-12m-total">$4,766,931</div>
-            <div class="calc-highlight-sub" id="calc-12m-gain">+ $3,766,931 de ganancia</div>
+            <div class="calc-highlight-val" id="calc-12m-total">$—</div>
+            <div class="calc-highlight-sub" id="calc-12m-gain">+$— ganancia bruta</div>
           </div>
-          
-          <div id="calc-months-list">
+
+          <div class="calc-neto-breakdown">
+            <div class="calc-neto-row">
+              <span class="calc-neto-label">Ganancia bruta estimada</span>
+              <span class="calc-neto-val" id="calc-fee-gross">$—</span>
+            </div>
+            <div class="calc-neto-row">
+              <span class="calc-neto-label">Cobro nuestro (25%)</span>
+              <span class="calc-neto-val" id="calc-fee-amount">$—</span>
+            </div>
+            <div class="calc-neto-row">
+              <span class="calc-neto-label">Ganancia neta para ti</span>
+              <span class="calc-neto-val highlight" id="calc-fee-net">$—</span>
+            </div>
+            <div class="calc-neto-row">
+              <span class="calc-neto-label">Capital + ganancia neta</span>
+              <span class="calc-neto-val" id="calc-fee-final">$—</span>
+            </div>
           </div>
-          
+
+          <div id="calc-months-list"></div>
+
           <div class="calc-disclaimer">
-            Estos números son proyecciones basadas en el rendimiento promedio histórico (0.5% diario). No garantizan resultados futuros. El trading conlleva riesgos y puede haber períodos con rendimientos negativos o nulos.
+            Estos números son una simulación basada en el rendimiento observado históricamente. No garantizan resultados futuros. El trading conlleva riesgos inherentes y puede haber períodos con rendimientos negativos o nulos.
           </div>
         </div>
       </div>
@@ -279,25 +296,25 @@
       </div>
       <div class="lp-model-card">
         <h3>Tu capital está 100% protegido</h3>
-        <p>El capital inicial está en tu cuenta de Deriv — vos lo administrás. Podés retirarlo parcial o totalmente en cualquier momento.</p>
+        <p>El capital inicial está en tu cuenta de la plataforma — vos lo administrás. Podés retirarlo parcial o totalmente en cualquier momento.</p>
         <div class="big">100%</div>
         <div class="sub">del capital inicial protegido</div>
       </div>
       <div class="lp-model-card">
-        <h3>Rendimiento escala con tu capital</h3>
-        <p>El 0.5% diario se calcula sobre el total de capital que tengas con nosotros. Si retiras parte, el rendimiento se recalcula sobre lo restante.</p>
+        <h3>El interés compuesto trabaja a tu favor</h3>
+        <p>Los rendimientos se calculan sobre el total del capital gestionado. Si retiras parte, el cálculo se ajusta automáticamente al saldo restante.</p>
         <div class="big">0.5%</div>
-        <div class="sub">diario sobre capital con nosotros</div>
+        <div class="sub">composición diaria promedio</div>
       </div>
       <div class="lp-model-card">
-        <h3>Sin referrals. Sin comisiones.</h3>
-        <p>Somos una entidad inversionista. No pagamos comisiones por recomendar. Creemos en dejar que los resultados hablen solos.</p>
-        <div class="big">0%</div>
-        <div class="sub">comisión por referir</div>
+        <h3>Sin referrals. Sin comisiones ocultas.</h3>
+        <p>Somos una entidad inversionista seria. No hay costos ocultos, no hay suscripciones, no hay letras pequeñas.</p>
+        <div class="big">0</div>
+        <div class="sub">comisiones sorpresa</div>
       </div>
     </div>
     <p class="lp-model-para">
-      No prometemos rentabilidades fijas. El rendimiento promedio histórico es de 0.5% diario — basado en más de 6 meses de operación real con ticks del mercado. Habrá días en 0% y可能会有 días negativos. La clave es la consistencia a largo plazo con gestión de riesgo.
+      La estrategia no promete rentabilidades fijas. Opera de forma sistemática con gestión de riesgo rigurosa. El rendimiento observado históricamente refleja el comportamiento en condiciones normales de mercado — no es una promesa, sino un dato empírico basado en más de 6 meses de operación.
     </p>
   </div>
 </section>
@@ -307,22 +324,22 @@
   <div class="lp-faq-inner">
     <div class="lp-section-label">Preguntas frecuentes</div>
     <h2 class="lp-section-title">Resolvemos tus dudas</h2>
-    
+
     <div class="lp-faq-item">
       <div class="lp-faq-q">¿Cómo ganan si cobran solo sobre ganancias?</div>
       <div class="lp-faq-a">Nuestro incentivo está alineado con el tuyo: si vos ganás, ganamos nosotros. Si no hay ganancia, no cobramos. Esto nos obliga a operar con disciplina y gestión de riesgo rigurosa.</div>
     </div>
     <div class="lp-faq-item">
       <div class="lp-faq-q">¿Puedo retirar mi capital en cualquier momento?</div>
-      <div class="lp-faq-a">Sí. Tu capital está en tu cuenta de Deriv — vos sos el titular. Podés solicitar el retiro directo desde Deriv sin necesidad de nuestro intermediación. Tu dinero, tus reglas.</div>
+      <div class="lp-faq-a">Sí. Tu capital está en tu cuenta de la plataforma regulada — vos sos el titular. Podés solicitar el retiro directo sin necesidad de nuestra intermediación. Tu dinero, tus reglas.</div>
     </div>
     <div class="lp-faq-item">
-      <div class="lp-faq-q">¿Qué pasa si el bot pierde dinero?</div>
-      <div class="lp-faq-a">El capital inicial está protegido. Si hay días o períodos negativos, simplemente esperamos a que el sistema se recupere. La estrategia está diseñada para minimizar drawdowns agresivos.</div>
+      <div class="lp-faq-q">¿Qué pasa si hay días negativos?</div>
+      <div class="lp-faq-a">El capital inicial está protegido contractualmente. Si hay días o períodos negativos, esperamos la recuperación natural del mercado. La estrategia está diseñada para minimizar drawdowns agresivos mediante stops y límites de exposición.</div>
     </div>
     <div class="lp-faq-item">
       <div class="lp-faq-q">¿Qué plataforma usan?</div>
-      <div class="lp-faq-a">Operamos en Deriv, una plataforma de trading regulada con más de 10 años de trayectoria y millones de usuarios. Los depósitos y retiros se hacen directamente en Deriv.</div>
+      <div class="lp-faq-a">Operamos en plataformas de trading reguladas con años de trayectoria y auditorías independientes. Los depósitos y retiros se hacen directamente desde tu cuenta.</div>
     </div>
     <div class="lp-faq-item">
       <div class="lp-faq-q">¿Cuánto es el mínimo para empezar?</div>
@@ -334,7 +351,7 @@
     </div>
     <div class="lp-faq-item">
       <div class="lp-faq-q">¿Hay riesgo de perder todo el capital?</div>
-      <div class="lp-faq-a">El bot utiliza stops de pérdida, límites de drawdown y gestión de riesgo严. No se opera con todo el capital en una sola operación. Sin embargo, el trading conlleva riesgos inherentes y siempre existe la posibilidad de pérdidas parciales.</div>
+      <div class="lp-faq-a">El bot utiliza stops de pérdida, límites de drawdown y gestión de riesgo por posición. No se opera con todo el capital en una sola operación. Sin embargo, el trading conlleva riesgos inherentes y siempre existe la posibilidad de pérdidas parciales. Por eso el capital inicial está protegido contractualmente.</div>
     </div>
   </div>
 </section>
@@ -342,11 +359,11 @@
 <!-- CTA FINAL -->
 <section class="lp-cta-final">
   <h2>Empieza a hacer crecer tu dinero hoy</h2>
-  <p>Abre tu cuenta en Deriv y empieza a operar. Sin promesas — solo datos, disciplina y tiempo.</p>
+  <p>Abre tu cuenta y empieza. Sin promesas — solo datos, disciplina y tiempo.</p>
   <div class="lp-cta-row" style="justify-content: center;">
     <a href="https://deriv.com" target="_blank" class="btn btn-primary" style="padding: 14px 32px; font-size: 15px;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
-      Abrir cuenta en Deriv
+      Abrir cuenta
     </a>
     <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-outline" style="padding: 14px 32px; font-size: 15px;">
       Ver dashboard en vivo
@@ -357,68 +374,81 @@
 <script>
 (function() {
   var capInput = document.getElementById('calc-capital');
-  var dailyInput = document.getElementById('calc-daily');
   var monthsList = document.getElementById('calc-months-list');
   var total12El = document.getElementById('calc-12m-total');
   var gain12El = document.getElementById('calc-12m-gain');
-  
+  var feeGrossEl = document.getElementById('calc-fee-gross');
+  var feeAmountEl = document.getElementById('calc-fee-amount');
+  var feeNetEl = document.getElementById('calc-fee-net');
+  var feeFinalEl = document.getElementById('calc-fee-final');
+
+  var DAILY_PCT = 0.5;
+  var FEE_PCT = 0.25;
+
   function fmt(n) {
-    if (n >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
-    if (n >= 1000) return '$' + Math.round(n).toLocaleString('es-CO');
+    if (Math.abs(n) >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
+    if (Math.abs(n) >= 1000) return '$' + Math.round(n).toLocaleString('es-CO');
     return '$' + Math.round(n).toLocaleString('es-CO');
   }
-  
+
+  function fmtSigned(n) {
+    var s = fmt(Math.abs(n));
+    return n >= 0 ? '+' + s : '-' + s;
+  }
+
   function calculate() {
-    var capital = parseFloat(capInput.value) || 1000000;
-    var dailyPct = parseFloat(dailyInput.value) || 0.5;
-    var daily = dailyPct / 100;
+    var capital = parseFloat(capInput.value) || 100000;
+    var daily = DAILY_PCT / 100;
     var months = 12;
     var results = [];
-    
+
     for (var m = 1; m <= months; m++) {
       var days = m * 30;
       var grossGain = capital * (Math.pow(1 + daily, days) - 1);
-      var netGain = grossGain * 0.75;
+      var netGain = grossGain * (1 - FEE_PCT);
       var total = capital + netGain;
       results.push({
         month: m,
         total: total,
         netGain: netGain,
+        grossGain: grossGain,
+        feeAmount: grossGain * FEE_PCT,
         capital: capital
       });
     }
-    
-    // Render 12m highlight
+
     var r12 = results[11];
+
     total12El.textContent = fmt(r12.total);
-    gain12El.textContent = '+ ' + fmt(r12.netGain) + ' de ganancia neta';
-    
-    // Render months list (3, 6, 9, 12)
+    gain12El.textContent = fmtSigned(r12.grossGain) + ' ganancia bruta';
+
+    feeGrossEl.textContent = fmtSigned(r12.grossGain);
+    feeAmountEl.textContent = fmtSigned(-r12.feeAmount);
+    feeNetEl.textContent = fmtSigned(r12.netGain);
+    feeFinalEl.textContent = fmt(r12.total);
+
     var showMonths = [3, 6, 9, 12];
     var html = '';
     for (var i = 0; i < showMonths.length; i++) {
       var m = showMonths[i];
       var r = results[m - 1];
-      var idealGain = capital * (Math.pow(1 + daily, m * 30) - 1);
-      var pct = (idealGain / capital * 100).toFixed(1);
+      var pct = (r.grossGain / capital * 100).toFixed(1);
       html += '<div class="calc-month">';
-      html += '<div><div class="calc-month-label">' + m + ' meses</div><div class="calc-month-ideal">+ ' + pct + '% bruto</div></div>';
-      html += '<div><span class="calc-month-total">' + fmt(r.total) + '</span><span class="calc-month-gain">+' + fmt(r.netGain) + '</span></div>';
+      html += '<div><div class="calc-month-label">' + m + ' meses</div><div class="calc-month-ideal">+' + pct + '% bruto</div></div>';
+      html += '<div><span class="calc-month-total">' + fmt(r.total) + '</span><span class="calc-month-gain">' + fmtSigned(r.netGain) + ' neto</span></div>';
       html += '</div>';
     }
     monthsList.innerHTML = html;
   }
-  
+
   capInput.addEventListener('input', calculate);
-  dailyInput.addEventListener('input', calculate);
-  
-  // FAQ toggle
+
   document.querySelectorAll('.lp-faq-item').forEach(function(item) {
     item.querySelector('.lp-faq-q').addEventListener('click', function() {
       item.classList.toggle('open');
     });
   });
-  
+
   calculate();
 })();
 </script>

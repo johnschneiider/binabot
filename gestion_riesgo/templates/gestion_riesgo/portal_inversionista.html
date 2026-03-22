@@ -176,18 +176,16 @@
     </div>
     <div class="portal-model-info">
       <p>
-        Tu capital está en tu cuenta de <strong class="highlight">Deriv</strong> — vos sos el titular y podés retirarlo cuando quieras.
+        Tu capital está en tu cuenta de la plataforma regulada — vos sos el titular y podés retirarlo cuando quieras.
         Nosotros cobramos el <strong>{{ inversionista.fee_performance_pct }}% sobre la ganancia acumulada</strong>.
       </p>
       <p>
         El rendimiento diario promedio de la estrategia es <strong>{{ inversionista.rendimiento_diario_pct }}%</strong>.
-        Esto significa que sobre tu capital de <strong>${{ inversionista.capital_actual|floatformat:0 }}</strong>,
-        el sistema busca generar aproximadamente <strong>${{ avg_daily|add:inversionista.capital_actual|floatformat:0|default:"0" }}</strong> por día.
+        Si retiras parte del capital, el rendimiento se recalcula sobre lo restante automáticamente.
       </p>
       <p>
-        <strong>Importante:</strong> el rendimiento del {{ inversionista.rendimiento_diario_pct }}% diario es un promedio histórico.
+        <strong>Importante:</strong> estos números son una referencia basada en el rendimiento observado históricamente.
         Habrá días en 0% o negativos. Lo importante es la consistencia a largo plazo.
-        Si retiras parte del capital, el rendimiento se recalcula sobre lo restante.
       </p>
     </div>
   </div>
@@ -196,36 +194,36 @@
   <div class="portal-section">
     <div class="portal-section-title">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Proyecciones (basadas en {{ inversionista.rendimiento_diario_pct }}% diario promedio)
+      Proyecciones estimativas
     </div>
     <div class="portal-proj-grid" id="proj-grid">
       <div class="portal-proj-card">
         <div class="portal-proj-period">1 mes</div>
         <div class="portal-proj-total">$—</div>
-        <div class="portal-proj-gain">+ $—</div>
-        <div class="portal-proj-label">neto (después del 25%)</div>
+        <div class="portal-proj-gain" id="proj-gain-1">+ $—</div>
+        <div class="portal-proj-label" id="proj-label-1">neto después del fee</div>
       </div>
       <div class="portal-proj-card">
         <div class="portal-proj-period">3 meses</div>
         <div class="portal-proj-total">$—</div>
-        <div class="portal-proj-gain">+ $—</div>
-        <div class="portal-proj-label">neto (después del 25%)</div>
+        <div class="portal-proj-gain" id="proj-gain-3">+ $—</div>
+        <div class="portal-proj-label" id="proj-label-3">neto después del fee</div>
       </div>
       <div class="portal-proj-card">
         <div class="portal-proj-period">6 meses</div>
         <div class="portal-proj-total">$—</div>
-        <div class="portal-proj-gain">+ $—</div>
-        <div class="portal-proj-label">neto (después del 25%)</div>
+        <div class="portal-proj-gain" id="proj-gain-6">+ $—</div>
+        <div class="portal-proj-label" id="proj-label-6">neto después del fee</div>
       </div>
       <div class="portal-proj-card">
         <div class="portal-proj-period">12 meses</div>
         <div class="portal-proj-total">$—</div>
-        <div class="portal-proj-gain">+ $—</div>
-        <div class="portal-proj-label">neto (después del 25%)</div>
+        <div class="portal-proj-gain" id="proj-gain-12">+ $—</div>
+        <div class="portal-proj-label" id="proj-label-12">neto después del fee</div>
       </div>
     </div>
     <div class="portal-disclaimer">
-      Estas proyecciones son estimativas basadas en el rendimiento promedio histórico ({{ inversionista.rendimiento_diario_pct }}% diario).
+      Estas proyecciones son estimativas basadas en el rendimiento observado históricamente.
       No garantizan resultados futuros. El trading conlleva riesgos y puede haber períodos con pérdidas.
     </div>
   </div>
@@ -356,20 +354,24 @@
       .then(function(data) {
         if (!data.labels || data.labels.length === 0) return;
 
-        // Calculate projections
-        var capital = data.capital_inicial || 1000000;
+        var capital = data.capital_actual || data.capital_inicial || 100000;
         var daily = {{ inversionista.rendimiento_diario_pct }} / 100;
         var months = [1, 3, 6, 12];
         var monthDays = [30, 90, 180, 360];
-        var projCards = document.querySelectorAll('.portal-proj-card');
+
         months.forEach(function(m, i) {
           var days = monthDays[i];
           var grossGain = capital * (Math.pow(1 + daily, days) - 1);
+          var feeAmount = grossGain * 0.25;
           var netGain = grossGain * 0.75;
           var total = capital + netGain;
-          if (projCards[i]) {
-            projCards[i].querySelector('.portal-proj-total').textContent = fmt(total);
-            projCards[i].querySelector('.portal-proj-gain').textContent = '+ ' + fmt(netGain) + ' gain';
+          var gainEl = document.getElementById('proj-gain-' + m);
+          var labelEl = document.getElementById('proj-label-' + m);
+          var card = document.querySelectorAll('.portal-proj-card')[i];
+          if (card) {
+            card.querySelector('.portal-proj-total').textContent = fmt(total);
+            if (gainEl) gainEl.textContent = '+ ' + fmt(netGain) + ' neto';
+            if (labelEl) labelEl.textContent = '+$' + Math.round(feeAmount).toLocaleString('es-CO') + ' fee';
           }
         });
 
