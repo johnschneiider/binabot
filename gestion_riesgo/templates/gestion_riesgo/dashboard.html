@@ -849,7 +849,12 @@
       }
 
       function ensureTicksChart(simbolo) {
-        const chartId = `ticks_chart_${simbolo.toLowerCase().replace("_", "")}`;
+        // Mapear simbolos a IDs de canvas en el HTML
+        const symbolToCanvasId = {
+          "frxEURUSD": "ticks_chart_forex",
+          "R_100": "ticks_chart_r100",
+        };
+        const chartId = symbolToCanvasId[simbolo] || `ticks_chart_${simbolo.toLowerCase().replace("_", "")}`;
         const ctx = document.getElementById(chartId);
         if (!ctx) return;
         if (charts[simbolo].chart) return;
@@ -1096,9 +1101,14 @@
           const chartObj = charts[simbolo];
           if (!chartObj.chart) return;
           
-          const chartId = simbolo.toLowerCase().replace("_", "");
-          const countId = `ticks_count_${chartId}`;
-          const priceId = `ticks_current_price_${chartId}`;
+          // Mapear simbolos a IDs de elementos en el HTML
+          const symbolToIds = {
+            "frxEURUSD": { chart: "ticks_chart_forex", count: "ticks_count_forex", price: "ticks_current_price_forex" },
+            "R_100": { chart: "ticks_chart_r100", count: "ticks_count_r100", price: "ticks_current_price_r100" },
+          };
+          const ids = symbolToIds[simbolo] || { count: "ticks_count_forex", price: "ticks_current_price_forex" };
+          const countId = ids.count;
+          const priceId = ids.price;
           
           if (ticks && ticks.length > 0) {
             // Actualizar contador y precio actual
