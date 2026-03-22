@@ -1,0 +1,3 @@
+ejecutar sin dashboard
+python manage.py bot_con_panel --real --sin-migrar --ilimitado
+name 'settings' is not defined. Did you mean: 'self.settings'?

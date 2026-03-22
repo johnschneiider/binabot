@@ -621,6 +621,26 @@ class Command(BaseCommand):
                                     await cliente.enviar({"balance": 1})
                                 finally:
                                     ultimo_balance_poll = now_m
+                        
+                        # ===== SNAPSHOT PERIÓDICO (independiente de eventos de balance) =====
+                        ahora_s = time.monotonic()
+                        cada_snapshot = float(getattr(settings, "BALANCE_SNAPSHOT_CADA_SEG", 60))
+                        if cada_snapshot <= 0:
+                            cada_snapshot = 60.0
+                        if (ahora_s - ultimo_balance_snapshot) >= cada_snapshot:
+                            ultimo_balance_snapshot = ahora_s
+                            try:
+                                await sync_to_async(
+                                    lambda: BalanceDerivSnapshot.objects.create(
+                                        cuenta_id=int(cuenta.id),
+                                        balance=float(balance_deriv_mem),
+                                        moneda=str(balance_moneda or "USD"),
+                                        epoch=int(time.time()),
+                                    ),
+                                    thread_sensitive=True,
+                                )()
+                            except Exception:
+                                pass
 
                         if ev.get("tipo") == "balance":
                             bal = ev["balance"]

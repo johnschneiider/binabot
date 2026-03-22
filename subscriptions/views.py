@@ -6,6 +6,7 @@ from django.contrib.auth import login, logout
 from django.middleware.csrf import get_token
 from django.utils import timezone
 from django.db.models import Q
+from django.conf import settings
 import jwt
 from datetime import datetime, timedelta
 
@@ -93,8 +94,9 @@ class RegisterView(APIView):
 
 
 class LoginView(APIView):
-    """Inicio de sesion."""
+    """Inicio de sesion - retorna JWT en localStorage."""
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -104,12 +106,10 @@ class LoginView(APIView):
         user = serializer.validated_data["user"]
         login(request, user)
         
-        # Actualizar datos de login
         user.last_login_ip = get_client_ip(request)
         user.last_login_device = request.META.get('HTTP_USER_AGENT', '')[:255]
         user.save(update_fields=['last_login_ip', 'last_login_device'])
         
-        # Log de auditoria
         LogAuditoria.objects.create(
             usuario=user,
             tenant=user.tenant,
@@ -119,17 +119,55 @@ class LoginView(APIView):
             user_agent=request.META.get('HTTP_USER_AGENT', ''),
         )
         
-        # Generar JWT token
+        plan_name = ""
+        has_plan = False
+        if hasattr(user, 'tenant') and user.tenant:
+            sub = user.tenant.get_active_subscription()
+            if sub:
+                plan_name = sub.plan.nombre
+                has_plan = True
+        
+        initials = ""
+        if user.first_name and user.last_name:
+            initials = (user.first_name[0] + user.last_name[0]).upper()
+        elif user.first_name:
+            initials = user.first_name[:2].upper()
+        else:
+            initials = user.username[:2].upper()
+        
+        user_data = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "displayName": user.first_name if user.first_name else user.username,
+            "initials": initials,
+            "has_plan": has_plan,
+            "plan_name": plan_name,
+        }
+        
         token = jwt.encode({
             "user_id": user.id,
             "exp": datetime.utcnow() + timedelta(days=7)
-        }, request.authelia_secret if hasattr(request, 'authelia_secret') else "secret_key_placeholder", algorithm="HS256")
+        }, "secret_key_placeholder", algorithm="HS256")
         
-        return Response({
+        response = Response({
             "message": "Login exitoso.",
-            "user": UsuarioSerializer(user).data,
+            "user": user_data,
             "token": token,
-        })
+        }, status=status.HTTP_200_OK)
+        
+        response.set_cookie(
+            key=settings.SESSION_COOKIE_NAME,
+            value=request.session.session_key,
+            max_age=None,
+            samesite='Lax',
+            httponly=False,
+            secure=False,
+        )
+        
+        return response
 
 
 class LogoutView(APIView):
@@ -151,6 +189,7 @@ class LogoutView(APIView):
 
 class ProfileView(APIView):
     """Perfil del usuario actual."""
+    permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
         serializer = UsuarioSerializer(request.user)
@@ -166,6 +205,7 @@ class ProfileView(APIView):
 
 class CambioPasswordView(APIView):
     """Cambio de password."""
+    permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
         serializer = CambioPasswordSerializer(data=request.data, context={"request": request})
@@ -213,17 +253,26 @@ class SuscripcionViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=["post"])
     def cambiar_plan(self, request):
-        """Cambia el plan del tenant actual."""
+        """Cambia el plan del tenant actual. Acepta plan_id o plan_slug."""
         if not request.user.tenant:
             return Response({"detail": "Usuario sin tenant."}, status=status.HTTP_400_BAD_REQUEST)
         
         plan_id = request.data.get("plan_id")
+        plan_slug = request.data.get("plan_slug")
         periodicidad = request.data.get("periodicidad", Plan.Periodicidad.MENSUAL)
         
-        try:
-            plan = Plan.objects.get(id=plan_id, activo=True)
-        except Plan.DoesNotExist:
-            return Response({"detail": "Plan no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        if plan_slug:
+            try:
+                plan = Plan.objects.get(slug=plan_slug, activo=True)
+            except Plan.DoesNotExist:
+                return Response({"detail": "Plan no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        elif plan_id:
+            try:
+                plan = Plan.objects.get(id=plan_id, activo=True)
+            except Plan.DoesNotExist:
+                return Response({"detail": "Plan no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response({"detail": "Se requiere plan_id o plan_slug."}, status=status.HTTP_400_BAD_REQUEST)
         
         # Cancelar suscripcion actual
         sub_actual = request.user.tenant.get_active_subscription()
@@ -233,10 +282,15 @@ class SuscripcionViewSet(viewsets.ModelViewSet):
             sub_actual.save()
         
         # Crear nueva suscripcion
+        estado = (
+            Suscripcion.Estado.ACTIVA
+            if plan.tipo == Plan.TipoPlan.FREE
+            else Suscripcion.Estado.PENDIENTE
+        )
         nueva_sub = Suscripcion.objects.create(
             tenant=request.user.tenant,
             plan=plan,
-            estado=Suscripcion.Estado.PENDIENTE,
+            estado=estado,
             periodicidad=periodicidad,
         )
         
@@ -293,6 +347,38 @@ class TenantViewSet(viewsets.ModelViewSet):
                 "usuarios_count": tenant.usuarios.count(),
             }
         })
+
+
+class MeViewSet(viewsets.ViewSet):
+    """ViewSet para el usuario actual (perfil)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        return Response(UsuarioSerializer(request.user).data)
+
+    def partial_update(self, request, pk=None):
+        return self._update(request)
+
+    def update(self, request, pk=None):
+        return self._update(request)
+
+    def _update(self, request):
+        user = request.user
+        first_name = request.data.get("first_name")
+        last_name = request.data.get("last_name")
+        telefono = request.data.get("telefono")
+
+        if first_name is not None:
+            user.first_name = first_name
+        if last_name is not None:
+            user.last_name = last_name
+        user.save(update_fields=['first_name', 'last_name'])
+
+        if telefono is not None and user.tenant:
+            user.tenant.telefono = telefono
+            user.tenant.save(update_fields=['telefono'])
+
+        return Response(UsuarioSerializer(user).data)
 
 
 class LogAuditoriaViewSet(viewsets.ReadOnlyModelViewSet):

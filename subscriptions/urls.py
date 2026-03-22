@@ -9,6 +9,7 @@ router.register(r"planes", views.PlanViewSet, basename="planes")
 router.register(r"suscripciones", views.SuscripcionViewSet, basename="suscripciones")
 router.register(r"tenants", views.TenantViewSet, basename="tenants")
 router.register(r"audit-logs", views.LogAuditoriaViewSet, basename="audit-logs")
+router.register(r"users", views.MeViewSet, basename="users")
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -19,6 +20,7 @@ urlpatterns = [
     path("auth/login/", views.LoginView.as_view(), name="login"),
     path("auth/logout/", views.LogoutView.as_view(), name="logout"),
     path("auth/profile/", views.ProfileView.as_view(), name="profile"),
+    path("auth/me/", views.ProfileView.as_view(), name="me"),
     path("auth/cambiar-password/", views.CambioPasswordView.as_view(), name="cambiar-password"),
     
     # Health check

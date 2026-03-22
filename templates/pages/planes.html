@@ -162,7 +162,7 @@
         <li class="disabled"><svg class="cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin soporte prioritario</li>
       </ul>
       <div class="plan-trial">Sin trial — acceso inmediato</div>
-      <button class="btn btn-outline" onclick="openAuth('register')">Crear Cuenta Gratis</button>
+      <button class="btn btn-outline" onclick="selectPlan('free')">Crear Cuenta Gratis</button>
     </div>
 
     <!-- BÁSICO -->
@@ -189,7 +189,7 @@
         <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte por email</li>
       </ul>
       <div class="plan-trial">3 días de trial gratis</div>
-      <button class="btn btn-outline" onclick="openAuth('register')">Comenzar con Básico</button>
+      <button class="btn btn-outline" onclick="selectPlan('basico')">Comenzar con Básico</button>
     </div>
 
     <!-- PRO -->
@@ -217,7 +217,7 @@
         <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Walk-forward analysis</li>
       </ul>
       <div class="plan-trial">3 días de trial gratis</div>
-      <button class="btn btn-primary" onclick="openAuth('register')">Comenzar con Pro</button>
+      <button class="btn btn-primary" onclick="selectPlan('pro')">Comenzar con Pro</button>
     </div>
 
     <!-- INSTITUCIONAL -->
@@ -244,7 +244,7 @@
         <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Onboarding personalizado</li>
       </ul>
       <div class="plan-trial">Sin trial — contacto directo</div>
-      <button class="btn btn-outline" onclick="openAuth('register')">Contactar Ventas</button>
+      <button class="btn btn-outline" onclick="selectPlan('institucional')">Contactar Ventas</button>
     </div>
   </div>
 </section>
@@ -323,7 +323,7 @@
     <h2>Empieza gratis hoy</h2>
     <p>Sin tarjeta de crédito. Sin compromiso. Configúralo en 5 minutos.</p>
     <div class="plans-cta-btns">
-      <button class="btn btn-primary" onclick="openAuth('register')">
+      <button class="btn btn-primary" onclick="selectPlan('free')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         Crear Cuenta Gratis
       </button>

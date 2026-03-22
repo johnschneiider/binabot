@@ -1,0 +1,281 @@
+================================================================================
+FÓRMULA DE TRIGGER ADICIONAL - PROPUESTA QUANT
+================================================================================
+Símbolo: frxEURUSD (Opciones binarias - 5 ticks)
+Estrategia actual: EMA 20/50 con pullback 1-3 velas
+Target: $45.86 (actual: ~$39)
+================================================================================
+
+RESUMEN:
+La estrategia actual opera en la dirección de la tendencia (EMA20 > EMA50 = CALL,
+EMA20 < EMA50 = PUT). El trigger adicional propuesto añade un filtro de momentum
+y volatilidad para reducir señales falsas y mejorar el winrate.
+
+================================================================================
+FÓRMULA 1: TRIGGER RSI-ZONA (Signal Strength)
+================================================================================
+
+FÓRMULA MATEMÁTICA:
+  S(t) = f(RSI, ATR_ratio, momentum, ema_gap)
+  
+  Donde:
+    RSI_t = 100 - 100/(1 + RS)          (RS = avg_gain/avg_loss)
+    ATR_ratio = ATR_current / ATR_promedio
+    momentum = (precio_t - precio_t-n) / ATR_current
+    ema_gap = (EMA_fast - EMA_slow) / ATR_current
+    
+  SEÑAL:
+    CALL: RSI < 40 AND momentum > 0.5 AND ema_gap > 0.5
+    PUT:  RSI > 60 AND momentum < -0.5 AND ema_gap < -0.5
+    NONE: cualquier otra condición
+
+PARÁMETROS SUGERIDOS:
+  - Periodo RSI: 14 (estándar)
+  - Periodo ATR: 14
+  - Periodo momentum: 5 ticks
+  - Umbral RSI sobreventa: 40
+  - Umbral RSI sobrecompra: 60
+  - Umbral momentum mínimo: 0.5 (en múltiplos de ATR)
+  - Umbral ema_gap mínimo: 0.5 (en múltiplos de ATR)
+
+LÓGICA:
+  El trigger opera en la dirección de la tendencia (EMA20/EMA50) pero solo
+  cuando el RSI indica zona de extensión (sobreventa/sobrecompra) que podría
+  generar un rebote en la dirección de la tendencia.
+  
+  - En tendencia ALCISTA (EMA20 > EMA50): Solo CALL cuando RSI < 40 (sobreventa)
+  - En tendencia BAJISTA (EMA20 < EMA50): Solo PUT cuando RSI > 60 (sobrecompra)
+
+================================================================================
+FÓRMULA 2: TRIGGER CONVERGENCIA-DIVERGENCIA (C-D Signal)
+================================================================================
+
+FÓRMULA MATEMÁTICA:
+  CD(t) = sign(EMA_fast_slope) * sign(EMA_slow_slope) * convergence_factor
+  
+  Donde:
+    EMA_fast_slope = EMA_fast(t) - EMA_fast(t-n)
+    EMA_slow_slope = EMA_slow(t) - EMA_slow(t-n)
+    convergence_factor = |EMA_fast_slope| / (|EMA_slow_slope| + epsilon)
+    
+  SEÑAL:
+    CALL: CD > 1.2 AND precio > EMA_fast
+    PUT:  CD > 1.2 AND precio < EMA_fast
+    NONE: CD <= 1.2
+
+PARÁMETROS SUGERIDOS:
+  - Periodo slope fast: 5 ticks
+  - Periodo slope slow: 10 ticks
+  - Umbral convergencia: 1.2
+  - Cooldown: 20 ticks (mitigar señales consecutivas)
+
+LÓGICA:
+  Este trigger detecta cuando la EMA rápida converge hacia la EMA lenta (el gap
+  se reduce) mientras ambas mantienen la misma dirección. Esto indica que el
+  precio está haciendo un pullback hacia la EMA lenta y podría rebotar.
+
+================================================================================
+FÓRMULA 3: TRIGGER VOLATILIDAD-EXPLOSIÓN (V-Explosion)
+================================================================================
+
+FÓRMULA MATEMÁTICA:
+  V(t) = (ATR_current - ATR_ma) / ATR_std
+  
+  Donde:
+    ATR_current = max(H-L) sobre ventana de 14 ticks
+    ATR_ma = media móvil de ATR (20 ticks)
+    ATR_std = desviación estándar de ATR (20 ticks)
+    
+  SEÑAL (solo en tendencia):
+    CALL: V > 1.5 AND tendencia_alcista AND precio cerca de EMA50
+    PUT:  V > 1.5 AND tendencia_bajista AND precio cerca de EMA50
+    NONE: V <= 1.5
+
+PARÁMETROS SUGERIDOS:
+  - Ventana ATR: 14 ticks
+  - Ventana ATR MA: 20 ticks
+  - Ventana ATR STD: 20 ticks
+  - Umbral explosión: 1.5 desviaciones estándar
+  - Distancia máxima a EMA50: 0.5 * ATR
+
+LÓGICA:
+  Este trigger detecta explosiones de volatilidad (spikes en ATR) que
+  frecuentemente preceden movimientos direccionales. Solo opera cuando
+  el precio está cerca de la EMA50 (zona de soporte/resistencia dinámica).
+
+================================================================================
+IMPLEMENTACIÓN RECOMENDADA (Python)
+================================================================================
+
+class TriggerAdicional:
+    """
+    Sistema de triggers adicionales para complementar EMA20/50.
+    """
+    
+    def __init__(self):
+        self.rsi_periodo = 14
+        self.atr_periodo = 14
+        self.momentum_periodo = 5
+        
+        # Estados internos
+        self._precios = deque(maxlen=100)
+        self._retornos = deque(maxlen=self.rsi_periodo + 1)
+        self._ganancias = 0.0
+        self._perdidas = 0.0
+        self._rsi = 50.0
+        self._atr = 0.0
+        self._atrs = deque(maxlen=20)
+        
+    def actualizar(self, precio: float, ema_fast: float, ema_slow: float) -> dict:
+        """
+        Actualiza indicadores y retorna señal del trigger.
+        """
+        self._precios.append(precio)
+        
+        # Calcular retorno
+        if len(self._precios) >= 2:
+            retorno = (precio - self._precios[-2]) / self._precios[-2]
+            self._actualizar_rsi(retorno)
+        
+        # Calcular ATR
+        if len(self._precios) >= 2:
+            rango = precio - self._precios[-2]
+            self._actualizar_atr(abs(rango))
+        
+        # Evaluar triggers
+        return self._evaluar_triggers(ema_fast, ema_slow)
+    
+    def _actualizar_rsi(self, retorno: float):
+        """Actualiza RSI de forma incremental."""
+        ganancia = max(retorno, 0)
+        perdida = max(-retorno, 0)
+        
+        if self._rsi == 50.0:
+            self._ganancias = ganancia
+            self._perdidas = perda
+        else:
+            alpha = 1.0 / self.rsi_periodo
+            self._ganancias = (1 - alpha) * self._ganancias + alpha * ganancia
+            self._perdidas = (1 - alpha) * self._perdidas + alpha * perdida
+        
+        if self._perdidas == 0:
+            self._rsi = 100.0
+        else:
+            rs = self._ganancias / self._perdidas
+            self._rsi = 100.0 - (100.0 / (1 + rs))
+    
+    def _actualizar_atr(self, rango: float):
+        """Actualiza ATR de forma incremental."""
+        self._atrs.append(rango)
+        if len(self._atrs) >= 2:
+            alpha = 1.0 / self.atr_periodo
+            self._atr = alpha * rango + (1 - alpha) * (self._atr or rango)
+    
+    def _evaluar_triggers(self, ema_fast: float, ema_slow: float) -> dict:
+        """
+        Evalúa los tres triggers y retorna señal compuesta.
+        """
+        if len(self._precios) < 20 or self._atr is None or self._atr == 0:
+            return {"decision": "NO_OPERAR", "razon": "warmup"}
+        
+        precio = self._precios[-1]
+        
+        # Calcular momentum normalizado por ATR
+        if len(self._precios) >= 6:
+            momentum = (precio - self._precios[-6]) / self._atr
+        else:
+            momentum = 0
+        
+        # Calcular EMA gap normalizado
+        ema_gap = (ema_fast - ema_slow) / self._atr
+        
+        # Determinar tendencia
+        if ema_fast > ema_slow:
+            tendencia = "CALL"
+        elif ema_fast < ema_slow:
+            tendencia = "PUT"
+        else:
+            return {"decision": "NO_OPERAR", "razon": "emas_iguales"}
+        
+        # TRIGGER 1: RSI-Zona
+       senal_rsi = "NONE"
+        if tendencia == "CALL" and self._rsi < 40 and momentum > 0.5 and ema_gap > 0.5:
+            senal_rsi = "CALL"
+        elif tendencia == "PUT" and self._rsi > 60 and momentum < -0.5 and ema_gap < -0.5:
+            senal_rsi = "PUT"
+        
+        # TRIGGER 2: Volatilidad-Explosión
+       senal_vol = "NONE"
+        atr_ma = sum(self._atrs) / len(self._atrs) if self._atrs else 0
+        if atr_ma > 0:
+            atr_ratio = self._atr / atr_ma
+            if atr_ratio > 1.5:
+                if tendencia == "CALL" and abs(precio - ema_slow) < 0.5 * self._atr:
+                    senal_vol = "CALL"
+                elif tendencia == "PUT" and abs(precio - ema_slow) < 0.5 * self._atr:
+                    senal_vol = "PUT"
+        
+        # Decisión final: Trigger RSI tiene prioridad
+        if senal_rsi != "NONE":
+            return {
+                "decision": senal_rsi,
+                "razon": f"rsi_zona_rsi{self._rsi:.1f}_mom{momentum:.2f}",
+                "trigger": "RSI-ZONA",
+                "rsi": self._rsi,
+                "momentum": momentum,
+                "atr_ratio": atr_ratio if 'atr_ratio' in dir() else 1.0
+            }
+        elif senal_vol != "NONE":
+            return {
+                "decision": senal_vol,
+                "razon": f"vol_explosion_atr{atr_ratio:.2f}",
+                "trigger": "V-EXPLOSION",
+                "atr_ratio": atr_ratio
+            }
+        
+        return {"decision": "NO_OPERAR", "razon": "sin_senal_trigger"}
+
+
+================================================================================
+INTEGRACIÓN CON ESTRATEGIA ACTUAL
+================================================================================
+
+El trigger adicional debe actuar como FILTRO SECUNDARIO después de la señal
+principal de EMA20/50:
+
+  1. Estrategia actual (senal_spp.py) genera señal: CALL/PUT/NO_OPERAR
+  2. Trigger adicional evalúa la señal:
+     - Si trigger = NONE: usar señal original de senal_spp
+     - Si trigger = CALL/PUT: DAR PRIORIDAD al trigger (más restrictivo)
+     - Esto aumenta la selectividad y reduce operaciones de baja probabilidad
+
+PSEUDO-CÓDIGO DE INTEGRACIÓN:
+
+  señal_ema = evaluar_senal_spp(...)
+  trigger_adicional = trigger.actualizar(precio, ema_fast, ema_slow)
+  
+  if trigger_adicional.decision != "NO_OPERAR":
+      # Trigger confirma o invalida la señal EMA
+      if trigger_adicional.decision == señal_ema.decision:
+          return trigger_adicional  # Fuerte confirmación
+      else:
+          return trigger_adicional  # Trigger invalida señal EMA
+  else:
+      # Sin confirmación del trigger, usar señal EMA original
+      return señal_ema
+
+================================================================================
+EXPECTATIVA DE MEJORA
+================================================================================
+
+Basado en el análisis de la estrategia actual:
+- Winrate actual: ~47.8% (historial R_10)
+- Con filtros de momentum/volatlidad: objetivo winrate > 55%
+- Reducción de operaciones de baja probabilidad
+- Mayor selectividad = menos trades, mejor tasa de acierto
+
+La fórmula propuesta complementa la estrategia EMA20/50 añadiendo una capa
+de confirmación basada en momentum (RSI) y volatilidad (ATR), lo que debería
+mejorar la rentabilidad al filtrar señales falsas en mercados laterales.
+
+================================================================================

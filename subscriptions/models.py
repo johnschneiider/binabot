@@ -232,6 +232,26 @@ class Usuario(AbstractUser):
         sub = self.tenant.get_active_subscription()
         return sub and sub.is_active
 
+    @property
+    def has_active_subscription(self) -> bool:
+        if not self.tenant:
+            return False
+        sub = self.tenant.get_active_subscription()
+        return sub and sub.is_active
+
+    @property
+    def user_display_name(self) -> str:
+        if self.first_name:
+            return self.first_name
+        return self.username
+
+    def user_initials(self) -> str:
+        name = self.user_display_name
+        parts = name.split()
+        if len(parts) >= 2:
+            return (parts[0][0] + parts[-1][0]).upper()
+        return name[:2].upper()
+
 
 class LogAuditoria(models.Model):
     """
