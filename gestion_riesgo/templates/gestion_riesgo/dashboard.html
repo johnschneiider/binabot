@@ -4,37 +4,37 @@
 
 {% block extra_head %}
 <style>
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
+      body { font-family: var(--font); margin: 24px; color: var(--text-2); background: var(--bg-1); }
       .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-      .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; background: #fff; }
-      .muted { color: #6b7280; font-size: 12px; }
-      .big { font-size: 22px; font-weight: 700; }
-      .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #e5e7eb; }
-      .ok { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
-      .bad { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
-      .neutral { background: #eff6ff; border-color: #bfdbfe; color: #1e3a8a; }
-      .warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+      .card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--bg-3); }
+      .muted { color: var(--text-3); font-size: 12px; }
+      .big { font-size: 22px; font-weight: 700; color: var(--text-1); }
+      .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); }
+      .ok { background: rgba(16,185,129,0.15); border-color: var(--green); color: var(--green-light); }
+      .bad { background: rgba(239,68,68,0.15); border-color: var(--red); color: #fca5a5; }
+      .neutral { background: rgba(59,130,246,0.15); border-color: var(--accent); color: var(--accent-light); }
+      .warn { background: rgba(234,179,8,0.15); border-color: #f59e0b; color: #fbbf24; }
       table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-      th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
-      th { font-size: 12px; color: #374151; background: #f9fafb; position: sticky; top: 0; }
+      th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text-2); }
+      th { font-size: 12px; color: var(--text-3); background: var(--bg-2); position: sticky; top: 0; }
+      tr:hover td { background: var(--bg-4); }
       .row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-      .log-wrap { max-height: 360px; overflow: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e5e7eb; border-radius: 10px; background: #0b1020; color: #e5e7eb; }
+      .log-wrap { max-height: 360px; overflow: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-0); color: var(--text-2); }
       .log-pre { margin: 0; padding: 12px; font-size: 12px; line-height: 1.4; white-space: pre; }
       .log-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
-      .log-toolbar input[type="text"] { flex: 1 1 220px; min-width: 180px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12px; }
-      .log-toolbar select { padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12px; background: #fff; }
-      .btn { padding: 6px 12px; background: #111827; color: #fff; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; }
-      .btn.secondary { background: #fff; color: #111827; border: 1px solid #e5e7eb; }
-      .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 999px; background: #9ca3af; border: 1px solid rgba(255,255,255,0.25); vertical-align: middle; margin-right: 6px; }
-      .status-dot.ok { background: #10b981; }
-      .status-dot.bad { background: #ef4444; }
+      .log-toolbar input[type="text"] { flex: 1 1 220px; min-width: 180px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; background: var(--bg-2); color: var(--text-1); }
+      .log-toolbar select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; background: var(--bg-2); color: var(--text-1); }
+      .btn { padding: 6px 12px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; }
+      .btn.secondary { background: var(--bg-2); color: var(--text-2); border: 1px solid var(--border); }
+      .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 999px; background: var(--text-4); border: 1px solid rgba(255,255,255,0.25); vertical-align: middle; margin-right: 6px; }
+      .status-dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+      .status-dot.bad { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
       .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
-      .tab { cursor: pointer; user-select: none; padding: 6px 10px; border-radius: 999px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; }
-      .tab.active { background: #111827; color: #fff; border-color: #111827; }
-      .chart-wrap { position: relative; height: 260px; }
-      /* Cursor tipo "cruz" al pasar sobre las gráficas */
+      .tab { cursor: pointer; user-select: none; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-2); font-size: 12px; color: var(--text-3); }
+      .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+      .chart-wrap { position: relative; height: 260px; background: var(--bg-2); border-radius: 8px; padding: 8px; }
       .chart-wrap canvas { cursor: crosshair; }
 
       /* ===== RESPONSIVE (MÓVIL) ===== */
@@ -59,6 +59,14 @@
         .card { padding: 10px; }
         .big { font-size: 16px; }
       }
+      
+      /* Fixes para los títulos dentro de cards */
+      .card .row .big { color: var(--text-1); }
+      .card .muted { color: var(--text-3); }
+      .card .muted.mono { color: var(--accent-light); }
+      
+      /* Badges con borde correcto */
+      .badge { border-width: 1px; border-style: solid; }
     </style>
 {% endblock %}
 
@@ -95,7 +103,7 @@
           {% endif %}
         </div>
         
-        <div style="padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 12px;">
+        <div style="padding: 12px; background: var(--bg-2); border-radius: 8px; margin-bottom: 12px;">
           <div class="muted" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Razón del estado</div>
           <div id="riesgo_motivo" style="font-size: 14px; font-weight: 500; color: #111; line-height: 1.4;">
             {% if cuenta and cuenta.riesgo_motivo_ui %}
@@ -119,18 +127,18 @@
           </div>
         </div>
 
-        <div id="ciclo_pausa_info" style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 12px; display: none;">
-          <div class="muted" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; color: #991b1b;">Pausa activa</div>
-          <div class="mono" id="ciclo_pausa_fecha" style="font-size: 14px; font-weight: 600; color: #dc2626; margin-bottom: 4px;"></div>
-          <div class="mono" id="ciclo_pausa_countdown" style="font-size: 13px; color: #b91c1c;"></div>
+        <div id="ciclo_pausa_info" style="padding: 12px; background: rgba(239,68,68,0.15); border: 1px solid var(--red); border-radius: 8px; margin-bottom: 12px; display: none;">
+          <div class="muted" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; color: #fca5a5;">Pausa activa</div>
+          <div class="mono" id="ciclo_pausa_fecha" style="font-size: 14px; font-weight: 600; color: #fca5a5; margin-bottom: 4px;"></div>
+          <div class="mono" id="ciclo_pausa_countdown" style="font-size: 13px; color: #fca5a5;"></div>
         </div>
 
-        <div style="margin-top: 14px; padding-top: 14px; border-top: 2px solid #e5e7eb;">
+        <div style="margin-top: 14px; padding-top: 14px; border-top: 2px solid var(--border);">
           <div class="muted" style="font-size: 12px; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Ciclo de Trading</div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
-            <div style="padding: 8px; background: #f9fafb; border-radius: 6px;">
+            <div style="padding: 8px; background: var(--bg-2); border-radius: 6px;">
               <div class="muted" style="font-size: 10px; margin-bottom: 4px;">Balance inicial</div>
-              <div class="mono" id="ciclo_balance_inicio" style="font-weight: 600; font-size: 15px; color: #111;">
+              <div class="mono" id="ciclo_balance_inicio" style="font-weight: 600; font-size: 15px; color: var(--text-1);">
                 {% if cuenta and cuenta.ciclo_balance_inicio != None %}
                   ${{ cuenta.ciclo_balance_inicio|floatformat:2 }}
                 {% else %}
@@ -138,23 +146,23 @@
                 {% endif %}
               </div>
             </div>
-            <div style="padding: 8px; background: #f9fafb; border-radius: 6px;">
-              <div class="muted" style="font-size: 10px; margin-bottom: 4px;">Inició</div>
-              <div class="mono" id="ciclo_inicio" style="font-size: 13px; color: #374151;">—</div>
+            <div style="padding: 8px; background: var(--bg-2); border-radius: 6px;">
+              <div class="muted" style="font-size: 10px; margin-bottom: 4px;">Inicio</div>
+              <div class="mono" id="ciclo_inicio" style="font-size: 13px; color: var(--text-2);">—</div>
             </div>
           </div>
         </div>
 
-        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #e5e7eb;">
+        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);">
           <div class="muted" style="font-size: 12px; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Mercado</div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
-            <div style="padding: 8px; background: #f9fafb; border-radius: 6px;">
+            <div style="padding: 8px; background: var(--bg-2); border-radius: 6px;">
               <div class="muted" style="font-size: 10px; margin-bottom: 4px;">Hora (local)</div>
-              <div class="mono" id="ultimo_tick" style="font-size: 13px; color: #374151;">—</div>
+              <div class="mono" id="ultimo_tick" style="font-size: 13px; color: var(--text-2);">—</div>
             </div>
-            <div style="padding: 8px; background: #f9fafb; border-radius: 6px;">
+            <div style="padding: 8px; background: var(--bg-2); border-radius: 6px;">
               <div class="muted" style="font-size: 10px; margin-bottom: 4px;">Precio actual</div>
-              <div class="mono" id="ultimo_precio" style="font-weight: 600; font-size: 15px; color: #111;">{{ cuenta.ultimo_precio|default:"—" }}</div>
+              <div class="mono" id="ultimo_precio" style="font-weight: 600; font-size: 15px; color: var(--text-1);">{{ cuenta.ultimo_precio|default:"—" }}</div>
             </div>
           </div>
         </div>
@@ -210,42 +218,42 @@
       </div>
     </div>
 
-    <!-- Colector de ticks (histórico) -->
+    <!-- Colector de ticks (historico) -->
     <div class="card" style="margin-top: 14px;">
       <div class="row">
         <div>
-          <div class="big">Recolector de ticks (histórico)</div>
-          <div class="muted">Guarda ticks por días para investigación · Puedes pausarlo/reanudarlo</div>
+          <div class="big">Recolector de ticks (historico)</div>
+          <div class="muted">Guarda ticks por dias para investigacion</div>
         </div>
         <div class="muted mono" id="ticks_collector_status_global">—</div>
       </div>
       <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
-        <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px;">
+        <div style="padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2);">
           <div class="row">
-            <div class="mono" style="font-weight: 700;">R_100</div>
+            <div class="mono" style="font-weight: 700; color: var(--text-1);">R_100</div>
             <div class="badge neutral mono" id="ticks_collector_badge_forex">—</div>
           </div>
           <div class="muted" style="margin-top: 8px;">Ticks archivados: <span class="mono" id="ticks_collector_total_forex">0</span></div>
-          <div class="muted">Último epoch: <span class="mono" id="ticks_collector_last_epoch_forex">—</span></div>
+          <div class="muted">Ultimo epoch: <span class="mono" id="ticks_collector_last_epoch_forex">—</span></div>
           <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
             <button class="btn" id="ticks_collector_toggle_forex">Pausar</button>
           </div>
         </div>
-        <!-- Segundo símbolo -->
-        <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px;">
+        <!-- Segundo simbolo -->
+        <div style="padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2);">
           <div class="row">
-            <div class="mono" style="font-weight: 700;">EURUSD</div>
+            <div class="mono" style="font-weight: 700; color: var(--text-1);">EURUSD</div>
             <div class="badge neutral mono" id="ticks_collector_badge_forex2">—</div>
           </div>
           <div class="muted" style="margin-top: 8px;">Ticks archivados: <span class="mono" id="ticks_collector_total_forex2">0</span></div>
-          <div class="muted">Último epoch: <span class="mono" id="ticks_collector_last_epoch_forex2">—</span></div>
+          <div class="muted">Ultimo epoch: <span class="mono" id="ticks_collector_last_epoch_forex2">—</span></div>
           <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
             <button class="btn" id="ticks_collector_toggle_forex2">Pausar</button>
           </div>
         </div>
       </div>
       <div class="muted" style="margin-top: 10px;">
-        Nota: esto NO detiene el bot ni el gráfico en tiempo real; solo controla el archivado para backtesting.
+        Nota: esto NO detiene el bot ni el grafico en tiempo real
       </div>
     </div>
 
@@ -263,16 +271,16 @@
       </div>
       
       <!-- Controles de EMAs R_100 -->
-      <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+      <div style="margin-top: 12px; padding: 12px; background: var(--bg-2); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <label style="font-size: 12px; color: #6b7280; font-weight: 500;">EMA Rápida:</label>
-          <input type="number" id="ema_fast_period_forex" value="50" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
+          <label style="font-size: 12px; color: var(--text-3); font-weight: 500;">EMA Rapida:</label>
+          <input type="number" id="ema_fast_period_forex" value="50" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; background: var(--bg-1); color: var(--text-1);" />
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <label style="font-size: 12px; color: #6b7280; font-weight: 500;">EMA Lenta:</label>
-          <input type="number" id="ema_slow_period_forex" value="100" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px;" />
+          <label style="font-size: 12px; color: var(--text-3); font-weight: 500;">EMA Lenta:</label>
+          <input type="number" id="ema_slow_period_forex" value="100" min="1" max="200" style="width: 60px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; background: var(--bg-1); color: var(--text-1);" />
         </div>
-        <button id="ema_update_btn_forex" style="padding: 6px 12px; background: #111827; color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Actualizar EMAs</button>
+        <button id="ema_update_btn_forex" style="padding: 6px 12px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Actualizar EMAs</button>
       </div>
       
       <div class="chart-wrap" style="margin-top: 10px;">
@@ -683,8 +691,8 @@
             datasets: [{
               label: "Balance",
               data: [],
-              borderColor: "#000000",
-              backgroundColor: "rgba(0,0,0,0.1)",
+              borderColor: "#60a5fa",
+              backgroundColor: "rgba(59,130,246,0.15)",
               fill: true,
               tension: 0.4,
               cubicInterpolationMode: "monotone",
@@ -700,7 +708,7 @@
             maintainAspectRatio: false,
             animation: false,
             plugins: {
-              crosshairPlugin: { color: "rgba(0,0,0,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
+              crosshairPlugin: { color: "rgba(96,165,250,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
               legend: { display: false },
               tooltip: { enabled: false },
             },
@@ -710,16 +718,18 @@
                 ticks: {
                   maxTicksLimit: 10,
                   autoSkip: true,
+                  color: "#94a3b8",
                   callback: function(value) {
-                    // En escala categórica, "value" es el índice; obtenemos el label real.
+                    // En escala categorica, "value" es el indice; obtenemos el label real.
                     const lbl = this.getLabelForValue(value);
                     return dayDDFromLabel(lbl);
                   },
                 },
-                grid: { display: false },
+                grid: { color: "rgba(255,255,255,0.05)" },
               },
               y: {
-                grid: { display: false },
+                grid: { color: "rgba(255,255,255,0.05)" },
+                ticks: { color: "#94a3b8" },
               },
             },
           },
@@ -754,6 +764,7 @@
       }
 
       // ===== GRÁFICAS TICKS (FOREX) =====
+      const charts = {
         "EURUSD": { chart: null, emaFast: 9, emaSlow: 21, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null },
         "R_100": { chart: null, emaFast: 50, emaSlow: 100, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null }
       };
@@ -849,17 +860,17 @@
             datasets: [{
               label: "Precio",
               data: [],
-              borderColor: "#000000",
-              backgroundColor: "rgba(0,0,0,0.1)",
+              borderColor: "#60a5fa",
+              backgroundColor: "rgba(59,130,246,0.15)",
               fill: true,
               tension: 0.1,
               pointRadius: 0,
               pointHoverRadius: 0,
               borderWidth: 1.5,
             }, {
-              label: "EMA Rápida",
+              label: "EMA Rapida",
               data: [],
-              borderColor: "#10b981",
+              borderColor: "#34d399",
               backgroundColor: "rgba(16,185,129,0.1)",
               borderDash: [3, 3],
               borderWidth: 1.5,
@@ -869,7 +880,7 @@
             }, {
               label: "EMA Lenta",
               data: [],
-              borderColor: "#ef4444",
+              borderColor: "#f87171",
               backgroundColor: "rgba(239,68,68,0.1)",
               borderDash: [5, 5],
               borderWidth: 1.5,
@@ -885,25 +896,23 @@
               duration: 300,
             },
             plugins: {
-              crosshairPlugin: { color: "rgba(0,0,0,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
+              crosshairPlugin: { color: "rgba(96,165,250,0.75)", width: 1.5, outlineColor: "rgba(255,255,255,0.55)", outlineWidth: 3.5 },
               legend: { display: false },
               tooltip: { enabled: false },
             },
             interaction: { mode: "index", intersect: false },
             scales: {
               x: {
-                ticks: {
-                  maxTicksLimit: 10,
-                  autoSkip: true,
-                },
-                grid: { display: false },
+                ticks: { maxTicksLimit: 10, autoSkip: true, color: "#94a3b8" },
+                grid: { color: "rgba(255,255,255,0.05)" },
               },
               y: {
-                grid: { display: false },
+                grid: { color: "rgba(255,255,255,0.05)" },
                 ticks: {
                   callback: function(value) {
                     return Number(value).toFixed(2);
                   },
+                  color: "#94a3b8",
                 },
               },
             },
