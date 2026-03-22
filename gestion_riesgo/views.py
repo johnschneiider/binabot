@@ -12,6 +12,7 @@ from django.http import JsonResponse, FileResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.contrib.auth.decorators import login_required
 from django.db.models import F
 from django.db.utils import OperationalError
 from django.db.models import Value
@@ -21,7 +22,7 @@ import json
 import time
 import queue
 
-from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, TickDerivSnapshot, TickDerivHistorico
+from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, Operacion, TickDerivSnapshot, TickDerivHistorico
 import subprocess
 
 # cola para SSE
@@ -207,27 +208,51 @@ def _riesgo_motivo_ui(riesgo_motivo: str | None) -> dict:
     return {"label": rm, "pausa_hasta_epoch": None}
 
 
+@login_required
 @ensure_csrf_cookie
 @require_http_methods(["GET", "HEAD"])
 def dashboard(request):
     """
     DASHBOARD WEB PARA MONITOREO (BALANCE + OPERACIONES) EN "TIEMPO REAL" (POLLING).
     """
-    # Usar SOLO la cuenta del símbolo configurado para evitar mezclar dashboards (ej: R_10 vs R_100).
+    # Usar SOLO la cuenta del simbolo configurado para evitar mezclar dashboards (ej: R_10 vs R_100).
     cuenta = Cuenta.objects.filter(simbolo=str(getattr(settings, "DERIV_SYMBOL", "") or "").strip()).order_by(
         "-ultimo_tick_epoch", "-updated_at"
     ).first()
+    
+    # Operaciones REALES de Deriv
     operaciones_deriv = (
         OperacionDeriv.objects.select_related("cuenta")
         .filter(creada_por_bot=True)
         .annotate(duracion_segundos=F("closed_epoch") - F("opened_epoch"))
         .order_by("-updated_at")[:50]
     )
-
-    # FECHA/HORA DERIVADA DE EPOCH EN HUSO HORARIO LOCAL (COLOMBIA).
+    
+    # Marcar como tipo REAL
     for op in operaciones_deriv:
+        op.tipo_cuenta = "REAL"
         epoch_ref = op.closed_epoch or op.opened_epoch
         op.fecha_hora = _fecha_hora_colombia_desde_epoch(int(epoch_ref) if epoch_ref else None)
+
+    # Operaciones PAPER/DEMO internas
+    operaciones_paper = (
+        Operacion.objects.filter(cuenta=cuenta)
+        .annotate(duracion_segundos=F("closed_epoch") - F("opened_epoch"))
+        .order_by("-updated_at")[:50]
+    )
+    
+    # Marcar como tipo PAPER
+    for op in operaciones_paper:
+        op.tipo_cuenta = "PAPER"
+        epoch_ref = op.closed_epoch or op.opened_epoch
+        op.fecha_hora = _fecha_hora_colombia_desde_epoch(int(epoch_ref) if epoch_ref else None)
+    
+    # Combinar ambas listas
+    todas_operaciones = list(operaciones_deriv) + list(operaciones_paper)
+    # Ordenar por fecha/hora descendente
+    todas_operaciones.sort(key=lambda x: x.fecha_hora or "", reverse=True)
+    # Limitar a 50
+    todas_operaciones = todas_operaciones[:50]
 
     horas_bloqueadas = _parse_horas_bloqueadas(str(getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""))
     hora_local_actual = _hora_local_actual()
@@ -238,7 +263,7 @@ def dashboard(request):
         "gestion_riesgo/dashboard.html",
         {
             "cuenta": cuenta,
-            "operaciones_deriv": operaciones_deriv,
+            "operaciones": todas_operaciones,
             "winrate_ult15": _winrate_ultimas_deriv(n=15),
             "hora_local_actual": hora_local_actual,
             "horario_bloqueado": horario_bloqueado,
@@ -510,24 +535,62 @@ def estado_json(request):
         dt_local = _fecha_hora_colombia_desde_epoch(int(epoch_ref) if epoch_ref else None)
         # FORMATO SIMPLE PARA UI (SIN UTC).
         op["fecha_hora"] = dt_local.strftime("%Y-%m-%d %H:%M:%S") if dt_local else None
+        op["tipo_cuenta"] = "REAL"
+    
+    # Obtener operaciones PAPER (internas/demo)
+    ops_paper = list(
+        Operacion.objects.filter(cuenta__simbolo__in=["R_10", "R_100"])
+        .annotate(epoch_ref=Coalesce("closed_epoch", "opened_epoch", Value(0)))
+        .order_by("-epoch_ref")
+        .annotate(duracion_segundos=F("closed_epoch") - F("opened_epoch"))
+        .values(
+            "id",
+            "simbolo",
+            "estado",
+            "pnl_realizado",
+            "precio_entrada",
+            "precio_salida",
+            "direccion",
+            "opened_epoch",
+            "closed_epoch",
+            "duracion_segundos",
+            "updated_at",
+        )[:50]
+    )
+    for op in ops_paper:
+        epoch_ref = op.get("closed_epoch") or op.get("opened_epoch")
+        dt_local = _fecha_hora_colombia_desde_epoch(int(epoch_ref) if epoch_ref else None)
+        op["fecha_hora"] = dt_local.strftime("%Y-%m-%d %H:%M:%S") if dt_local else None
+        op["tipo_cuenta"] = "PAPER"
+        op["contract_type"] = op.get("direccion", "")
+        op["profit"] = op.get("pnl_realizado")
+        op["entry_spot"] = op.get("precio_entrada")
+        op["exit_spot"] = op.get("precio_salida")
+    
+    # Combinar operaciones
+    todas_ops = ops_deriv + ops_paper
+    todas_ops.sort(key=lambda x: x.get("fecha_hora") or "", reverse=True)
+    todas_ops = todas_ops[:50]
     
     # Mantener compatibilidad: cuenta principal es R_10
     cuenta_dict = cuentas_dict.get("R_10")
     
-    # Debug: contar total de operaciones (con y sin filtro)
-    total_ops_sin_filtro = OperacionDeriv.objects.filter(cuenta__simbolo__in=["R_10", "R_100"]).count()
-    total_ops_con_filtro = OperacionDeriv.objects.filter(creada_por_bot=True, cuenta__simbolo__in=["R_10", "R_100"]).count()
+    # Debug: contar total de operaciones
+    total_ops_deriv = OperacionDeriv.objects.filter(creada_por_bot=True, cuenta__simbolo__in=["R_10", "R_100"]).count()
+    total_ops_paper = Operacion.objects.filter(cuenta__simbolo__in=["R_10", "R_100"]).count()
     
     return JsonResponse({
-        "cuenta": cuenta_dict,  # Compatibilidad con código existente
-        "cuentas": cuentas_dict,  # Nuevo: datos de todos los activos
+        "cuenta": cuenta_dict,
+        "cuentas": cuentas_dict,
+        "operaciones": todas_ops,
         "operaciones_deriv": ops_deriv,
-        "ticks": ticks_dict.get("R_10", []),  # Compatibilidad
-        "ticks_por_activo": ticks_dict,  # Nuevo: ticks por activo
+        "operaciones_paper": ops_paper,
+        "ticks": ticks_dict.get("R_10", []),
+        "ticks_por_activo": ticks_dict,
         "_debug": {
-            "ops_total_sin_filtro": total_ops_sin_filtro,
-            "ops_total_con_filtro_creada_por_bot": total_ops_con_filtro,
-            "ops_enviadas": len(ops_deriv),
+            "ops_deriv": total_ops_deriv,
+            "ops_paper": total_ops_paper,
+            "ops_total": len(todas_ops),
         },
     })
 
@@ -712,6 +775,7 @@ def logs_json(request):
     )
 
 
+@login_required
 def dashboard_eurusd(request):
     """
     Dashboard específico para EURUSD con estrategia EMA 35 M5.

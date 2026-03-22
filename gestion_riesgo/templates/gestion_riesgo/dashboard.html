@@ -307,6 +307,7 @@
           <thead>
             <tr>
               <th>Cuenta</th>
+              <th>Activo</th>
               <th>Tipo</th>
               <th>Estado</th>
               <th>Profit</th>
@@ -318,15 +319,15 @@
             </tr>
           </thead>
           <tbody id="tabla_operaciones_deriv">
-            {% for op in operaciones_deriv %}
+            {% for op in operaciones %}
               <tr>
-                <td><span class="badge {% if op.simbolo == 'DEMO' %}neutral{% else %}ok{% endif %}">{{ op.simbolo|default:"REAL" }}</span></td>
+                <td><span class="badge {% if op.tipo_cuenta == 'PAPER' %}neutral{% else %}ok{% endif %}">{{ op.tipo_cuenta|default:"REAL" }}</span></td>
+                <td class="mono">{{ op.simbolo|default:"—" }}</td>
                 <td class="mono">{{ op.contract_type|default:"—" }}</td>
                 <td>{{ op.estado }}</td>
-                <td class="mono">{{ op.profit|default:"—" }}</td>
-                <td class="mono">{% if op.umbral_usado != None %}{{ op.umbral_usado|floatformat:3 }}{% else %}—{% endif %}</td>
-                <td class="mono">{% if op.entry_spot != None %}{{ op.entry_spot|floatformat:3 }}{% else %}—{% endif %}</td>
-                <td class="mono">{% if op.exit_spot != None %}{{ op.exit_spot|floatformat:3 }}{% else %}—{% endif %}</td>
+                <td class="mono">{% if op.profit != None %}{{ op.profit|floatformat:2 }}{% else %}{% if op.pnl_realizado != None %}{{ op.pnl_realizado|floatformat:2 }}{% else %}—{% endif %}{% endif %}</td>
+                <td class="mono">{% if op.entry_spot != None %}{{ op.entry_spot|floatformat:2 }}{% else %}—{% endif %}</td>
+                <td class="mono">{% if op.exit_spot != None %}{{ op.exit_spot|floatformat:2 }}{% else %}—{% endif %}</td>
                 <td class="mono">
                   {% if op.duracion_segundos != None %}
                     {{ op.duracion_segundos }}s
@@ -343,7 +344,7 @@
                 </td>
               </tr>
             {% empty %}
-              <tr><td colspan="9" class="muted">Aun no hay operaciones.</td></tr>
+              <tr><td colspan="10" class="muted">Aun no hay operaciones.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -609,7 +610,7 @@
         const tbody = document.getElementById("tabla_operaciones_deriv");
         if (!tbody) return;
         if (!ops || ops.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="9" class="muted">Aun no hay operaciones.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="10" class="muted">Aun no hay operaciones.</td></tr>';
           return;
         }
         console.log("[RENDER OPS] Recibidas:", ops.length, "operaciones");
@@ -619,20 +620,23 @@
             : ((op.opened_epoch && op.closed_epoch) ? `${Number(op.closed_epoch) - Number(op.opened_epoch)}s` : "—");
           const fh = op.fecha_hora ? String(op.fecha_hora) : "—";
           const umbral = (op.umbral_usado === null || op.umbral_usado === undefined) ? "—" : Number(op.umbral_usado).toFixed(3);
-          const activo = op.simbolo ? String(op.simbolo) : "REAL";
-          const tipo = (op.contract_type || "—");
-          const entrada = (op.entry_spot === null || op.entry_spot === undefined) ? "—" : Number(op.entry_spot).toFixed(3);
-          const cierre = (op.exit_spot === null || op.exit_spot === undefined) ? "—" : Number(op.exit_spot).toFixed(3);
-          // Badge para tipo de cuenta
-          const isDemo = activo === 'DEMO';
-          const badgeClass = isDemo ? 'badge neutral' : 'badge ok';
-          const badgeText = activo;
+          const simbolo = op.simbolo ? String(op.simbolo) : "—";
+          const tipo = op.contract_type || "—";
+          // Para operaciones PAPER, usar pnl_realizado
+          const profit = (op.profit !== null && op.profit !== undefined) ? op.profit : (op.pnl_realizado || null);
+          const entrada = (op.entry_spot === null || op.entry_spot === undefined) ? "—" : Number(op.entry_spot).toFixed(2);
+          const cierre = (op.exit_spot === null || op.exit_spot === undefined) ? "—" : Number(op.exit_spot).toFixed(2);
+          // Badge para tipo de cuenta (PAPER = demo interno, REAL = Deriv)
+          const tipoCuenta = op.tipo_cuenta || "REAL";
+          const badgeClass = (tipoCuenta === 'PAPER') ? 'badge neutral' : 'badge ok';
+          const profitStr = (profit === null || profit === undefined) ? "—" : fmt2(profit);
           return `
             <tr>
-              <td><span class="${badgeClass}">${badgeText}</span></td>
+              <td><span class="${badgeClass}">${tipoCuenta}</span></td>
+              <td class="mono">${simbolo}</td>
               <td class="mono">${tipo}</td>
               <td>${op.estado}</td>
-              <td class="mono">${(op.profit === null || op.profit === undefined) ? "—" : fmt2(op.profit)}</td>
+              <td class="mono">${profitStr}</td>
               <td class="mono">${umbral}</td>
               <td class="mono">${entrada}</td>
               <td class="mono">${cierre}</td>
@@ -1038,10 +1042,10 @@
           } else {
             console.warn("[REFRESCAR] No hay datos de cuenta");
           }
-          // ===== Operaciones: evitar re-render si no cambió (evita “parpadeo”/resets) =====
-          const opsArr = Array.isArray(data.operaciones_deriv) ? data.operaciones_deriv : [];
+          // ===== Operaciones: evitar re-render si no cambio (evita parpadeo/resets) =====
+          const opsArr = Array.isArray(data.operaciones) ? data.operaciones : [];
           const opsKey = opsArr
-            .map(op => `${op.contract_id || ""}|${op.updated_at || ""}|${op.estado || ""}|${op.profit ?? ""}`)
+            .map(op => `${op.tipo_cuenta || "REAL"}|${op.simbolo || ""}|${op.contract_id || ""}|${op.updated_at || ""}|${op.estado || ""}|${op.profit ?? op.pnl_realizado ?? ""}`)
             .join(";");
 
           const wrap = document.getElementById("ops_table_wrap");
