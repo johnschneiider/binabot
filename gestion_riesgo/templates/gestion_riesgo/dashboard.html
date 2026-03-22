@@ -755,7 +755,7 @@
 
       // ===== GRÁFICAS TICKS (FOREX) =====
       const charts = {
-        "EURUSD": { chart: null, emaFast: 9, emaSlow: 21, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null },
+        "R_10": { chart: null, emaFast: 9, emaSlow: 21, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null },
         "R_100": { chart: null, emaFast: 50, emaSlow: 100, lastTicks: null, emaFastByEpoch: null, emaSlowByEpoch: null, emaLastEpoch: null, emaLastFast: null, emaLastSlow: null }
       };
 
@@ -841,7 +841,7 @@
       function ensureTicksChart(simbolo) {
         // Mapear simbolos a IDs de canvas en el HTML
         const symbolToCanvasId = {
-          "frxEURUSD": "ticks_chart_forex",
+          "R_10": "ticks_chart_forex",
           "R_100": "ticks_chart_r100",
         };
         const chartId = symbolToCanvasId[simbolo] || `ticks_chart_${simbolo.toLowerCase().replace("_", "")}`;
@@ -1074,7 +1074,7 @@
           console.log("[REFRESCAR] ticksPorActivo:", ticksPorActivo);
           console.log("[REFRESCAR] cuentas:", cuentas);
           actualizarTicksCollectorUI(cuentas);
-          for (const simbolo of ["frxEURUSD", "R_100"]) {
+          for (const simbolo of ["R_10", "R_100"]) {
             const ticks = ticksPorActivo[simbolo] || [];
             const cuentaData = cuentas[simbolo];
             console.log(`[REFRESCAR] ${simbolo}: ${ticks.length} ticks, cuenta:`, cuentaData ? "existe" : "no existe");
@@ -1093,7 +1093,7 @@
           
           // Mapear simbolos a IDs de elementos en el HTML
           const symbolToIds = {
-            "frxEURUSD": { chart: "ticks_chart_forex", count: "ticks_count_forex", price: "ticks_current_price_forex" },
+            "R_10": { chart: "ticks_chart_forex", count: "ticks_count_forex", price: "ticks_current_price_forex" },
             "R_100": { chart: "ticks_chart_r100", count: "ticks_count_r100", price: "ticks_current_price_r100" },
           };
           const ids = symbolToIds[simbolo] || { count: "ticks_count_forex", price: "ticks_current_price_forex" };
