@@ -22,8 +22,6 @@ db.sqlite3-journal
 *.pyproj
 .idea/
 .vscode/
-*.sqlite3
-.env
-.env.*
 !.env.example
+nul
 

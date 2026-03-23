@@ -1,0 +1,116 @@
+{% extends "admin_panel/base_admin.html" %}
+
+{% block title %}Editar {{ grupo.nombre }} · Panel Admin{% endblock %}
+
+{% block admin_content %}
+<div class="ap-page-title">Editar grupo: {{ grupo.nombre }}</div>
+<div class="ap-page-sub">
+  <a href="{% url 'admin_panel:grupos' %}" class="ap-back-link">← Volver a grupos</a>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="ap-msg {% if msg.tags == 'error' %}ap-msg-error{% else %}ap-msg-success{% endif %}">{{ msg }}</div>
+{% endfor %}
+{% endif %}
+
+<div class="ap-edit-grid">
+  <div class="ap-card">
+    <div class="ap-card-title">Datos del grupo</div>
+    <form method="POST" action="{% url 'admin_panel:grupo_editar' grupo.id %}">
+      {% csrf_token %}
+      <div class="ap-form-group">
+        <label>Nombre</label>
+        <input type="text" name="nombre" value="{{ grupo.nombre }}" required>
+      </div>
+      <div class="ap-form-group">
+        <label>Descripción</label>
+        <input type="text" name="descripcion" value="{{ grupo.descripcion }}">
+      </div>
+      <div class="ap-form-group">
+        <label>Rutas permitidas <span style="font-weight:400;color:var(--text-4);font-size:11px;">(separadas por coma)</span></label>
+        <textarea name="urls_permitidas" rows="4" placeholder="/portal/,/portal/depositar/,/portal/retirar/">{{ grupo.urls_permitidas }}</textarea>
+      </div>
+      <button type="submit" class="ap-btn ap-btn-primary">Guardar cambios</button>
+    </form>
+  </div>
+
+  <div class="ap-card">
+    <div class="ap-card-title">Usuarios en este grupo ({{ grupo.usuarios.count }})</div>
+    <div class="ap-user-list">
+      {% for u in grupo.usuarios.all %}
+      <div class="ap-user-row">
+        <div class="ap-user-info">
+          <strong>{{ u.username }}</strong>
+          <span style="color:var(--text-4);font-size:12px;">{{ u.email }}</span>
+        </div>
+        <form method="POST" action="{% url 'admin_panel:grupo_quitar_usuario' grupo.id u.id %}">
+          {% csrf_token %}
+          <button type="submit" class="ap-btn ap-btn-red ap-btn-sm">Quitar</button>
+        </form>
+      </div>
+      {% empty %}
+      <div class="ap-empty-sm">No hay usuarios en este grupo.</div>
+      {% endfor %}
+    </div>
+
+    {% if request.user.is_superuser %}
+    <div class="ap-add-user">
+      <div class="ap-form-group" style="margin-top:16px;">
+        <label>Agregar usuario al grupo</label>
+        <div style="display:flex;gap:8px;">
+          <select name="user_id" form="add-user-form-{{ grupo.id }}" style="flex:1;padding:9px 12px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-1);font-size:13px;font-family:var(--font);outline:none;">
+            <option value="">— Seleccionar usuario —</option>
+            {% for u in all_users %}
+            {% if u not in grupo.usuarios.all %}
+            <option value="{{ u.id }}">{{ u.username }} ({{ u.email }})</option>
+            {% endif %}
+            {% endfor %}
+          </select>
+          <form method="POST" id="add-user-form-{{ grupo.id }}" action="{% url 'admin_panel:grupo_agregar_usuario' grupo.id %}">
+            {% csrf_token %}
+            <input type="hidden" name="user_id" id="hidden-user-id-{{ grupo.id }}">
+            <button type="submit" class="ap-btn ap-btn-green ap-btn-sm">Agregar</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .ap-back-link { font-size: 13px; color: var(--accent-light); text-decoration: none; }
+  .ap-back-link:hover { text-decoration: underline; }
+  .ap-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .ap-card { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--r-md); padding: 24px; }
+  .ap-card-title { font-size: 15px; font-weight: 700; color: var(--text-1); margin-bottom: 20px; }
+  .ap-form-group { margin-bottom: 14px; }
+  .ap-form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-3); margin-bottom: 6px; }
+  .ap-form-group input, .ap-form-group textarea, .ap-form-group select {
+    width: 100%; padding: 9px 12px; background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: var(--r-sm); color: var(--text-1); font-size: 13px; font-family: var(--font); outline: none; box-sizing: border-box;
+  }
+  .ap-form-group textarea { resize: vertical; }
+  .ap-form-group input:focus, .ap-form-group textarea:focus, .ap-form-group select:focus { border-color: var(--accent); }
+  .ap-user-list { display: flex; flex-direction: column; gap: 8px; }
+  .ap-user-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--r-sm); }
+  .ap-user-info strong { display: block; font-size: 13px; color: var(--text-1); }
+  .ap-user-info span { display: block; }
+  .ap-empty-sm { text-align: center; padding: 20px; color: var(--text-4); font-size: 13px; }
+  .ap-btn { padding: 9px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 700; border: none; cursor: pointer; font-family: var(--font); transition: all 0.15s; text-decoration: none; display: inline-block; }
+  .ap-btn-sm { padding: 6px 12px; font-size: 12px; }
+  .ap-btn-primary { background: var(--accent); color: #fff; }
+  .ap-btn-primary:hover { background: var(--accent-light); }
+  .ap-btn-green { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.2); }
+  .ap-btn-green:hover { background: rgba(16,185,129,0.25); }
+  .ap-btn-red { background: rgba(239,68,68,0.1); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
+  .ap-btn-red:hover { background: rgba(239,68,68,0.2); }
+  .ap-msg { padding: 12px 16px; border-radius: var(--r-sm); margin-bottom: 16px; font-size: 13px; font-weight: 600; }
+  .ap-msg-success { background: rgba(16,185,129,0.1); color: var(--green); border: 1px solid rgba(16,185,129,0.2); }
+  .ap-msg-error { background: rgba(239,68,68,0.1); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
+  @media (max-width: 768px) { .ap-edit-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}

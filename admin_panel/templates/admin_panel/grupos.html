@@ -1,0 +1,93 @@
+{% extends "admin_panel/base_admin.html" %}
+
+{% block title %}Grupos de Acceso · Panel Admin{% endblock %}
+
+{% block admin_content %}
+<div class="ap-page-title">Grupos de Acceso</div>
+<div class="ap-page-sub">Administra grupos y permisos de acceso por rutas URL. Solo el super administrador puede crear y eliminar grupos.</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="ap-msg {% if msg.tags == 'error' %}ap-msg-error{% elif msg.tags == 'warning' %}ap-msg-warning{% else %}ap-msg-success{% endif %}">{{ msg }}</div>
+{% endfor %}
+{% endif %}
+
+{% if request.user.is_superuser %}
+<div class="ap-create-bar">
+  <div class="ap-section-title">Crear nuevo grupo</div>
+  <form method="POST" action="{% url 'admin_panel:grupo_crear' %}" class="ap-create-form">
+    {% csrf_token %}
+    <input type="text" name="nombre" placeholder="Nombre del grupo" required>
+    <input type="text" name="descripcion" placeholder="Descripción (opcional)">
+    <input type="text" name="urls_permitidas" placeholder="Rutas separadas por coma, ej: /portal/,/portal/depositar/">
+    <button type="submit" class="ap-btn ap-btn-primary">Crear grupo</button>
+  </form>
+</div>
+{% endif %}
+
+{% if grupos %}
+<div class="ap-table-wrap">
+  <table class="ap-table">
+    <thead>
+      <tr>
+        <th>Grupo</th>
+        <th>Descripción</th>
+        <th>Rutas permitidas</th>
+        <th>Usuarios</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in grupos %}
+      <tr>
+        <td><strong>{{ g.nombre }}</strong></td>
+        <td style="color:var(--text-4);font-size:12px;">{{ g.descripcion|default:"—" }}</td>
+        <td style="font-size:11px;color:var(--text-4);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ g.urls_permitidas }}">{{ g.urls_permitidas|default:"—" }}</td>
+        <td>
+          {% for u in g.usuarios.all %}
+            <span class="ap-user-chip">{{ u.username }}</span>
+          {% empty %}
+            <span style="color:var(--text-4);font-size:12px;">Sin usuarios</span>
+          {% endfor %}
+        </td>
+        <td>
+          <a href="{% url 'admin_panel:grupo_editar' g.id %}" class="ap-btn ap-btn-blue">Editar</a>
+          {% if request.user.is_superuser %}
+          <form method="POST" action="{% url 'admin_panel:grupo_eliminar' g.id %}" style="display:inline;" onsubmit="return confirm('¿Eliminar el grupo \'{{ g.nombre }}\'?');">
+            {% csrf_token %}
+            <button type="submit" class="ap-btn ap-btn-red">Eliminar</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="ap-empty">No hay grupos creados. Crea uno usando el formulario de arriba.</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .ap-create-bar { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--r-md); padding: 20px; margin-bottom: 24px; }
+  .ap-create-form { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; align-items: center; }
+  .ap-create-form input { flex: 1; min-width: 160px; padding: 9px 12px; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text-1); font-size: 13px; font-family: var(--font); outline: none; }
+  .ap-create-form input:focus { border-color: var(--accent); }
+  .ap-create-form input[placeholder="Rutas separadas por coma"] { min-width: 300px; }
+  .ap-btn { padding: 9px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 700; border: none; cursor: pointer; font-family: var(--font); transition: all 0.15s; text-decoration: none; display: inline-block; }
+  .ap-btn-primary { background: var(--accent); color: #fff; }
+  .ap-btn-primary:hover { background: var(--accent-light); }
+  .ap-btn-blue { background: rgba(59,130,246,0.15); color: var(--accent-light); border: 1px solid rgba(59,130,246,0.2); }
+  .ap-btn-blue:hover { background: rgba(59,130,246,0.25); }
+  .ap-btn-red { background: rgba(239,68,68,0.1); color: var(--red); border: 1px solid rgba(239,68,68,0.2); margin-left: 4px; }
+  .ap-btn-red:hover { background: rgba(239,68,68,0.2); }
+  .ap-user-chip { display: inline-block; background: var(--bg-4); color: var(--text-3); font-size: 11px; padding: 2px 8px; border-radius: 100px; margin: 2px 4px 2px 0; border: 1px solid var(--border); }
+  .ap-empty { text-align: center; padding: 48px; color: var(--text-4); font-size: 14px; }
+  .ap-msg { padding: 12px 16px; border-radius: var(--r-sm); margin-bottom: 16px; font-size: 13px; font-weight: 600; }
+  .ap-msg-success { background: rgba(16,185,129,0.1); color: var(--green); border: 1px solid rgba(16,185,129,0.2); }
+  .ap-msg-error { background: rgba(239,68,68,0.1); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
+  .ap-msg-warning { background: rgba(234,179,8,0.1); color: var(--yellow); border: 1px solid rgba(234,179,8,0.2); }
+</style>
+{% endblock %}
