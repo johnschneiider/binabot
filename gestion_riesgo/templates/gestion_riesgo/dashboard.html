@@ -125,6 +125,11 @@
           <div class="muted" style="margin-top: 8px;">
             Horas bloqueadas: <span class="mono" id="horas_bloqueadas">{% if horas_bloqueadas %}{{ horas_bloqueadas }}{% else %}—{% endif %}</span>
           </div>
+          <div id="countdown_horario" style="margin-top: 10px; padding: 10px; background: rgba(234,179,8,0.2); border-radius: 6px; text-align: center;">
+            <div class="muted" style="font-size: 10px; color: #92400e;">PRÓXIMO HORARIO HABIL</div>
+            <div id="countdown_timer" class="mono" style="font-size: 20px; font-weight: 700; color: #92400e;">—</div>
+            <div id="countdown_mensaje" class="muted" style="font-size: 11px; color: #b45309;">{% if horario_info %}{{ horario_info.mensaje }}{% endif %}</div>
+          </div>
         </div>
 
         <div id="ciclo_pausa_info" style="padding: 12px; background: rgba(239,68,68,0.15); border: 1px solid var(--red); border-radius: 8px; margin-bottom: 12px; display: none;">
@@ -520,6 +525,34 @@
         const hb = (c && Array.isArray(c.horas_bloqueadas)) ? c.horas_bloqueadas : null;
         if (hb) {
           setText("horas_bloqueadas", JSON.stringify(hb));
+        }
+        
+        // Actualizar cuenta regresiva
+        const countdownEl = document.getElementById("countdown_horario");
+        const timerEl = document.getElementById("countdown_timer");
+        const msgEl = document.getElementById("countdown_mensaje");
+        if (countdownEl && timerEl && msgEl) {
+          if (c && c.horario_segundos_restantes !== undefined && c.horario_segundos_restantes !== null) {
+            const segs = Number(c.horario_segundos_restantes);
+            if (segs > 0) {
+              countdownEl.style.display = "block";
+              const horas = Math.floor(segs / 3600);
+              const mins = Math.floor((segs % 3600) / 60);
+              const secs = segs % 60;
+              if (horas > 0) {
+                timerEl.textContent = `${horas}h ${mins.toString().padStart(2, "0")}m ${secs.toString().padStart(2, "0")}s`;
+              } else if (mins > 0) {
+                timerEl.textContent = `${mins}m ${secs.toString().padStart(2, "0")}s`;
+              } else {
+                timerEl.textContent = `${secs}s`;
+              }
+              msgEl.textContent = c.horario_mensaje || "Próximo horario habilitado";
+            } else {
+              countdownEl.style.display = "none";
+            }
+          } else {
+            countdownEl.style.display = "none";
+          }
         }
       }
 

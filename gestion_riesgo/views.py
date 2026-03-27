@@ -116,6 +116,78 @@ def _hora_local_actual() -> int:
     return int(timezone.localtime(timezone.now()).hour)
 
 
+def _proximo_horario_habil():
+    """
+    Calcula el tiempo hasta el próximo horario habilitado para operar.
+    Retorna dict con:
+    - disponible: True si está en horario permitido
+    - segundos_restantes: segundos hasta el próximo horario (0 si está disponible)
+    - hora_proxima: hora del próximo horario habilitado (None si ya está disponible)
+    - mensaje: texto descriptivo
+    """
+    from datetime import timedelta
+    
+    horas_bloqueadas = _parse_horas_bloqueadas(str(getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""))
+    hora_actual = _hora_local_actual()
+    ahora = timezone.localtime(timezone.now())
+    
+    # Todas las horas del día
+    todas_horas = set(range(24))
+    horas_permitidas = todas_horas - horas_bloqueadas
+    
+    if hora_actual in horas_permitidas:
+        return {
+            "disponible": True,
+            "segundos_restantes": 0,
+            "hora_proxima": None,
+            "mensaje": "Horario de operación activo",
+        }
+    
+    # Buscar la próxima hora permitida
+    hora_proxima = None
+    for h in range(hora_actual + 1, 24):
+        if h in horas_permitidas:
+            hora_proxima = h
+            break
+    
+    # Si no hay más horas hoy, buscar la primera de mañana
+    if hora_proxima is None:
+        for h in range(0, 24):
+            if h in horas_permitidas:
+                hora_proxima = h
+                break
+    
+    # Calcular segundos hasta la próxima hora
+    if hora_proxima is not None:
+        # Hora objetivo hoy
+        objetivo = ahora.replace(hour=hora_proxima, minute=0, second=0, microsecond=0)
+        # Si ya pasó esa hora hoy, es para mañana
+        if hora_proxima <= hora_actual:
+            objetivo += timedelta(days=1)
+        diferencia = objetivo - ahora
+        segundos = int(diferencia.total_seconds())
+    else:
+        segundos = 0
+    
+    # Formatear mensaje
+    horas = segundos // 3600
+    minutos = (segundos % 3600) // 60
+    
+    if horas > 0:
+        mensaje = f"{horas}h {minutos}m hasta horario habilitado"
+    elif minutos > 0:
+        mensaje = f"{minutos}m hasta horario habilitado"
+    else:
+        mensaje = "Próximo momento habilitado"
+    
+    return {
+        "disponible": False,
+        "segundos_restantes": segundos,
+        "hora_proxima": hora_proxima,
+        "mensaje": mensaje,
+    }
+
+
 def _winrate_ultimas_deriv(*, n: int = 15) -> dict:
     """
     Winrate simple para el dashboard.
@@ -265,6 +337,9 @@ def dashboard(request):
     horas_bloqueadas = _parse_horas_bloqueadas(str(getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""))
     hora_local_actual = _hora_local_actual()
     horario_bloqueado = bool(horas_bloqueadas and (hora_local_actual in horas_bloqueadas))
+    
+    # Info de horario para el template
+    info_horario = _proximo_horario_habil()
 
     return render(
         request,
@@ -275,6 +350,7 @@ def dashboard(request):
             "winrate_ult15": _winrate_ultimas_deriv(n=15),
             "hora_local_actual": hora_local_actual,
             "horario_bloqueado": horario_bloqueado,
+            "horario_info": info_horario,
             "horas_bloqueadas": sorted(list(horas_bloqueadas)),
         },
     )
@@ -450,6 +526,9 @@ def estado_json(request):
             horas_bloqueadas = _parse_horas_bloqueadas(str(getattr(settings, "DERIV_BLOQUEO_HORAS_LOCAL", "") or ""))
             hora_local_actual = _hora_local_actual()
             horario_bloqueado = bool(horas_bloqueadas and (hora_local_actual in horas_bloqueadas))
+            
+            # Info de horario para cuenta regresiva
+            info_horario = _proximo_horario_habil()
 
             cuentas_dict[simbolo] = {
                 "id": cuenta.id,
@@ -482,6 +561,10 @@ def estado_json(request):
                 "hora_local_actual": hora_local_actual,
                 "horario_bloqueado": horario_bloqueado,
                 "horas_bloqueadas": sorted(list(horas_bloqueadas)),
+                "horario_disponible": info_horario["disponible"],
+                "horario_segundos_restantes": info_horario["segundos_restantes"],
+                "horario_hora_proxima": info_horario["hora_proxima"],
+                "horario_mensaje": info_horario["mensaje"],
                 "volatilidad_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "volatilidad_100"), None),
                 "ema_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_50"), None),
                 "ema_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_100"), None),
