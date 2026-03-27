@@ -1493,32 +1493,24 @@ class Command(BaseCommand):
                                         dur_ml = dur
 
                                 # STAKE:
-                                # - Calculado como 1% del balance actual (crece proporcionalmente con el capital)
-                                # - Mínimo: 0.35 USD (si el 1% es menor, usar 0.35)
-                                # - Opcional: DERIV_STAKE_FIJO para forzar un monto (p.ej. 0.5 USD)
+                                # - FIJO: 0.35 USD por operación (monto constante)
+                                # - No usa porcentaje del balance
                                 stake_fijo = getattr(settings, "DERIV_STAKE_FIJO", None)
                                 balance_actual = float(gestor_riesgo.capital_actual)
-                                min_stake = float(getattr(settings, "DERIV_MIN_STAKE", 1.0))
-                                min_stake_dinamico = float(getattr(settings, "DERIV_MIN_STAKE_DINAMICO", 0.35))
+                                min_stake = float(getattr(settings, "DERIV_MIN_STAKE", 0.35))
 
                                 if balance_actual <= 0.0:
                                     continue
 
-                                # Base stake: fijo (si existe) o 1% del balance actual.
-                                if stake_fijo is not None:
-                                    try:
-                                        stake = float(stake_fijo)
-                                    except Exception:
-                                        # Si stake_fijo es inválido, calcular como 1% del balance
-                                        stake = balance_actual * 0.01
+                                # Stake fijo (0.35 USD)
+                                if stake_fijo is not None and float(stake_fijo) > 0:
+                                    stake = float(stake_fijo)
                                 else:
-                                    # Calcular como 1% del balance actual
-                                    stake = balance_actual * 0.01
+                                    stake = float(min_stake)
 
-                                # Aplicar mínimo dinámico (0.35) si el stake calculado es menor
-                                stake = max(float(stake), float(min_stake_dinamico))
-                                
-                                stake = max(min_stake, min(round(stake, 2), balance_actual))
+                                # Aplicar mínimo
+                                stake = max(float(stake), float(min_stake))
+                                stake = min(round(stake, 2), balance_actual)
                                 if stake > 0:
                                     contract_type = "CALL" if resultado.decision == "COMPRA" else "PUT"
 

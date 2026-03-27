@@ -569,3 +569,38 @@ class OperacionDeriv(models.Model):
         return f"OperacionDeriv({self.simbolo},contract_id={self.contract_id})"
 
 
+class GrupoAcceso(models.Model):
+    """
+    Grupos de acceso por URL para gestionar permisos de usuarios.
+    """
+
+    nombre = models.CharField(max_length=80, unique=True)
+    descripcion = models.TextField(blank=True, default="")
+    urls_permitidas = models.TextField(
+        blank=True,
+        default="",
+        help_text="Lista de rutas separadas por coma. Ej: /portal/,/portal/depositar/",
+    )
+    usuarios = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="grupos_acceso",
+    )
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="grupos_creados",
+    )
+    fecha_creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Grupo de Acceso"
+        verbose_name_plural = "Grupos de Acceso"
+        ordering = ["nombre"]
+
+    def __str__(self) -> str:
+        return self.nombre
+
+
