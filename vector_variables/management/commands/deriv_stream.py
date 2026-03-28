@@ -678,10 +678,11 @@ class Command(BaseCommand):
                                     # ===== CICLOS (OPCIONAL) =====
                                     ahora_epoch = int(time.time())
                                     ciclo_habil = bool(getattr(settings, "CICLO_HABILITADO", False))
-                                    ciclo_tp = float(getattr(settings, "CICLO_TAKE_PROFIT_PCT", 0.015))
-                                    ciclo_sl = float(getattr(settings, "CICLO_STOPLOSS_PCT", 0.010))
-                                    pausa_tp = int(getattr(settings, "CICLO_PAUSA_TP_SEG", 86400))
-                                    pausa_sl = int(getattr(settings, "CICLO_PAUSA_SL_SEG", 3600))
+                                    ciclo_tp = float(getattr(settings, "CICLO_TAKE_PROFIT_PCT", 0.02))
+                                    ciclo_sl = float(getattr(settings, "CICLO_STOPLOSS_PCT", 0.02))
+                                    pausa_tp = int(getattr(settings, "CICLO_PAUSA_TP_SEG", 86400))  # 24 horas
+                                    pausa_sl = int(getattr(settings, "CICLO_PAUSA_SL_SEG", 3600))   # 1 hora
+                                    
                                     # ===== EDGE GUARD (OPCIONAL) =====
                                     edge_habil = bool(getattr(settings, "EDGE_GUARD_HABILITADO", True))
                                     edge_n = int(getattr(settings, "EDGE_GUARD_WINDOW_N", 200) or 200)
@@ -699,6 +700,16 @@ class Command(BaseCommand):
                                     nuevo_ciclo_balance_inicio = ciclo_balance_inicio
                                     nuevo_ciclo_inicio_epoch = int(prev.get("ciclo_inicio_epoch")) if (prev and prev.get("ciclo_inicio_epoch") is not None) else None
                                     nuevo_ciclo_pausa_hasta = ciclo_pausa_hasta
+                                    
+                                    # AL INICIAR: Si hay una pausa activa pero el balance cambió significativamente,
+                                    # significa que es de un ciclo anterior - limpiarla
+                                    if nuevo_ciclo_pausa_hasta is not None and ahora_epoch < nuevo_ciclo_pausa_hasta:
+                                        if ciclo_balance_inicio and (balance_val > (ciclo_balance_inicio * 1.01) or balance_val < (ciclo_balance_inicio * 0.99)):
+                                            # Balance cambió >1% desde el inicio del ciclo - la pausa es antigua
+                                            nuevo_ciclo_pausa_hasta = None
+                                            nuevo_ciclo_balance_inicio = None
+                                            nuevo_ciclo_inicio_epoch = None
+                                            self.stderr.write(f"[RISK] Pausa antigua limpiada, balance={balance_val:.2f} vs ciclo_inicio={ciclo_balance_inicio:.2f}")
 
                                     # ===== EDGE PAUSE (persistida en riesgo_motivo) =====
                                     edge_bloqueado = False
@@ -811,10 +822,10 @@ class Command(BaseCommand):
                                                         # Mantener baseline del ciclo para auditoría/dashboard durante la pausa.
                                                         # Al reanudar (cuando expire), el código de arriba limpia baseline y arranca uno nuevo.
                                                         ciclo_bloqueado = True
-                                                        riesgo_motivo = f"TAKE_PROFIT_{float(ciclo_tp):.4f}_PAUSA_{int(pausa_tp_eff)}s"
+                                                        riesgo_motivo = f"TAKE_PROFIT_{float(ciclo_tp)*100:.0f}%_PAUSA_24H"
                                                         ciclo_evento = "TAKE_PROFIT"
                                                 elif pnl_pct <= -float(ciclo_sl):
-                                                    # Si pausa_sl <= 0 => stoploss informativo SIN pausar (operación continua).
+                                                    # Stop Loss: pausa 1 hora y reinicia ciclo
                                                     if int(pausa_sl) <= 0:
                                                         nuevo_ciclo_pausa_hasta = None
                                                         nuevo_ciclo_balance_inicio = float(balance_val)
@@ -823,11 +834,12 @@ class Command(BaseCommand):
                                                         riesgo_motivo = f"STOPLOSS_{float(ciclo_sl):.4f}_SIN_PAUSA"
                                                         ciclo_evento = "STOPLOSS_CONTINUAR"
                                                     else:
-                                                        nuevo_ciclo_pausa_hasta = int(ahora_epoch + max(0, pausa_sl))
+                                                        # SL siempre pausa 1 hora
+                                                        nuevo_ciclo_pausa_hasta = int(ahora_epoch + pausa_sl)  # 1 hora
                                                         nuevo_ciclo_balance_inicio = None
                                                         nuevo_ciclo_inicio_epoch = None
                                                         ciclo_bloqueado = True
-                                                        riesgo_motivo = f"STOPLOSS_{float(ciclo_sl):.4f}_PAUSA_{int(pausa_sl)}s"
+                                                        riesgo_motivo = f"STOPLOSS_{float(ciclo_sl):.4f}_PAUSA_1H"
                                                         ciclo_evento = "STOPLOSS"
                                                 else:
                                                     riesgo_motivo = "CICLO_ACTIVO"

@@ -1,0 +1,528 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Binance - Trading Bot</title>
+  <style>
+    :root {
+      --bg-1: #0a0a0a;
+      --bg-2: #111;
+      --bg-3: #1a1a1a;
+      --bg-4: #222;
+      --text-1: #e5e5e5;
+      --text-2: #999;
+      --text-3: #666;
+      --border: #2a2a2a;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+      --orange: #f97316;
+      --cyan: #06b6d4;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-1);
+      color: var(--text-1);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--yellow), var(--orange));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-info {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .badge {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-green {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .badge-red {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--red);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .badge-yellow {
+      background: rgba(234, 179, 8, 0.15);
+      color: var(--yellow);
+      border: 1px solid rgba(234, 179, 8, 0.3);
+    }
+
+    /* Stats Row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .stat-value.green { color: var(--green); }
+    .stat-value.red { color: var(--red); }
+    .stat-value.yellow { color: var(--yellow); }
+    .stat-value.blue { color: var(--blue); }
+    .stat-value.purple { color: var(--purple); }
+
+    .stat-sub {
+      font-size: 11px;
+      color: var(--text-3);
+      margin-top: 4px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title::before {
+      content: '';
+      width: 4px;
+      height: 16px;
+      background: var(--yellow);
+      border-radius: 2px;
+    }
+
+    /* Table */
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px;
+      font-weight: 600;
+      color: var(--text-3);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tr:hover {
+      background: var(--bg-3);
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .win { color: var(--green); }
+    .loss { color: var(--red); }
+
+    /* Progress bar */
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: var(--bg-4);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .progress-fill.green {
+      background: linear-gradient(90deg, var(--green), #16a34a);
+    }
+
+    .progress-fill.red {
+      background: linear-gradient(90deg, var(--red), #dc2626);
+    }
+
+    /* Grid layout */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+      .stats-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    /* Pulse animation */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .pulse {
+      animation: pulse 2s infinite;
+    }
+
+    /* Time display */
+    .time-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: var(--text-2);
+    }
+
+    /* Symbol badge */
+    .symbol-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .symbol-btc {
+      background: rgba(234, 179, 8, 0.15);
+      color: var(--yellow);
+    }
+
+    .symbol-eth {
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--purple);
+    }
+
+    .symbol-sol {
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--cyan);
+    }
+
+    .symbol-xrp {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--blue);
+    }
+
+    .symbol-default {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-2);
+    }
+
+    /* Confidence badge */
+    .conf-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .conf-alta {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--green);
+    }
+
+    .conf-media {
+      background: rgba(234, 179, 8, 0.15);
+      color: var(--yellow);
+    }
+
+    .conf-baja {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-3);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- HEADER -->
+    <div class="header">
+      <div>
+        <h1>Dashboard Binance</h1>
+        <div style="font-size: 12px; color: var(--text-3); margin-top: 4px;">
+          Operaciones ficticias con datos reales
+        </div>
+      </div>
+      <div class="header-info">
+        <div class="time-display">
+          {{ ahora|date:"d/m/Y" }} - {{ ahora|time:"H:i:s" }}
+        </div>
+        {% if bot_activo %}
+          <div class="badge badge-green pulse">BOT ACTIVO</div>
+        {% else %}
+          <div class="badge badge-red">BOT INACTIVO</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- STATS ROW -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Balance Ficticio</div>
+        <div class="stat-value {% if balance_ficticio >= 1000 %}green{% else %}red{% endif %}">
+          ${{ balance_ficticio|floatformat:2 }}
+        </div>
+        <div class="stat-sub">Capital inicial: $1000</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Win Rate Global</div>
+        <div class="stat-value {% if wr_global >= 55 %}green{% elif wr_global >= 50 %}yellow{% else %}red{% endif %}">
+          {{ wr_global|floatformat:1 }}%
+        </div>
+        <div class="stat-sub">{{ total_wins }} wins / {{ total_ops }} ops</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Profit Total</div>
+        <div class="stat-value {% if total_profit >= 0 %}green{% else %}red{% endif %}">
+          ${{ total_profit|floatformat:2 }}
+        </div>
+        <div class="stat-sub">ROI: {% widthratio total_profit 1000 100 %}%</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Operaciones</div>
+        <div class="stat-value blue">{{ total_ops }}</div>
+        <div class="stat-sub">Últimas {{ ultimas_ops|length }} mostradas</div>
+      </div>
+    </div>
+
+    <!-- STATS POR ACTIVO -->
+    <div class="card">
+      <div class="card-title">Estadísticas por Activo</div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Símbolo</th>
+              <th>Operaciones</th>
+              <th>Wins</th>
+              <th>Win Rate</th>
+              <th>Profit</th>
+              <th>Balance</th>
+              <th>Win Streak</th>
+              <th>Loss Streak</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for stat in stats %}
+            <tr>
+              <td>
+                <span class="symbol-badge symbol-{{ stat.simbolo|lower }}">
+                  {{ stat.simbolo }}
+                </span>
+              </td>
+              <td class="mono">{{ stat.total_ops }}</td>
+              <td class="mono win">{{ stat.wins }}</td>
+              <td class="mono {% if stat.win_rate >= 55 %}win{% elif stat.win_rate >= 50 %}yellow{% else %}loss{% endif %}">
+                {{ stat.win_rate|floatformat:1 }}%
+                <div class="progress-bar">
+                  <div class="progress-fill {% if stat.win_rate >= 55 %}green{% else %}red{% endif %}"
+                       style="width: {{ stat.win_rate }}%"></div>
+                </div>
+              </td>
+              <td class="mono {% if stat.profit_total >= 0 %}win{% else %}loss{% endif %}">
+                ${{ stat.profit_total|floatformat:2 }}
+              </td>
+              <td class="mono">${{ stat.balance_ficticio|floatformat:2 }}</td>
+              <td class="mono win">{{ stat.win_streak }}</td>
+              <td class="mono loss">{{ stat.loss_streak }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" style="text-align: center; color: var(--text-3);">
+                No hay operaciones registradas aún
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ÚLTIMAS OPERACIONES -->
+    <div class="card">
+      <div class="card-title">Últimas Operaciones</div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Hora</th>
+              <th>Símbolo</th>
+              <th>Dirección</th>
+              <th>Precio</th>
+              <th>Resultado</th>
+              <th>Profit</th>
+              <th>Razón</th>
+              <th>Confianza</th>
+              <th>WR Momento</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for op in ultimas_ops %}
+            <tr>
+              <td class="mono">{{ op.num_operacion }}</td>
+              <td class="mono" style="font-size: 11px;">{{ op.created_at|time:"H:i:s" }}</td>
+              <td>
+                <span class="symbol-badge symbol-{{ op.simbolo|lower }}">
+                  {{ op.simbolo }}
+                </span>
+              </td>
+              <td>
+                {% if op.direccion == "CALL" %}
+                  <span class="win">CALL ↑</span>
+                {% else %}
+                  <span class="loss">PUT ↓</span>
+                {% endif %}
+              </td>
+              <td class="mono" style="font-size: 11px;">{{ op.precio_entrada|floatformat:2 }}</td>
+              <td>
+                {% if op.es_win %}
+                  <span class="badge badge-green">WIN</span>
+                {% else %}
+                  <span class="badge badge-red">LOSS</span>
+                {% endif %}
+              </td>
+              <td class="mono {% if op.profit >= 0 %}win{% else %}loss{% endif %}">
+                {{ op.profit|floatformat:2 }}
+              </td>
+              <td style="font-size: 11px; color: var(--text-3); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                {{ op.razon }}
+              </td>
+              <td>
+                <span class="conf-badge conf-{{ op.confianza }}">
+                  {{ op.confianza|upper }}
+                </span>
+              </td>
+              <td class="mono">{{ op.win_rate_momento|floatformat:1 }}%</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="10" style="text-align: center; color: var(--text-3);">
+                No hay operaciones registradas aún
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CHART PLACEHOLDER -->
+    <div class="card">
+      <div class="card-title">Rendimiento por Activo</div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+        {% for stat in stats %}
+        <div style="text-align: center; padding: 16px; background: var(--bg-3); border-radius: 8px;">
+          <div class="symbol-badge symbol-{{ stat.simbolo|lower }}" style="margin-bottom: 12px;">
+            {{ stat.simbolo }}
+          </div>
+          <div style="font-size: 24px; font-weight: 700;" class="mono {% if stat.profit_total >= 0 %}win{% else %}loss{% endif %}">
+            ${{ stat.profit_total|floatformat:2 }}
+          </div>
+          <div style="font-size: 12px; color: var(--text-3); margin-top: 4px;">
+            {{ stat.win_rate|floatformat:1 }}% WR
+          </div>
+          <div class="progress-bar" style="margin-top: 8px;">
+            <div class="progress-fill {% if stat.win_rate >= 55 %}green{% else %}red{% endif %}"
+                 style="width: {{ stat.win_rate }}%"></div>
+          </div>
+        </div>
+        {% empty %}
+        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-3); padding: 40px;">
+          No hay datos de activos aún
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- AUTO-REFRESH -->
+  <script>
+    // Auto-refresh cada 10 segundos
+    setInterval(() => {
+      location.reload();
+    }, 10000);
+  </script>
+</body>
+</html>

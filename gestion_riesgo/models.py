@@ -608,3 +608,75 @@ class GrupoAcceso(models.Model):
         return self.nombre
 
 
+class OperacionBinance(models.Model):
+    """
+    Operaciones ficticias del bot de Binance (paper trading).
+    """
+    
+    class Direccion(models.TextChoices):
+        CALL = "CALL", "Call (Compra)"
+        PUT = "PUT", "Put (Venta)"
+    
+    class Confianza(models.TextChoices):
+        ALTA = "alta", "Alta"
+        MEDIA = "media", "Media"
+        BAJA = "baja", "Baja"
+    
+    simbolo = models.CharField(max_length=20)
+    direccion = models.CharField(max_length=10, choices=Direccion.choices)
+    precio_entrada = models.DecimalField(max_digits=20, decimal_places=8)
+    razon = models.CharField(max_length=100, blank=True, default="")
+    confianza = models.CharField(max_length=10, choices=Confianza.choices, default="media")
+    
+    # Resultado
+    es_win = models.BooleanField(default=False)
+    profit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    # Estadísticas al momento de la operación
+    win_rate_momento = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    profit_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    num_operacion = models.IntegerField(default=0)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Operacion Binance"
+        verbose_name_plural = "Operaciones Binance"
+        ordering = ["-created_at"]
+    
+    def __str__(self) -> str:
+        resultado = "WIN" if self.es_win else "LOSS"
+        return f"{self.simbolo} {self.direccion} {resultado} ({self.profit})"
+
+
+class EstadisticasBinance(models.Model):
+    """
+    Estadísticas acumuladas por activo.
+    """
+    simbolo = models.CharField(max_length=20, unique=True)
+    total_ops = models.IntegerField(default=0)
+    wins = models.IntegerField(default=0)
+    losses = models.IntegerField(default=0)
+    profit_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    win_streak = models.IntegerField(default=0)
+    loss_streak = models.IntegerField(default=0)
+    max_win_streak = models.IntegerField(default=0)
+    max_loss_streak = models.IntegerField(default=0)
+    balance_ficticio = models.DecimalField(max_digits=12, decimal_places=2, default=1000)
+    ultima_operacion = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Estadistica Binance"
+        verbose_name_plural = "Estadisticas Binance"
+    
+    def __str__(self) -> str:
+        wr = (self.wins / self.total_ops * 100) if self.total_ops > 0 else 0
+        return f"{self.simbolo}: WR {wr:.1f}% | Profit ${self.profit_total}"
+    
+    @property
+    def win_rate(self) -> float:
+        return (self.wins / self.total_ops * 100) if self.total_ops > 0 else 0
+
+

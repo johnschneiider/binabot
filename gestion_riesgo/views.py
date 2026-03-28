@@ -22,6 +22,7 @@ from .models import (
     Inversionista, RendimientoDiario, Liquidacion,
     BalanceInversionista, Cuenta, OperacionDeriv,
     Deposito, Retiro, RendimientoFondo,
+    OperacionBinance, EstadisticasBinance,
 )
 import json
 import time
@@ -1822,5 +1823,163 @@ def retirar_view(request):
         "retiros": retiros,
         "balance_fondo": balance_fondo,
         "moneda": moneda,
+    })
+
+
+# ============================================================
+#  DASHBOARD BINANCE - OPERACIONES FICTICIAS
+# ============================================================
+
+@login_required
+def dashboard_binance(request):
+    """
+    Dashboard para mostrar operaciones ficticias de Binance.
+    """
+    from django.utils import timezone
+    from datetime import datetime, timezone as dt_tz
+    
+    # Obtener estadísticas por activo
+    stats = EstadisticasBinance.objects.all().order_by("-profit_total")
+    
+    # Calcular totales
+    total_ops = sum(s.total_ops for s in stats)
+    total_wins = sum(s.wins for s in stats)
+    total_profit = sum(float(s.profit_total) for s in stats)
+    balance_ficticio = sum(float(s.balance_ficticio) for s in stats)
+    
+    # Win rate global
+    wr_global = (total_wins / total_ops * 100) if total_ops > 0 else 0
+    
+    # Últimas operaciones
+    ultimas_ops = OperacionBinance.objects.all().order_by("-created_at")[:20]
+    
+    # Verificar si bot está activo (por defecto True por ahora)
+    bot_activo = True
+    
+    # Hora actual
+    ahora = timezone.localtime(timezone.now())
+    
+    return render(request, "gestion_riesgo/dashboard_binance.html", {
+        "stats": stats,
+        "total_ops": total_ops,
+        "total_wins": total_wins,
+        "wr_global": wr_global,
+        "total_profit": total_profit,
+        "balance_ficticio": balance_ficticio,
+        "ultimas_ops": ultimas_ops,
+        "bot_activo": bot_activo,
+        "ahora": ahora,
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_guardar_operacion_binance(request):
+    """
+    API para guardar operaciones ficticias de Binance.
+    """
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        data = request.POST
+    
+    simbolo = data.get("simbolo", "").upper()
+    direccion = data.get("direccion", "CALL")
+    precio_entrada = float(data.get("precio_entrada", 0))
+    razon = data.get("razon", "")
+    confianza = data.get("confianza", "media")
+    es_win = bool(data.get("es_win", False))
+    profit = float(data.get("profit", 0))
+    
+    if not simbolo:
+        return JsonResponse({"error": "simbolo requerido"}, status=400)
+    
+    # Obtener o crear estadísticas del activo
+    stats, created = EstadisticasBinance.objects.get_or_create(
+        simbolo=simbolo,
+        defaults={
+            "balance_ficticio": 1000,
+        }
+    )
+    
+    # Actualizar estadísticas
+    stats.total_ops += 1
+    if es_win:
+        stats.wins += 1
+        stats.win_streak += 1
+        stats.loss_streak = 0
+        stats.max_win_streak = max(stats.max_win_streak, stats.win_streak)
+    else:
+        stats.losses += 1
+        stats.loss_streak += 1
+        stats.win_streak = 0
+        stats.max_loss_streak = max(stats.max_loss_streak, stats.loss_streak)
+    
+    stats.profit_total += profit
+    stats.balance_ficticio += profit
+    stats.ultima_operacion = timezone.now()
+    stats.save()
+    
+    # Guardar operación
+    operacion = OperacionBinance.objects.create(
+        simbolo=simbolo,
+        direccion=direccion,
+        precio_entrada=precio_entrada,
+        razon=razon,
+        confianza=confianza,
+        es_win=es_win,
+        profit=profit,
+        win_rate_momento=stats.win_rate,
+        profit_total=stats.profit_total,
+        num_operacion=stats.total_ops,
+    )
+    
+    return JsonResponse({
+        "ok": True,
+        "operacion_id": operacion.id,
+        "stats": {
+            "simbolo": simbolo,
+            "total_ops": stats.total_ops,
+            "wins": stats.wins,
+            "win_rate": stats.win_rate,
+            "profit_total": float(stats.profit_total),
+            "balance_ficticio": float(stats.balance_ficticio),
+        }
+    })
+
+
+@require_http_methods(["GET"])
+def api_estado_binance(request):
+    """
+    API para obtener estado actual del bot de Binance.
+    """
+    stats = EstadisticasBinance.objects.all().order_by("-profit_total")
+    
+    total_ops = sum(s.total_ops for s in stats)
+    total_wins = sum(s.wins for s in stats)
+    wr_global = (total_wins / total_ops * 100) if total_ops > 0 else 0
+    total_profit = sum(float(s.profit_total) for s in stats)
+    balance_ficticio = sum(float(s.balance_ficticio) for s in stats)
+    
+    return JsonResponse({
+        "bot_activo": True,
+        "total_ops": total_ops,
+        "total_wins": total_wins,
+        "win_rate": wr_global,
+        "total_profit": total_profit,
+        "balance_ficticio": balance_ficticio,
+        "activos": [
+            {
+                "simbolo": s.simbolo,
+                "ops": s.total_ops,
+                "wins": s.wins,
+                "win_rate": s.win_rate,
+                "profit": float(s.profit_total),
+                "balance": float(s.balance_ficticio),
+                "win_streak": s.win_streak,
+                "loss_streak": s.loss_streak,
+            }
+            for s in stats
+        ]
     })
 

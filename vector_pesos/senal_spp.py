@@ -249,10 +249,10 @@ def _estructura_ok(
 def _duracion_por_slope(symbol: str, *, slope_abs: float, slope_threshold: float) -> int:
     """
     Duración recomendada (ticks) según fuerza del impulso.
-    MODIFICADO: Usar siempre 10 ticks para mayor probabilidad de éxito.
+    Usar 5 ticks para capturar momentum inicial.
     """
-    # Siempre retornar 10 ticks (máximo) para mayor chance de acierto
-    return 10
+    # 5 ticks para capturar momentum inicial
+    return 5
     if strength >= 1.5:
         return 10
     return 10
@@ -387,7 +387,7 @@ def evaluar_senal_spp(
         cooldown_aplicado = int(cooldown_aplicado * fatiga_multiplicador)
     
     if is_r100:
-        dur = 10  # Reducido de 25 a 10 para mayor probabilidad de acierto
+        dur = 5  # 5 ticks para capturar momentum
         duracion_unit = "t"
     elif is_forex:
         dur = 5
