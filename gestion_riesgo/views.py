@@ -568,6 +568,8 @@ def estado_json(request):
                 "volatilidad_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "volatilidad_100"), None),
                 "ema_50": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_50"), None),
                 "ema_100": next((x.get("x") for x in (cuenta.senal_top_contribuciones or []) if x.get("variable") == "ema_100"), None),
+                # Control manual del bot
+                "bot_activo": bool(getattr(cuenta, "bot_activo", True)),
                 # Colector de ticks (histórico)
                 "ticks_colector_activo": bool(getattr(cuenta, "ticks_colector_activo", False)),
                 "ticks_colector_total": int(getattr(cuenta, "ticks_colector_total", 0) or 0),
@@ -1686,6 +1688,62 @@ def api_retirar(request):
         "id": ret.id,
         "estado": ret.estado,
         "monto": monto,
+    })
+
+
+# ============================================================
+#  API: ACTIVAR/DESACTIVAR BOT
+# ============================================================
+
+@require_http_methods(["GET", "POST"])
+def api_bot_toggle(request):
+    """
+    API para activar o desactivar el bot manualmente.
+    GET: Returns current bot_activo status for all cuentas
+    POST: Toggles bot_activo for specified cuenta_id
+    """
+    from django.views.decorators.csrf import csrf_exempt
+    
+    if request.method == "GET":
+        cuentas = Cuenta.objects.all()
+        return JsonResponse({
+            "cuentas": {
+                c.simbolo: {
+                    "id": c.id,
+                    "bot_activo": c.bot_activo,
+                    "balance": c.balance_deriv,
+                    "bloqueado": c.bloqueado,
+                }
+                for c in cuentas
+            }
+        })
+    
+    # POST - Toggle
+    try:
+        data = json.loads(request.body) if request.body else request.POST
+    except Exception:
+        data = request.POST
+    
+    cuenta_id = data.get("cuenta_id")
+    activo = data.get("activo")  # True/False
+    
+    if cuenta_id is None:
+        return JsonResponse({"error": "cuenta_id requerido"}, status=400)
+    
+    try:
+        cuenta = Cuenta.objects.get(id=cuenta_id)
+    except Cuenta.DoesNotExist:
+        return JsonResponse({"error": "Cuenta no encontrada"}, status=404)
+    
+    if activo is not None:
+        cuenta.bot_activo = bool(activo)
+        cuenta.save()
+    
+    return JsonResponse({
+        "ok": True,
+        "cuenta_id": cuenta.id,
+        "simbolo": cuenta.simbolo,
+        "bot_activo": cuenta.bot_activo,
     })
 
 

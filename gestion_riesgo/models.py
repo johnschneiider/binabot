@@ -300,8 +300,12 @@ class Cuenta(models.Model):
     senal_decision = models.CharField(max_length=16, blank=True, default="")
     senal_top_contribuciones = models.JSONField(null=True, blank=True)
 
+    # ===== CONTROL MANUAL DEL BOT =====
+    # Permite al usuario activar/desactivar el bot desde la UI
+    bot_activo = models.BooleanField(default=True, help_text="Activar o desactivar el bot manualmente")
+
     # ===== COLECTOR DE TICKS (HISTÓRICO) =====
-    # Permite dejar el bot en modo “recopilar ticks” por días sin operar necesariamente.
+    # Permite dejar el bot en modo "recopilar ticks" por días sin operar necesariamente.
     # El bot sigue recibiendo ticks, pero solo los ARCHIVA si este flag está activo.
     ticks_colector_activo = models.BooleanField(default=True)
     ticks_colector_total = models.BigIntegerField(default=0)

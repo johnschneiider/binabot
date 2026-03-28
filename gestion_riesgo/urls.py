@@ -15,6 +15,7 @@ urlpatterns = [
     path("api/ticks/", views.ticks_json, name="ticks_json"),
     path("api/logs/", views.logs_json, name="logs_json"),
     path("api/ticks_colector/toggle/", views.ticks_colector_toggle, name="ticks_colector_toggle"),
+    path("api/bot/toggle/", views.api_bot_toggle, name="api_bot_toggle"),
     path("api/sse/", views.sse_stream, name="sse_stream"),
 
     # Registro KYC
