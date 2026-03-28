@@ -2057,92 +2057,85 @@ def sse_binance_stream(request):
                 # Cerrar conexión vieja para evitar problemas
                 connection.close()
                 
-                # Obtener última operación
-                ultima = OperacionBinance.objects.order_by('-id').first()
-                current_id = ultima.id if ultima else 0
+                # SIEMPRE enviar datos (cada 2 segundos) para gráficos en tiempo real
+                stats = EstadisticasBinance.objects.all()
+                total_ops = sum(s.total_ops for s in stats)
+                total_wins = sum(s.wins for s in stats)
+                wr_global = (total_wins / total_ops * 100) if total_ops > 0 else 0
+                total_profit = sum(float(s.profit_total) for s in stats)
+                balance_ficticio = sum(float(s.balance_ficticio) for s in stats)
                 
-                # Solo enviar si hay cambios
-                if current_id > last_id:
-                    # Obtener estadísticas actualizadas
-                    stats = EstadisticasBinance.objects.all()
-                    total_ops = sum(s.total_ops for s in stats)
-                    total_wins = sum(s.wins for s in stats)
-                    wr_global = (total_wins / total_ops * 100) if total_ops > 0 else 0
-                    total_profit = sum(float(s.profit_total) for s in stats)
-                    balance_ficticio = sum(float(s.balance_ficticio) for s in stats)
-                    
-                    # Datos para gráfico de balance por operación
-                    todas_ops = OperacionBinance.objects.all().order_by('created_at')
-                    balance_points = []
-                    bal = 1000
-                    for op in todas_ops:
-                        bal += float(op.profit)
-                        balance_points.append({
-                            "x": f"#{op.num_operacion}",
-                            "y": round(bal, 2)
-                        })
-                    
-                    # Datos para gráfico de barras por activo
-                    activos_data = []
-                    for s in stats:
-                        activos_data.append({
-                            "simbolo": s.simbolo,
-                            "profit": float(s.profit_total),
-                            "ops": s.total_ops,
-                            "wr": s.win_rate
-                        })
-                    
-                    # Última operación
-                    ultima_op = OperacionBinance.objects.order_by('-created_at').first()
-                    op_data = None
-                    if ultima_op:
-                        op_data = {
-                            "num": ultima_op.num_operacion,
-                            "simbolo": ultima_op.simbolo,
-                            "direccion": ultima_op.direccion,
-                            "precio": float(ultima_op.precio_entrada),
-                            "razon": ultima_op.razon,
-                            "confianza": ultima_op.confianza,
-                            "es_win": ultima_op.es_win,
-                            "profit": float(ultima_op.profit),
-                            "wr_momento": float(ultima_op.win_rate_momento),
-                            "hora": ultima_op.created_at.strftime("%H:%M:%S")
-                        }
-                    
-                    # Ticks de precios por activo (últimos 200 cada uno)
-                    from .models import TickBinance
-                    simbolos = ["BTC", "ETH", "SOL", "XRP"]
-                    ticks_data = {}
-                    for sym in simbolos:
-                        ticks = TickBinance.objects.filter(
-                            simbolo=sym
-                        ).order_by('-timestamp')[:200]
-                        ticks_data[sym] = [
-                            {
-                                "t": t.timestamp.strftime("%H:%M:%S"),
-                                "p": float(t.precio)
-                            }
-                            for t in reversed(list(ticks))
-                        ]
-                    
-                    data = json.dumps({
-                        "type": "update",
-                        "timestamp": time.time(),
-                        "total_ops": total_ops,
-                        "total_wins": total_wins,
-                        "wr_global": round(wr_global, 1),
-                        "total_profit": round(total_profit, 2),
-                        "balance_ficticio": round(balance_ficticio, 2),
-                        "activos": activos_data,
-                        "balance_points": balance_points[-100:],
-                        "ultima_operacion": op_data,
-                        "ticks": ticks_data,
+                # Datos para gráfico de balance por operación
+                todas_ops = OperacionBinance.objects.all().order_by('created_at')
+                balance_points = []
+                bal = 1000
+                for op in todas_ops:
+                    bal += float(op.profit)
+                    balance_points.append({
+                        "x": f"#{op.num_operacion}",
+                        "y": round(bal, 2)
                     })
-                    
-                    yield f"data: {data}\n\n"
-                    last_id = current_id
                 
-                # Esperar 2 segundos antes de verificar de nuevo
+                # Datos para gráfico de barras por activo
+                activos_data = []
+                for s in stats:
+                    activos_data.append({
+                        "simbolo": s.simbolo,
+                        "profit": float(s.profit_total),
+                        "ops": s.total_ops,
+                        "wr": s.win_rate
+                    })
+                
+                # Última operación
+                ultima_op = OperacionBinance.objects.order_by('-created_at').first()
+                op_data = None
+                if ultima_op:
+                    op_data = {
+                        "num": ultima_op.num_operacion,
+                        "simbolo": ultima_op.simbolo,
+                        "direccion": ultima_op.direccion,
+                        "precio": float(ultima_op.precio_entrada),
+                        "razon": ultima_op.razon,
+                        "confianza": ultima_op.confianza,
+                        "es_win": ultima_op.es_win,
+                        "profit": float(ultima_op.profit),
+                        "wr_momento": float(ultima_op.win_rate_momento),
+                        "hora": ultima_op.created_at.strftime("%H:%M:%S")
+                    }
+                
+                # Ticks de precios por activo (últimos 200 cada uno)
+                from .models import TickBinance
+                simbolos = ["BTC", "ETH", "SOL", "XRP"]
+                ticks_data = {}
+                for sym in simbolos:
+                    ticks = TickBinance.objects.filter(
+                        simbolo=sym
+                    ).order_by('-timestamp')[:200]
+                    ticks_data[sym] = [
+                        {
+                            "t": t.timestamp.strftime("%H:%M:%S"),
+                            "p": float(t.precio)
+                        }
+                        for t in reversed(list(ticks))
+                    ]
+                
+                data = json.dumps({
+                    "type": "update",
+                    "timestamp": time.time(),
+                    "total_ops": total_ops,
+                    "total_wins": total_wins,
+                    "wr_global": round(wr_global, 1),
+                    "total_profit": round(total_profit, 2),
+                    "balance_ficticio": round(balance_ficticio, 2),
+                    "activos": activos_data,
+                    "balance_points": balance_points[-100:],
+                    "ultima_operacion": op_data,
+                    "ticks": ticks_data,
+                })
+                
+                yield f"data: {data}\n\n"
+                
+                # Esperar 2 segundos antes de enviar de nuevo
                 time.sleep(2)
                 
             except Exception as e:
