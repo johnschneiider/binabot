@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.http import JsonResponse, FileResponse, HttpResponseNotFound, StreamingHttpResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.db.models import F
 from django.db.utils import OperationalError
@@ -1695,16 +1695,40 @@ def api_retirar(request):
 #  API: ACTIVAR/DESACTIVAR BOT
 # ============================================================
 
+@csrf_exempt
 @require_http_methods(["GET", "POST"])
 def api_bot_toggle(request):
     """
     API para activar o desactivar el bot manualmente.
     GET: Returns current bot_activo status for all cuentas
+         Can also toggle with ?cuenta_id=X&activo=true/false
     POST: Toggles bot_activo for specified cuenta_id
     """
-    from django.views.decorators.csrf import csrf_exempt
     
+    # Support GET toggle for simplicity
     if request.method == "GET":
+        cuenta_id = request.GET.get("cuenta_id")
+        activo = request.GET.get("activo")
+        
+        print(f"[BOT_TOGGLE] GET: cuenta_id={cuenta_id}, activo={activo}")
+        
+        if cuenta_id and activo is not None:
+            try:
+                cuenta = Cuenta.objects.get(id=int(cuenta_id))
+                cuenta.bot_activo = activo.lower() in ("true", "1", "yes")
+                cuenta.save()
+                print(f"[BOT_TOGGLE] Saved: bot_activo={cuenta.bot_activo}")
+                return JsonResponse({
+                    "ok": True,
+                    "cuenta_id": cuenta.id,
+                    "simbolo": cuenta.simbolo,
+                    "bot_activo": cuenta.bot_activo,
+                })
+            except Cuenta.DoesNotExist:
+                return JsonResponse({"error": "Cuenta no encontrada"}, status=404)
+            except Exception as e:
+                print(f"[BOT_TOGGLE] Error: {e}")
+                return JsonResponse({"error": str(e)}, status=500)
         cuentas = Cuenta.objects.all()
         return JsonResponse({
             "cuentas": {

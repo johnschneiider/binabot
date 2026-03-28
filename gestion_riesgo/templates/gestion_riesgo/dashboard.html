@@ -31,12 +31,6 @@
       .status-dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
       .status-dot.bad { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
-      /* Toggle switch styles */
-      #bot_activo_switch + span { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: 0.3s; border-radius: 26px; }
-      #bot_activo_switch:checked + span { background-color: var(--green); }
-      #bot_activo_switch + span:before { position: absolute; content: ''; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%; }
-      #bot_activo_switch:checked + span:before { transform: translateX(22px); }
-
       .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
       .tab { cursor: pointer; user-select: none; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-2); font-size: 12px; color: var(--text-3); }
       .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -109,22 +103,6 @@
           {% endif %}
         </div>
 
-        <!-- Switch para activar/desactivar el bot -->
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-2); border-radius: 8px; margin-bottom: 12px;">
-          <div>
-            <div style="font-size: 13px; font-weight: 500; color: var(--text-1);">Bot Activo</div>
-            <div class="muted" style="font-size: 11px;">Activar o desactivar operaciones</div>
-          </div>
-          <label style="position: relative; display: inline-block; width: 48px; height: 26px;">
-            <input type="checkbox" id="bot_activo_switch" style="opacity: 0; width: 0; height: 0;" 
-              {% if cuenta.bot_activo %}checked{% endif %}
-              onchange="toggleBot(this.checked)">
-            <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: 0.3s; border-radius: 26px;"></span>
-            <span style="position: absolute; content: ''; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%;"></span>
-          </label>
-        </div>
-        <div id="bot_toggle_status" class="muted" style="font-size: 11px; text-align: center; margin-bottom: 12px;"></div>
-        
         <div style="padding: 12px; background: var(--bg-2); border-radius: 8px; margin-bottom: 12px;">
           <div class="muted" style="font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Razón del estado</div>
           <div id="riesgo_motivo" style="font-size: 14px; font-weight: 500; color: #111; line-height: 1.4;">
@@ -509,55 +487,7 @@
           el.textContent = "OPERANDO";
           el.className = "badge ok";
         }
-      }
-
-      async function toggleBot(activo) {
-        const cuentaId = window.lastCuentaData && window.lastCuentaData.id;
-        if (!cuentaId) {
-          alert("No se pudo obtener el ID de la cuenta");
-          return;
         }
-        const statusEl = document.getElementById("bot_toggle_status");
-        if (statusEl) {
-          statusEl.textContent = "Guardando...";
-          statusEl.style.color = "var(--text-3)";
-        }
-        try {
-          const csrf = getCookie("csrftoken");
-          const res = await fetch("/api/bot/toggle/", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(csrf ? { "X-CSRFToken": csrf } : {}),
-            },
-            body: JSON.stringify({
-              cuenta_id: cuentaId,
-              activo: activo
-            }),
-          });
-          const data = await res.json();
-          if (data.ok) {
-            if (statusEl) {
-              statusEl.textContent = activo ? "✓ Bot activado" : "✓ Bot desactivado";
-              statusEl.style.color = activo ? "var(--green)" : "var(--red)";
-            }
-          } else {
-            alert("Error: " + (data.error || "Unknown error"));
-            // Revert switch
-            const sw = document.getElementById("bot_activo_switch");
-            if (sw) sw.checked = !activo;
-          }
-        } catch (e) {
-          alert("Error de conexión: " + e);
-          const sw = document.getElementById("bot_activo_switch");
-          if (sw) sw.checked = !activo;
-        }
-        setTimeout(() => {
-          if (statusEl) {
-            statusEl.textContent = "";
-          }
-        }, 3000);
-      }
 
       function setRiesgoMotivo(m, horarioBloqueado) {
         const hB = Boolean(horarioBloqueado);
