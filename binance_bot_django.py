@@ -113,7 +113,7 @@ def evaluar_senal(estado: EstadoActivo, precio: float) -> tuple:
         estado.cooldown -= 1
         return ("NEUTRAL", f"cooldown({estado.cooldown})", "media")
     
-    if len(estado.precios) < 30:
+    if len(estado.precios) < 15:
         return ("NEUTRAL", "warmup", "baja")
     
     # Calcular indicadores
@@ -137,36 +137,43 @@ def evaluar_senal(estado: EstadoActivo, precio: float) -> tuple:
     if (banda_sup - banda_inf) > 0:
         precio_vs_bb = (precio - banda_inf) / (banda_sup - banda_inf)
     
-    # ===== SEÑALES =====
+    # ===== SEÑALES SIMPLIFICADAS =====
     
-    # 1. REVERSIÓN EN EXTREMOS (mayor confianza)
-    if estado.rsi < 25 and precio < banda_inf:
-        estado.cooldown = 5
-        return ("CALL", f"reversión_sobrevendida_rsi{estado.rsi:.0f}", "alta")
+    # 1. RSI EXTREMO (más simple - solo RSI)
+    if estado.rsi < 30:
+        estado.cooldown = 2
+        return ("CALL", f"rsi_bajo_{estado.rsi:.0f}", "alta")
     
-    if estado.rsi > 75 and precio > banda_sup:
-        estado.cooldown = 5
-        return ("PUT", f"reversión_sobrecomprada_rsi{estado.rsi:.0f}", "alta")
+    if estado.rsi > 70:
+        estado.cooldown = 2
+        return ("PUT", f"rsi_alto_{estado.rsi:.0f}", "alta")
     
-    # 2. TEN + PULLBACK (confianza media)
-    if tendencia == "ALCISTA" and ema_gap > 0.15:
-        if precio_vs_bb < 0.35 and momentum > 0 and estado.rsi < 65:
-            estado.cooldown = 3
-            return ("CALL", f"pullback_alcista_rsi{estado.rsi:.0f}", "media")
+    # 2. TEN + PULLBACK
+    if tendencia == "ALCISTA" and precio_vs_bb < 0.4:
+        estado.cooldown = 2
+        return ("CALL", f"pullback_alcista", "media")
     
-    if tendencia == "BAJISTA" and ema_gap > 0.15:
-        if precio_vs_bb > 0.65 and momentum < 0 and estado.rsi > 35:
-            estado.cooldown = 3
-            return ("PUT", f"pullback_bajista_rsi{estado.rsi:.0f}", "media")
+    if tendencia == "BAJISTA" and precio_vs_bb > 0.6:
+        estado.cooldown = 2
+        return ("PUT", f"pullback_bajista", "media")
     
     # 3. MOMENTUM FUERTE
-    if abs(momentum) > 0.5:
-        if momentum > 0 and estado.rsi < 70 and ema_gap > 0.1:
-            estado.cooldown = 3
-            return ("CALL", f"momentum_alcista{momentum:.2f}", "media")
-        if momentum < 0 and estado.rsi > 30 and ema_gap > 0.1:
-            estado.cooldown = 3
-            return ("PUT", f"momentum_bajista{momentum:.2f}", "media")
+    if abs(momentum) > 0.3:
+        if momentum > 0:
+            estado.cooldown = 2
+            return ("CALL", f"momentum_up", "media")
+        else:
+            estado.cooldown = 2
+            return ("PUT", f"momentum_down", "media")
+    
+    # 4. EMA CROSS
+    if ema_gap > 0.1:
+        if tendencia == "ALCISTA":
+            estado.cooldown = 2
+            return ("CALL", f"ema_cross_up", "media")
+        else:
+            estado.cooldown = 2
+            return ("PUT", f"ema_cross_down", "media")
     
     return ("NEUTRAL", f"sin_señal_rsi{estado.rsi:.0f}", "baja")
 
@@ -203,6 +210,25 @@ def guardar_operacion(simbolo: str, direccion: str, precio: float,
     except Exception as e:
         print(f"Error guardando operación: {e}")
         return None
+
+
+def guardar_tick(simbolo: str, precio: float):
+    """Guarda tick de precio en Django via API"""
+    DJANGO_TICK_URL = "http://127.0.0.1:8000/api/binance/tick/"
+    data = {
+        "simbolo": simbolo,
+        "precio": precio,
+    }
+    try:
+        req = urllib.request.Request(
+            DJANGO_TICK_URL,
+            data=json.dumps(data).encode('utf-8'),
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        urllib.request.urlopen(req, timeout=2)
+    except Exception:
+        pass  # Silently ignore tick errors
 
 
 # ============================================================
@@ -243,7 +269,7 @@ def simular_operacion(estado: EstadoActivo, decision: str, confianza: str, razon
     estado.profit += profit
     
     # Guardar en Django
-    resultado = guardar_operacion(simbolo, decision, precio, razon, confianza, es_win, profit)
+    resultado = guardar_operacion(estado.simbolo, decision, precio, razon, confianza, es_win, profit)
     
     wr = (estado.wins / estado.total_ops * 100) if estado.total_ops > 0 else 0
     
@@ -288,6 +314,12 @@ async def conectar_binance(simbolos: list):
                     continue
                 
                 estado = estados[simbolo]
+                
+                # Guardar tick cada 5 ticks por activo (para gráfico más fluido)
+                tick_count = getattr(estado, 'tick_count', 0) + 1
+                estado.tick_count = tick_count
+                if tick_count % 5 == 0:
+                    guardar_tick(simbolo, precio)
                 
                 # Evaluar señal
                 decision, razon, confianza = evaluar_senal(estado, precio)

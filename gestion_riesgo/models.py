@@ -680,3 +680,20 @@ class EstadisticasBinance(models.Model):
         return (self.wins / self.total_ops * 100) if self.total_ops > 0 else 0
 
 
+class TickBinance(models.Model):
+    """
+    Ticks de precio de Binance en tiempo real.
+    """
+    simbolo = models.CharField(max_length=20, db_index=True)
+    precio = models.DecimalField(max_digits=20, decimal_places=8)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    class Meta:
+        verbose_name = "Tick Binance"
+        verbose_name_plural = "Ticks Binance"
+        ordering = ["-timestamp"]
+    
+    def __str__(self) -> str:
+        return f"{self.simbolo}: ${self.precio}"
+
+

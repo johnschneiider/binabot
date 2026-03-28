@@ -1910,10 +1910,11 @@ def api_guardar_operacion_binance(request):
         return JsonResponse({"error": "simbolo requerido"}, status=400)
     
     # Obtener o crear estadísticas del activo
+    from decimal import Decimal
     stats, created = EstadisticasBinance.objects.get_or_create(
         simbolo=simbolo,
         defaults={
-            "balance_ficticio": 1000,
+            "balance_ficticio": Decimal("1000"),
         }
     )
     
@@ -1930,8 +1931,11 @@ def api_guardar_operacion_binance(request):
         stats.win_streak = 0
         stats.max_loss_streak = max(stats.max_loss_streak, stats.loss_streak)
     
-    stats.profit_total += profit
-    stats.balance_ficticio += profit
+    # Convertir profit a Decimal antes de sumar
+    from decimal import Decimal
+    profit_decimal = Decimal(str(profit))
+    stats.profit_total += profit_decimal
+    stats.balance_ficticio += profit_decimal
     stats.ultima_operacion = timezone.now()
     stats.save()
     
@@ -1961,6 +1965,42 @@ def api_guardar_operacion_binance(request):
             "balance_ficticio": float(stats.balance_ficticio),
         }
     })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_guardar_tick_binance(request):
+    """
+    API para guardar ticks de precio de Binance.
+    """
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        data = request.POST
+    
+    simbolo = data.get("simbolo", "").upper()
+    precio = data.get("precio", 0)
+    
+    if not simbolo or not precio:
+        return JsonResponse({"error": "simbolo y precio requeridos"}, status=400)
+    
+    # Guardar tick (solo los últimos 200 por símbolo)
+    from .models import TickBinance
+    from decimal import Decimal
+    
+    TickBinance.objects.create(
+        simbolo=simbolo,
+        precio=Decimal(str(precio))
+    )
+    
+    # Eliminar ticks viejos (mantener solo últimos 200 por símbolo)
+    ticks_viejos = TickBinance.objects.filter(simbolo=simbolo).order_by('-timestamp')[200:]
+    if ticks_viejos:
+        TickBinance.objects.filter(
+            id__in=[t.id for t in ticks_viejos]
+        ).delete()
+    
+    return JsonResponse({"ok": True})
 
 
 @require_http_methods(["GET"])
@@ -1997,4 +2037,124 @@ def api_estado_binance(request):
             for s in stats
         ]
     })
+
+
+# ============================================================
+#  SSE: UPDATES EN TIEMPO REAL PARA BINANCE
+# ============================================================
+
+def sse_binance_stream(request):
+    """
+    Server-Sent Events para actualizaciones en tiempo real del dashboard Binance.
+    """
+    import time
+    from django.db import connection
+    
+    def event_stream():
+        last_id = 0
+        while True:
+            try:
+                # Cerrar conexión vieja para evitar problemas
+                connection.close()
+                
+                # Obtener última operación
+                ultima = OperacionBinance.objects.order_by('-id').first()
+                current_id = ultima.id if ultima else 0
+                
+                # Solo enviar si hay cambios
+                if current_id > last_id:
+                    # Obtener estadísticas actualizadas
+                    stats = EstadisticasBinance.objects.all()
+                    total_ops = sum(s.total_ops for s in stats)
+                    total_wins = sum(s.wins for s in stats)
+                    wr_global = (total_wins / total_ops * 100) if total_ops > 0 else 0
+                    total_profit = sum(float(s.profit_total) for s in stats)
+                    balance_ficticio = sum(float(s.balance_ficticio) for s in stats)
+                    
+                    # Datos para gráfico de balance por operación
+                    todas_ops = OperacionBinance.objects.all().order_by('created_at')
+                    balance_points = []
+                    bal = 1000
+                    for op in todas_ops:
+                        bal += float(op.profit)
+                        balance_points.append({
+                            "x": f"#{op.num_operacion}",
+                            "y": round(bal, 2)
+                        })
+                    
+                    # Datos para gráfico de barras por activo
+                    activos_data = []
+                    for s in stats:
+                        activos_data.append({
+                            "simbolo": s.simbolo,
+                            "profit": float(s.profit_total),
+                            "ops": s.total_ops,
+                            "wr": s.win_rate
+                        })
+                    
+                    # Última operación
+                    ultima_op = OperacionBinance.objects.order_by('-created_at').first()
+                    op_data = None
+                    if ultima_op:
+                        op_data = {
+                            "num": ultima_op.num_operacion,
+                            "simbolo": ultima_op.simbolo,
+                            "direccion": ultima_op.direccion,
+                            "precio": float(ultima_op.precio_entrada),
+                            "razon": ultima_op.razon,
+                            "confianza": ultima_op.confianza,
+                            "es_win": ultima_op.es_win,
+                            "profit": float(ultima_op.profit),
+                            "wr_momento": float(ultima_op.win_rate_momento),
+                            "hora": ultima_op.created_at.strftime("%H:%M:%S")
+                        }
+                    
+                    # Ticks de precios por activo (últimos 200 cada uno)
+                    from .models import TickBinance
+                    simbolos = ["BTC", "ETH", "SOL", "XRP"]
+                    ticks_data = {}
+                    for sym in simbolos:
+                        ticks = TickBinance.objects.filter(
+                            simbolo=sym
+                        ).order_by('-timestamp')[:200]
+                        ticks_data[sym] = [
+                            {
+                                "t": t.timestamp.strftime("%H:%M:%S"),
+                                "p": float(t.precio)
+                            }
+                            for t in reversed(list(ticks))
+                        ]
+                    
+                    data = json.dumps({
+                        "type": "update",
+                        "timestamp": time.time(),
+                        "total_ops": total_ops,
+                        "total_wins": total_wins,
+                        "wr_global": round(wr_global, 1),
+                        "total_profit": round(total_profit, 2),
+                        "balance_ficticio": round(balance_ficticio, 2),
+                        "activos": activos_data,
+                        "balance_points": balance_points[-100:],
+                        "ultima_operacion": op_data,
+                        "ticks": ticks_data,
+                    })
+                    
+                    yield f"data: {data}\n\n"
+                    last_id = current_id
+                
+                # Esperar 2 segundos antes de verificar de nuevo
+                time.sleep(2)
+                
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                time.sleep(5)
+    
+    return StreamingHttpResponse(
+        event_stream(),
+        content_type='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+        }
+    )
 

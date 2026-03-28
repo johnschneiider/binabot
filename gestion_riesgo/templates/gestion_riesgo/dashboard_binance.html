@@ -40,7 +40,6 @@
       padding: 20px;
     }
 
-    /* Header */
     .header {
       display: flex;
       justify-content: space-between;
@@ -85,13 +84,6 @@
       border: 1px solid rgba(239, 68, 68, 0.3);
     }
 
-    .badge-yellow {
-      background: rgba(234, 179, 8, 0.15);
-      color: var(--yellow);
-      border: 1px solid rgba(234, 179, 8, 0.3);
-    }
-
-    /* Stats Row */
     .stats-row {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -124,7 +116,6 @@
     .stat-value.red { color: var(--red); }
     .stat-value.yellow { color: var(--yellow); }
     .stat-value.blue { color: var(--blue); }
-    .stat-value.purple { color: var(--purple); }
 
     .stat-sub {
       font-size: 11px;
@@ -132,7 +123,6 @@
       margin-top: 4px;
     }
 
-    /* Card */
     .card {
       background: var(--bg-2);
       border: 1px solid var(--border);
@@ -158,9 +148,10 @@
       border-radius: 2px;
     }
 
-    /* Table */
-    .table-container {
+    .table-container { 
       overflow-x: auto;
+      max-height: 400px;
+      overflow-y: auto;
     }
 
     table {
@@ -178,6 +169,10 @@
       font-size: 11px;
       letter-spacing: 0.5px;
       border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--bg-2);
+      z-index: 1;
     }
 
     td {
@@ -185,75 +180,18 @@
       border-bottom: 1px solid var(--border);
     }
 
-    tr:hover {
-      background: var(--bg-3);
-    }
+    tr:hover { background: var(--bg-3); }
 
-    .mono {
-      font-family: 'JetBrains Mono', monospace;
-    }
-
+    .mono { font-family: 'JetBrains Mono', monospace; }
     .win { color: var(--green); }
     .loss { color: var(--red); }
 
-    /* Progress bar */
-    .progress-bar {
-      width: 100%;
-      height: 8px;
-      background: var(--bg-4);
-      border-radius: 4px;
-      overflow: hidden;
-      margin-top: 8px;
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-bottom: 20px;
     }
 
-    .progress-fill {
-      height: 100%;
-      border-radius: 4px;
-      transition: width 0.3s ease;
-    }
-
-    .progress-fill.green {
-      background: linear-gradient(90deg, var(--green), #16a34a);
-    }
-
-    .progress-fill.red {
-      background: linear-gradient(90deg, var(--red), #dc2626);
-    }
-
-    /* Grid layout */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-    }
-
-    @media (max-width: 768px) {
-      .grid-2 {
-        grid-template-columns: 1fr;
-      }
-      .stats-row {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    /* Pulse animation */
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    .pulse {
-      animation: pulse 2s infinite;
-    }
-
-    /* Time display */
-    .time-display {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
-      color: var(--text-2);
-    }
-
-    /* Symbol badge */
     .symbol-badge {
       display: inline-block;
       padding: 2px 8px;
@@ -262,32 +200,11 @@
       font-weight: 600;
     }
 
-    .symbol-btc {
-      background: rgba(234, 179, 8, 0.15);
-      color: var(--yellow);
-    }
+    .symbol-btc { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+    .symbol-eth { background: rgba(139, 92, 246, 0.15); color: var(--purple); }
+    .symbol-sol { background: rgba(6, 182, 212, 0.15); color: var(--cyan); }
+    .symbol-xrp { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
 
-    .symbol-eth {
-      background: rgba(139, 92, 246, 0.15);
-      color: var(--purple);
-    }
-
-    .symbol-sol {
-      background: rgba(6, 182, 212, 0.15);
-      color: var(--cyan);
-    }
-
-    .symbol-xrp {
-      background: rgba(59, 130, 246, 0.15);
-      color: var(--blue);
-    }
-
-    .symbol-default {
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--text-2);
-    }
-
-    /* Confidence badge */
     .conf-badge {
       display: inline-block;
       padding: 2px 6px;
@@ -296,26 +213,101 @@
       font-weight: 600;
     }
 
-    .conf-alta {
-      background: rgba(34, 197, 94, 0.15);
-      color: var(--green);
+    .conf-alta { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+    .conf-media { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
     }
 
-    .conf-media {
-      background: rgba(234, 179, 8, 0.15);
-      color: var(--yellow);
+    .pulse { animation: pulse 2s infinite; }
+
+    .time-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: var(--text-2);
     }
 
-    .conf-baja {
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--text-3);
-    }
-
-    /* Chart container */
-    .chart-container {
-      position: relative;
-      height: 300px;
+    /* Grid para gráficos */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
       margin-bottom: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Barra horizontal personalizada */
+    .bar-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .bar-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .bar-label {
+      width: 60px;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 32px;
+      background: var(--bg-4);
+      border-radius: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.5s ease;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .bar-fill.positive {
+      background: linear-gradient(90deg, rgba(34, 197, 94, 0.3), var(--green));
+    }
+
+    .bar-fill.negative {
+      background: linear-gradient(90deg, var(--red), rgba(239, 68, 68, 0.3));
+    }
+
+    .bar-value {
+      width: 80px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      text-align: right;
+    }
+
+    /* Center line for bar chart */
+    .bar-track::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--text-3);
     }
   </style>
 </head>
@@ -326,18 +318,12 @@
       <div>
         <h1>Dashboard Binance</h1>
         <div style="font-size: 12px; color: var(--text-3); margin-top: 4px;">
-          Operaciones ficticias con datos reales
+          Datos en tiempo real via SSE
         </div>
       </div>
       <div class="header-info">
-        <div class="time-display">
-          {{ ahora|date:"d/m/Y" }} - {{ ahora|time:"H:i:s" }}
-        </div>
-        {% if bot_activo %}
-          <div class="badge badge-green pulse">BOT ACTIVO</div>
-        {% else %}
-          <div class="badge badge-red">BOT INACTIVO</div>
-        {% endif %}
+        <div class="time-display" id="clockDisplay">--:--:--</div>
+        <div class="badge badge-green pulse" id="sseStatus">CONECTANDO</div>
       </div>
     </div>
 
@@ -345,40 +331,50 @@
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-label">Balance Ficticio</div>
-        <div class="stat-value {% if balance_ficticio >= 1000 %}green{% else %}red{% endif %}">
-          ${{ balance_ficticio|floatformat:2 }}
-        </div>
+        <div class="stat-value green" id="balanceDisplay">$1000.00</div>
         <div class="stat-sub">Capital inicial: $1000</div>
       </div>
-
       <div class="stat-card">
-        <div class="stat-label">Win Rate Global</div>
-        <div class="stat-value {% if wr_global >= 55 %}green{% elif wr_global >= 50 %}yellow{% else %}red{% endif %}">
-          {{ wr_global|floatformat:1 }}%
-        </div>
-        <div class="stat-sub">{{ total_wins }} wins / {{ total_ops }} ops</div>
+        <div class="stat-label">Win Rate</div>
+        <div class="stat-value yellow" id="wrDisplay">0%</div>
+        <div class="stat-sub"><span id="winsDisplay">0</span> wins / <span id="opsDisplay">0</span> ops</div>
       </div>
-
       <div class="stat-card">
         <div class="stat-label">Profit Total</div>
-        <div class="stat-value {% if total_profit >= 0 %}green{% else %}red{% endif %}">
-          ${{ total_profit|floatformat:2 }}
-        </div>
-        <div class="stat-sub">ROI: {% widthratio total_profit 1000 100 %}%</div>
+        <div class="stat-value green" id="profitDisplay">$0.00</div>
+        <div class="stat-sub" id="roiDisplay">ROI: 0%</div>
       </div>
-
       <div class="stat-card">
         <div class="stat-label">Operaciones</div>
-        <div class="stat-value blue">{{ total_ops }}</div>
-        <div class="stat-sub">Últimas {{ historial_ops|length }} mostradas</div>
+        <div class="stat-value blue" id="totalOpsDisplay">0</div>
+        <div class="stat-sub">Última: <span id="lastOpDisplay">--</span></div>
       </div>
     </div>
 
-    <!-- CHART - Balance over time -->
+    <!-- CHARTS GRID -->
+    <div class="charts-grid">
+      <!-- LINE CHART - Balance por operación -->
+      <div class="card">
+        <div class="card-title">Balance por Operación</div>
+        <div class="chart-container">
+          <canvas id="balanceChart"></canvas>
+        </div>
+      </div>
+
+      <!-- HORIZONTAL BAR CHART - Profit por activo -->
+      <div class="card">
+        <div class="card-title">Profit por Activo</div>
+        <div class="bar-chart" id="barChart">
+          <!-- Se llena dinámicamente -->
+        </div>
+      </div>
+    </div>
+
+    <!-- PRECIO EN TIEMPO REAL -->
     <div class="card">
-      <div class="card-title">Evolución del Balance</div>
-      <div class="chart-container">
-        <canvas id="balanceChart"></canvas>
+      <div class="card-title">Precios en Tiempo Real (200 ticks)</div>
+      <div class="chart-container" style="height: 350px;">
+        <canvas id="priceChart"></canvas>
       </div>
     </div>
 
@@ -399,43 +395,14 @@
               <th>Loss Streak</th>
             </tr>
           </thead>
-          <tbody>
-            {% for stat in stats %}
-            <tr>
-              <td>
-                <span class="symbol-badge symbol-{{ stat.simbolo|lower }}">
-                  {{ stat.simbolo }}
-                </span>
-              </td>
-              <td class="mono">{{ stat.total_ops }}</td>
-              <td class="mono win">{{ stat.wins }}</td>
-              <td class="mono {% if stat.win_rate >= 55 %}win{% elif stat.win_rate >= 50 %}yellow{% else %}loss{% endif %}">
-                {{ stat.win_rate|floatformat:1 }}%
-                <div class="progress-bar">
-                  <div class="progress-fill {% if stat.win_rate >= 55 %}green{% else %}red{% endif %}"
-                       style="width: {{ stat.win_rate }}%"></div>
-                </div>
-              </td>
-              <td class="mono {% if stat.profit_total >= 0 %}win{% else %}loss{% endif %}">
-                ${{ stat.profit_total|floatformat:2 }}
-              </td>
-              <td class="mono">${{ stat.balance_ficticio|floatformat:2 }}</td>
-              <td class="mono win">{{ stat.win_streak }}</td>
-              <td class="mono loss">{{ stat.loss_streak }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="8" style="text-align: center; color: var(--text-3);">
-                No hay operaciones registradas aún
-              </td>
-            </tr>
-            {% endfor %}
+          <tbody id="statsTable">
+            <!-- Se llena dinámicamente -->
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- HISTORIAL COMPLETO DE OPERACIONES -->
+    <!-- HISTORIAL -->
     <div class="card">
       <div class="card-title">Historial de Operaciones</div>
       <div class="table-container">
@@ -443,7 +410,7 @@
           <thead>
             <tr>
               <th>#</th>
-              <th>Fecha/Hora</th>
+              <th>Hora</th>
               <th>Símbolo</th>
               <th>Dirección</th>
               <th>Precio</th>
@@ -451,121 +418,44 @@
               <th>Profit</th>
               <th>Razón</th>
               <th>Confianza</th>
-              <th>WR Momento</th>
             </tr>
           </thead>
-          <tbody>
-            {% for op in historial_ops %}
-            <tr>
-              <td class="mono">{{ op.num_operacion }}</td>
-              <td class="mono" style="font-size: 11px;">{{ op.created_at|date:"d/m/Y" }} {{ op.created_at|time:"H:i:s" }}</td>
-              <td>
-                <span class="symbol-badge symbol-{{ op.simbolo|lower }}">
-                  {{ op.simbolo }}
-                </span>
-              </td>
-              <td>
-                {% if op.direccion == "CALL" %}
-                  <span class="win">CALL ↑</span>
-                {% else %}
-                  <span class="loss">PUT ↓</span>
-                {% endif %}
-              </td>
-              <td class="mono" style="font-size: 11px;">{{ op.precio_entrada|floatformat:2 }}</td>
-              <td>
-                {% if op.es_win %}
-                  <span class="badge badge-green">WIN</span>
-                {% else %}
-                  <span class="badge badge-red">LOSS</span>
-                {% endif %}
-              </td>
-              <td class="mono {% if op.profit >= 0 %}win{% else %}loss{% endif %}">
-                {{ op.profit|floatformat:2 }}
-              </td>
-              <td style="font-size: 11px; color: var(--text-3); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                {{ op.razon }}
-              </td>
-              <td>
-                <span class="conf-badge conf-{{ op.confianza }}">
-                  {{ op.confianza|upper }}
-                </span>
-              </td>
-              <td class="mono">{{ op.win_rate_momento|floatformat:1 }}%</td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="10" style="text-align: center; color: var(--text-3);">
-                No hay operaciones registradas aún
-              </td>
-            </tr>
-            {% endfor %}
+          <tbody id="historyTable">
+            <!-- Se llena dinámicamente -->
           </tbody>
         </table>
       </div>
     </div>
-
-    <!-- RENDIMIENTO POR ACTIVO -->
-    <div class="card">
-      <div class="card-title">Rendimiento por Activo</div>
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
-        {% for stat in stats %}
-        <div style="text-align: center; padding: 16px; background: var(--bg-3); border-radius: 8px;">
-          <div class="symbol-badge symbol-{{ stat.simbolo|lower }}" style="margin-bottom: 12px;">
-            {{ stat.simbolo }}
-          </div>
-          <div style="font-size: 24px; font-weight: 700;" class="mono {% if stat.profit_total >= 0 %}win{% else %}loss{% endif %}">
-            ${{ stat.profit_total|floatformat:2 }}
-          </div>
-          <div style="font-size: 12px; color: var(--text-3); margin-top: 4px;">
-            {{ stat.win_rate|floatformat:1 }}% WR
-          </div>
-          <div class="progress-bar" style="margin-top: 8px;">
-            <div class="progress-fill {% if stat.win_rate >= 55 %}green{% else %}red{% endif %}"
-                 style="width: {{ stat.win_rate }}%"></div>
-          </div>
-        </div>
-        {% empty %}
-        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-3); padding: 40px;">
-          No hay datos de activos aún
-        </div>
-        {% endfor %}
-      </div>
-    </div>
   </div>
 
-  <!-- CHART SCRIPT -->
+  <!-- SSE & CHARTS SCRIPT -->
   <script>
-    const chartLabels = {{ chart_labels|safe }};
-    const chartBalance = {{ chart_balance|safe }};
-    
+    // ===== CHART.JS - Balance por operación =====
     const ctx = document.getElementById('balanceChart').getContext('2d');
-    
-    new Chart(ctx, {
+    const balanceChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: chartLabels,
+        labels: [],
         datasets: [{
           label: 'Balance',
-          data: chartBalance,
+          data: [],
           borderColor: '#22c55e',
           backgroundColor: 'rgba(34, 197, 94, 0.1)',
           borderWidth: 2,
-          pointRadius: 4,
+          pointRadius: 3,
           pointBackgroundColor: '#22c55e',
           pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-          pointHoverRadius: 6,
+          pointBorderWidth: 1,
+          pointHoverRadius: 5,
           fill: true,
-          tension: 0.4
+          tension: 0.3
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: {
-            display: false
-          },
+          legend: { display: false },
           tooltip: {
             backgroundColor: '#111',
             titleColor: '#fff',
@@ -575,57 +465,283 @@
             padding: 12,
             displayColors: false,
             callbacks: {
-              label: function(context) {
-                return 'Balance: $' + context.parsed.y.toFixed(2);
-              }
+              label: ctx => 'Balance: $' + ctx.parsed.y.toFixed(2)
             }
           }
         },
         scales: {
           x: {
             display: true,
-            grid: {
-              color: '#222',
-              drawBorder: false
-            },
-            ticks: {
-              color: '#666',
-              maxTicksLimit: 10,
-              font: {
-                size: 10
-              }
-            }
+            grid: { color: '#222', drawBorder: false },
+            ticks: { color: '#666', maxTicksLimit: 15, font: { size: 10 } }
           },
           y: {
             display: true,
-            grid: {
-              color: '#222',
-              drawBorder: false
-            },
+            grid: { color: '#222', drawBorder: false },
             ticks: {
               color: '#666',
-              callback: function(value) {
-                return '$' + value;
-              },
-              font: {
-                size: 10
-              }
+              callback: v => '$' + v,
+              font: { size: 10 }
             }
           }
         },
-        interaction: {
-          intersect: false,
-          mode: 'index'
-        }
+        interaction: { intersect: false, mode: 'index' }
       }
     });
-  </script>
 
-  <!-- AUTO-REFRESH -->
-  <script>
-    setInterval(() => {
-      location.reload();
-    }, 10000);
+    // ===== CHART.JS - Precios en tiempo real =====
+    const ctxPrice = document.getElementById('priceChart').getContext('2d');
+    const priceChart = new Chart(ctxPrice, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'BTC',
+            data: [],
+            borderColor: '#f7931a',
+            backgroundColor: 'rgba(247, 147, 26, 0.1)',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.4
+          },
+          {
+            label: 'ETH',
+            data: [],
+            borderColor: '#627eea',
+            backgroundColor: 'rgba(98, 126, 234, 0.1)',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.4
+          },
+          {
+            label: 'SOL',
+            data: [],
+            borderColor: '#00d18c',
+            backgroundColor: 'rgba(0, 209, 140, 0.1)',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.4
+          },
+          {
+            label: 'XRP',
+            data: [],
+            borderColor: '#00aae4',
+            backgroundColor: 'rgba(0, 170, 228, 0.1)',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: {
+              color: '#999',
+              usePointStyle: true,
+              padding: 15
+            }
+          },
+          tooltip: {
+            backgroundColor: '#111',
+            titleColor: '#fff',
+            bodyColor: '#999',
+            borderColor: '#333',
+            borderWidth: 1,
+            padding: 12,
+            callbacks: {
+              label: ctx => ctx.dataset.label + ': $' + ctx.parsed.y.toFixed(2)
+            }
+          }
+        },
+        scales: {
+          x: {
+            display: true,
+            grid: { color: '#222', drawBorder: false },
+            ticks: { color: '#666', maxTicksLimit: 10, font: { size: 10 } }
+          },
+          y: {
+            display: true,
+            grid: { color: '#222', drawBorder: false },
+            ticks: {
+              color: '#666',
+              callback: v => '$' + v,
+              font: { size: 10 }
+            }
+          }
+        },
+        interaction: { intersect: false, mode: 'index' }
+      }
+    });
+
+    // ===== SSE Connection =====
+    let lastOperationId = 0;
+    const historialOps = [];
+
+    function connectSSE() {
+      const evtSource = new EventSource('/api/binance/sse/');
+      
+      evtSource.onopen = () => {
+        document.getElementById('sseStatus').textContent = 'CONECTADO';
+        document.getElementById('sseStatus').className = 'badge badge-green pulse';
+      };
+
+      evtSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'update') {
+            updateDashboard(data);
+          } else if (data.type === 'error') {
+            console.error('SSE Error:', data.message);
+          }
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+
+      evtSource.onerror = () => {
+        document.getElementById('sseStatus').textContent = 'RECONECTANDO';
+        document.getElementById('sseStatus').className = 'badge badge-red pulse';
+      };
+    }
+
+    function updateDashboard(data) {
+      // Stats
+      document.getElementById('balanceDisplay').textContent = '$' + data.balance_ficticio.toFixed(2);
+      document.getElementById('balanceDisplay').className = 'stat-value ' + (data.balance_ficticio >= 1000 ? 'green' : 'red');
+      document.getElementById('wrDisplay').textContent = data.wr_global + '%';
+      document.getElementById('wrDisplay').className = 'stat-value ' + (data.wr_global >= 55 ? 'green' : data.wr_global >= 50 ? 'yellow' : 'red');
+      document.getElementById('profitDisplay').textContent = '$' + data.total_profit.toFixed(2);
+      document.getElementById('profitDisplay').className = 'stat-value ' + (data.total_profit >= 0 ? 'green' : 'red');
+      document.getElementById('totalOpsDisplay').textContent = data.total_ops;
+      document.getElementById('winsDisplay').textContent = data.total_wins;
+      document.getElementById('opsDisplay').textContent = data.total_ops;
+      
+      const roi = ((data.balance_ficticio - 1000) / 1000 * 100).toFixed(1);
+      document.getElementById('roiDisplay').textContent = 'ROI: ' + roi + '%';
+
+      // Última operación
+      if (data.ultima_operacion) {
+        const op = data.ultima_operacion;
+        document.getElementById('lastOpDisplay').textContent = op.hora;
+        
+        // Agregar al historial si no existe
+        if (!historialOps.find(o => o.num === op.num)) {
+          historialOps.unshift(op);
+          updateHistoryTable();
+        }
+      }
+
+      // Stats por activo
+      updateStatsTable(data.activos);
+
+      // Bar chart por activo
+      updateBarChart(data.activos);
+
+      // Line chart de balance
+      if (data.balance_points && data.balance_points.length > 0) {
+        balanceChart.data.labels = data.balance_points.map(p => p.x);
+        balanceChart.data.datasets[0].data = data.balance_points.map(p => p.y);
+        balanceChart.update('none');
+      }
+
+      // Price chart - ticks de cada activo
+      if (data.ticks) {
+        const symOrder = ['BTC', 'ETH', 'SOL', 'XRP'];
+        symOrder.forEach((sym, idx) => {
+          if (data.ticks[sym] && data.ticks[sym].length > 0) {
+            priceChart.data.labels = data.ticks[sym].map(t => t.t);
+            priceChart.data.datasets[idx].data = data.ticks[sym].map(t => t.p);
+          }
+        });
+        priceChart.update('none');
+      }
+    }
+
+    function updateStatsTable(activos) {
+      const tbody = document.getElementById('statsTable');
+      tbody.innerHTML = '';
+      
+      activos.forEach(a => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><span class="symbol-badge symbol-${a.simbolo.toLowerCase()}">${a.simbolo}</span></td>
+          <td class="mono">${a.ops}</td>
+          <td class="mono win">${Math.round(a.ops * a.wr / 100)}</td>
+          <td class="mono ${a.wr >= 55 ? 'win' : a.wr >= 50 ? 'yellow' : 'loss'}">${a.wr.toFixed(1)}%</td>
+          <td class="mono ${a.profit >= 0 ? 'win' : 'loss'}">$${a.profit.toFixed(2)}</td>
+          <td class="mono">${a.balance ? '$' + a.balance.toFixed(2) : '—'}</td>
+          <td class="mono win">${a.win_streak || 0}</td>
+          <td class="mono loss">${a.loss_streak || 0}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updateBarChart(activos) {
+      const container = document.getElementById('barChart');
+      container.innerHTML = '';
+      
+      const maxAbsProfit = Math.max(...activos.map(a => Math.abs(a.profit)), 1);
+      
+      activos.forEach(a => {
+        const isPositive = a.profit >= 0;
+        const widthPercent = (Math.abs(a.profit) / maxAbsProfit * 45); // 45% max
+        
+        const item = document.createElement('div');
+        item.className = 'bar-item';
+        item.innerHTML = `
+          <div class="bar-label symbol-badge symbol-${a.simbolo.toLowerCase()}">${a.simbolo}</div>
+          <div class="bar-track">
+            <div class="bar-fill ${isPositive ? 'positive' : 'negative'}"
+                 style="width: ${widthPercent}%; margin-left: ${isPositive ? '50%' : 50 - widthPercent + '%'}">
+              ${isPositive ? '+' : ''}$${a.profit.toFixed(2)}
+            </div>
+          </div>
+          <div class="bar-value ${isPositive ? 'win' : 'loss'}">${a.wr.toFixed(1)}% WR</div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function updateHistoryTable() {
+      const tbody = document.getElementById('historyTable');
+      tbody.innerHTML = '';
+      
+      historialOps.slice(0, 50).forEach(op => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="mono">${op.num}</td>
+          <td class="mono" style="font-size:11px">${op.hora}</td>
+          <td><span class="symbol-badge symbol-${op.simbolo.toLowerCase()}">${op.simbolo}</span></td>
+          <td class="${op.direccion === 'CALL' ? 'win' : 'loss'}">${op.direccion} ${op.direccion === 'CALL' ? '↑' : '↓'}</td>
+          <td class="mono" style="font-size:11px">${op.precio.toFixed(2)}</td>
+          <td><span class="badge ${op.es_win ? 'badge-green' : 'badge-red'}">${op.es_win ? 'WIN' : 'LOSS'}</span></td>
+          <td class="mono ${op.profit >= 0 ? 'win' : 'loss'}">${op.profit >= 0 ? '+' : ''}${op.profit.toFixed(2)}</td>
+          <td style="font-size:11px;color:var(--text-3);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${op.razon}</td>
+          <td><span class="conf-badge conf-${op.confianza}">${op.confianza.toUpperCase()}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Clock
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clockDisplay').textContent = 
+        now.toLocaleTimeString('es-CO', { hour12: false });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Connect SSE on load
+    connectSSE();
   </script>
 </body>
 </html>
