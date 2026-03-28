@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard Binance - Trading Bot</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
       --bg-1: #0a0a0a;
@@ -309,6 +310,13 @@
       background: rgba(255, 255, 255, 0.1);
       color: var(--text-3);
     }
+
+    /* Chart container */
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
@@ -362,7 +370,15 @@
       <div class="stat-card">
         <div class="stat-label">Operaciones</div>
         <div class="stat-value blue">{{ total_ops }}</div>
-        <div class="stat-sub">Últimas {{ ultimas_ops|length }} mostradas</div>
+        <div class="stat-sub">Últimas {{ historial_ops|length }} mostradas</div>
+      </div>
+    </div>
+
+    <!-- CHART - Balance over time -->
+    <div class="card">
+      <div class="card-title">Evolución del Balance</div>
+      <div class="chart-container">
+        <canvas id="balanceChart"></canvas>
       </div>
     </div>
 
@@ -419,15 +435,15 @@
       </div>
     </div>
 
-    <!-- ÚLTIMAS OPERACIONES -->
+    <!-- HISTORIAL COMPLETO DE OPERACIONES -->
     <div class="card">
-      <div class="card-title">Últimas Operaciones</div>
+      <div class="card-title">Historial de Operaciones</div>
       <div class="table-container">
         <table>
           <thead>
             <tr>
               <th>#</th>
-              <th>Hora</th>
+              <th>Fecha/Hora</th>
               <th>Símbolo</th>
               <th>Dirección</th>
               <th>Precio</th>
@@ -439,10 +455,10 @@
             </tr>
           </thead>
           <tbody>
-            {% for op in ultimas_ops %}
+            {% for op in historial_ops %}
             <tr>
               <td class="mono">{{ op.num_operacion }}</td>
-              <td class="mono" style="font-size: 11px;">{{ op.created_at|time:"H:i:s" }}</td>
+              <td class="mono" style="font-size: 11px;">{{ op.created_at|date:"d/m/Y" }} {{ op.created_at|time:"H:i:s" }}</td>
               <td>
                 <span class="symbol-badge symbol-{{ op.simbolo|lower }}">
                   {{ op.simbolo }}
@@ -466,7 +482,7 @@
               <td class="mono {% if op.profit >= 0 %}win{% else %}loss{% endif %}">
                 {{ op.profit|floatformat:2 }}
               </td>
-              <td style="font-size: 11px; color: var(--text-3); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <td style="font-size: 11px; color: var(--text-3); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 {{ op.razon }}
               </td>
               <td>
@@ -488,7 +504,7 @@
       </div>
     </div>
 
-    <!-- CHART PLACEHOLDER -->
+    <!-- RENDIMIENTO POR ACTIVO -->
     <div class="card">
       <div class="card-title">Rendimiento por Activo</div>
       <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
@@ -517,9 +533,96 @@
     </div>
   </div>
 
+  <!-- CHART SCRIPT -->
+  <script>
+    const chartLabels = {{ chart_labels|safe }};
+    const chartBalance = {{ chart_balance|safe }};
+    
+    const ctx = document.getElementById('balanceChart').getContext('2d');
+    
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: chartLabels,
+        datasets: [{
+          label: 'Balance',
+          data: chartBalance,
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          borderWidth: 2,
+          pointRadius: 4,
+          pointBackgroundColor: '#22c55e',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointHoverRadius: 6,
+          fill: true,
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            backgroundColor: '#111',
+            titleColor: '#fff',
+            bodyColor: '#999',
+            borderColor: '#333',
+            borderWidth: 1,
+            padding: 12,
+            displayColors: false,
+            callbacks: {
+              label: function(context) {
+                return 'Balance: $' + context.parsed.y.toFixed(2);
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            display: true,
+            grid: {
+              color: '#222',
+              drawBorder: false
+            },
+            ticks: {
+              color: '#666',
+              maxTicksLimit: 10,
+              font: {
+                size: 10
+              }
+            }
+          },
+          y: {
+            display: true,
+            grid: {
+              color: '#222',
+              drawBorder: false
+            },
+            ticks: {
+              color: '#666',
+              callback: function(value) {
+                return '$' + value;
+              },
+              font: {
+                size: 10
+              }
+            }
+          }
+        },
+        interaction: {
+          intersect: false,
+          mode: 'index'
+        }
+      }
+    });
+  </script>
+
   <!-- AUTO-REFRESH -->
   <script>
-    // Auto-refresh cada 10 segundos
     setInterval(() => {
       location.reload();
     }, 10000);

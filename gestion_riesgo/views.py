@@ -1837,6 +1837,7 @@ def dashboard_binance(request):
     """
     from django.utils import timezone
     from datetime import datetime, timezone as dt_tz
+    from decimal import Decimal
     
     # Obtener estadísticas por activo
     stats = EstadisticasBinance.objects.all().order_by("-profit_total")
@@ -1850,8 +1851,19 @@ def dashboard_binance(request):
     # Win rate global
     wr_global = (total_wins / total_ops * 100) if total_ops > 0 else 0
     
-    # Últimas operaciones
-    ultimas_ops = OperacionBinance.objects.all().order_by("-created_at")[:20]
+    # Últimas 50 operaciones para historial
+    historial_ops = OperacionBinance.objects.all().order_by("-created_at")[:50]
+    
+    # Datos para gráfico de balance (balance acumulado por operación)
+    todas_ops = OperacionBinance.objects.all().order_by("created_at")
+    chart_labels = []
+    chart_balance = []
+    balance_acumulado = 1000  # Capital inicial
+    
+    for op in todas_ops:
+        balance_acumulado += float(op.profit)
+        chart_labels.append(op.created_at.strftime("%H:%M:%S"))
+        chart_balance.append(round(balance_acumulado, 2))
     
     # Verificar si bot está activo (por defecto True por ahora)
     bot_activo = True
@@ -1866,9 +1878,12 @@ def dashboard_binance(request):
         "wr_global": wr_global,
         "total_profit": total_profit,
         "balance_ficticio": balance_ficticio,
-        "ultimas_ops": ultimas_ops,
+        "historial_ops": historial_ops,
+        "ultimas_ops": historial_ops[:20],
         "bot_activo": bot_activo,
         "ahora": ahora,
+        "chart_labels": json.dumps(chart_labels),
+        "chart_balance": json.dumps(chart_balance),
     })
 
 
