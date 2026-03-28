@@ -28,7 +28,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg-1);
       color: var(--text-1);
       min-height: 100vh;
@@ -86,7 +86,7 @@
 
     .stats-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 16px;
       margin-bottom: 24px;
     }
@@ -148,7 +148,7 @@
       border-radius: 2px;
     }
 
-    .table-container { 
+    .table-container {
       overflow-x: auto;
       max-height: 400px;
       overflow-y: auto;
@@ -229,19 +229,12 @@
       color: var(--text-2);
     }
 
-    /* Grid para gráficos */
     .charts-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 20px;
-      margin-bottom: 20px;
     }
 
-    @media (max-width: 900px) {
-      .charts-grid { grid-template-columns: 1fr; }
-    }
-
-    /* Barra horizontal personalizada */
     .bar-chart {
       display: flex;
       flex-direction: column;
@@ -299,7 +292,6 @@
       text-align: right;
     }
 
-    /* Center line for bar chart */
     .bar-track::before {
       content: '';
       position: absolute;
@@ -308,6 +300,11 @@
       bottom: 0;
       width: 2px;
       background: var(--text-3);
+    }
+
+    @media (max-width: 900px) {
+      .charts-grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
@@ -318,12 +315,12 @@
       <div>
         <h1>Dashboard Binance</h1>
         <div style="font-size: 12px; color: var(--text-3); margin-top: 4px;">
-          Datos en tiempo real via SSE
+          Operaciones de 60 segundos - Datos reales
         </div>
       </div>
       <div class="header-info">
         <div class="time-display" id="clockDisplay">--:--:--</div>
-        <div class="badge badge-green pulse" id="sseStatus">CONECTANDO</div>
+        <div class="badge badge-red" id="sseStatus">DESCONECTADO</div>
       </div>
     </div>
 
@@ -331,7 +328,7 @@
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-label">Balance Ficticio</div>
-        <div class="stat-value green" id="balanceDisplay">$1000.00</div>
+        <div class="stat-value green" id="balanceDisplay">$0.00</div>
         <div class="stat-sub">Capital inicial: $1000</div>
       </div>
       <div class="stat-card">
@@ -347,34 +344,56 @@
       <div class="stat-card">
         <div class="stat-label">Operaciones</div>
         <div class="stat-value blue" id="totalOpsDisplay">0</div>
-        <div class="stat-sub">Última: <span id="lastOpDisplay">--</span></div>
+        <div class="stat-sub">Duración: 60s por operación</div>
       </div>
     </div>
 
-    <!-- CHARTS GRID -->
+    <!-- CHARTS -->
     <div class="charts-grid">
-      <!-- LINE CHART - Balance por operación -->
       <div class="card">
         <div class="card-title">Balance por Operación</div>
         <div class="chart-container">
           <canvas id="balanceChart"></canvas>
         </div>
       </div>
-
-      <!-- HORIZONTAL BAR CHART - Profit por activo -->
       <div class="card">
         <div class="card-title">Profit por Activo</div>
-        <div class="bar-chart" id="barChart">
-          <!-- Se llena dinámicamente -->
-        </div>
+        <div class="bar-chart" id="barChart"></div>
       </div>
     </div>
 
-    <!-- PRECIO EN TIEMPO REAL -->
+    <!-- PRECIOS EN TIEMPO REAL - 4 GRÁFICOS -->
     <div class="card">
-      <div class="card-title">Precios en Tiempo Real (200 ticks)</div>
-      <div class="chart-container" style="height: 350px;">
-        <canvas id="priceChart"></canvas>
+      <div class="card-title">Precios en Tiempo Real (últimos 200 ticks)</div>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+        <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span class="symbol-badge symbol-btc">BTC</span>
+            <span id="btcPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--yellow);">--</span>
+          </div>
+          <div style="height: 180px;"><canvas id="chartBTC"></canvas></div>
+        </div>
+        <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span class="symbol-badge symbol-eth">ETH</span>
+            <span id="ethPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--purple);">--</span>
+          </div>
+          <div style="height: 180px;"><canvas id="chartETH"></canvas></div>
+        </div>
+        <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span class="symbol-badge symbol-sol">SOL</span>
+            <span id="solPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--cyan);">--</span>
+          </div>
+          <div style="height: 180px;"><canvas id="chartSOL"></canvas></div>
+        </div>
+        <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span class="symbol-badge symbol-xrp">XRP</span>
+            <span id="xrpPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--blue);">--</span>
+          </div>
+          <div style="height: 180px;"><canvas id="chartXRP"></canvas></div>
+        </div>
       </div>
     </div>
 
@@ -395,9 +414,7 @@
               <th>Loss Streak</th>
             </tr>
           </thead>
-          <tbody id="statsTable">
-            <!-- Se llena dinámicamente -->
-          </tbody>
+          <tbody id="statsTable"></tbody>
         </table>
       </div>
     </div>
@@ -420,19 +437,15 @@
               <th>Confianza</th>
             </tr>
           </thead>
-          <tbody id="historyTable">
-            <!-- Se llena dinámicamente -->
-          </tbody>
+          <tbody id="historyTable"></tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- SSE & CHARTS SCRIPT -->
   <script>
-    // ===== CHART.JS - Balance por operación =====
-    const ctx = document.getElementById('balanceChart').getContext('2d');
-    const balanceChart = new Chart(ctx, {
+    // Charts
+    const balanceChart = new Chart(document.getElementById('balanceChart').getContext('2d'), {
       type: 'line',
       data: {
         labels: [],
@@ -444,9 +457,6 @@
           borderWidth: 2,
           pointRadius: 3,
           pointBackgroundColor: '#22c55e',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 1,
-          pointHoverRadius: 5,
           fill: true,
           tension: 0.3
         }]
@@ -454,213 +464,131 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#111',
-            titleColor: '#fff',
-            bodyColor: '#999',
-            borderColor: '#333',
-            borderWidth: 1,
-            padding: 12,
-            displayColors: false,
-            callbacks: {
-              label: ctx => 'Balance: $' + ctx.parsed.y.toFixed(2)
-            }
-          }
-        },
+        plugins: { legend: { display: false } },
         scales: {
-          x: {
-            display: true,
-            grid: { color: '#222', drawBorder: false },
-            ticks: { color: '#666', maxTicksLimit: 15, font: { size: 10 } }
-          },
-          y: {
-            display: true,
-            grid: { color: '#222', drawBorder: false },
-            ticks: {
-              color: '#666',
-              callback: v => '$' + v,
-              font: { size: 10 }
-            }
-          }
-        },
-        interaction: { intersect: false, mode: 'index' }
+          x: { grid: { color: '#222' }, ticks: { color: '#666', maxTicksLimit: 15, font: { size: 10 } } },
+          y: { grid: { color: '#222' }, ticks: { color: '#666', callback: v => '$' + v, font: { size: 10 } } }
+        }
       }
     });
 
-    // ===== CHART.JS - Precios en tiempo real =====
-    const ctxPrice = document.getElementById('priceChart').getContext('2d');
-    const priceChart = new Chart(ctxPrice, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          {
-            label: 'BTC',
+    // ===== 4 CHARTS SEPARADOS POR ACTIVO =====
+    function createPriceChart(canvasId, color, label) {
+      return new Chart(document.getElementById(canvasId).getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: label,
             data: [],
-            borderColor: '#f7931a',
-            backgroundColor: 'rgba(247, 147, 26, 0.1)',
+            borderColor: color,
+            backgroundColor: color + '20',
             borderWidth: 2,
             pointRadius: 0,
+            fill: true,
             tension: 0.4
-          },
-          {
-            label: 'ETH',
-            data: [],
-            borderColor: '#627eea',
-            backgroundColor: 'rgba(98, 126, 234, 0.1)',
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.4
-          },
-          {
-            label: 'SOL',
-            data: [],
-            borderColor: '#00d18c',
-            backgroundColor: 'rgba(0, 209, 140, 0.1)',
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.4
-          },
-          {
-            label: 'XRP',
-            data: [],
-            borderColor: '#00aae4',
-            backgroundColor: 'rgba(0, 170, 228, 0.1)',
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.4
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: true,
-            position: 'top',
-            labels: {
-              color: '#999',
-              usePointStyle: true,
-              padding: 15
-            }
-          },
-          tooltip: {
-            backgroundColor: '#111',
-            titleColor: '#fff',
-            bodyColor: '#999',
-            borderColor: '#333',
-            borderWidth: 1,
-            padding: 12,
-            callbacks: {
-              label: ctx => ctx.dataset.label + ': $' + ctx.parsed.y.toFixed(2)
-            }
-          }
+          }]
         },
-        scales: {
-          x: {
-            display: true,
-            grid: { color: '#222', drawBorder: false },
-            ticks: { color: '#666', maxTicksLimit: 10, font: { size: 10 } }
-          },
-          y: {
-            display: true,
-            grid: { color: '#222', drawBorder: false },
-            ticks: {
-              color: '#666',
-              callback: v => '$' + v,
-              font: { size: 10 }
-            }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: '#222' }, ticks: { color: '#666', maxTicksLimit: 8, font: { size: 9 } } },
+            y: { grid: { color: '#222' }, ticks: { color: '#666', font: { size: 9 } } }
           }
-        },
-        interaction: { intersect: false, mode: 'index' }
-      }
-    });
+        }
+      });
+    }
 
-    // ===== SSE Connection =====
-    let lastOperationId = 0;
+    const chartBTC = createPriceChart('chartBTC', '#f7931a', 'BTC');
+    const chartETH = createPriceChart('chartETH', '#627eea', 'ETH');
+    const chartSOL = createPriceChart('chartSOL', '#00d18c', 'SOL');
+    const chartXRP = createPriceChart('chartXRP', '#00aae4', 'XRP');
+
+    const chartsMap = { 'BTC': chartBTC, 'ETH': chartETH, 'SOL': chartSOL, 'XRP': chartXRP };
+    const priceMap = { 'BTC': 'btcPrice', 'ETH': 'ethPrice', 'SOL': 'solPrice', 'XRP': 'xrpPrice' };
+
+    // Historial
     const historialOps = [];
 
+    // SSE Connection
     function connectSSE() {
       const evtSource = new EventSource('/api/binance/sse/');
       
       evtSource.onopen = () => {
-        document.getElementById('sseStatus').textContent = 'CONECTADO';
-        document.getElementById('sseStatus').className = 'badge badge-green pulse';
+        const el = document.getElementById('sseStatus');
+        el.textContent = 'CONECTADO';
+        el.className = 'badge badge-green pulse';
       };
 
       evtSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          
-          if (data.type === 'update') {
-            updateDashboard(data);
-          } else if (data.type === 'error') {
-            console.error('SSE Error:', data.message);
-          }
+          if (data.type === 'update') updateDashboard(data);
         } catch (e) {
           console.error('Parse error:', e);
         }
       };
 
       evtSource.onerror = () => {
-        document.getElementById('sseStatus').textContent = 'RECONECTANDO';
-        document.getElementById('sseStatus').className = 'badge badge-red pulse';
+        const el = document.getElementById('sseStatus');
+        el.textContent = 'RECONECTANDO';
+        el.className = 'badge badge-red pulse';
       };
     }
 
     function updateDashboard(data) {
       // Stats
-      document.getElementById('balanceDisplay').textContent = '$' + data.balance_ficticio.toFixed(2);
-      document.getElementById('balanceDisplay').className = 'stat-value ' + (data.balance_ficticio >= 1000 ? 'green' : 'red');
-      document.getElementById('wrDisplay').textContent = data.wr_global + '%';
-      document.getElementById('wrDisplay').className = 'stat-value ' + (data.wr_global >= 55 ? 'green' : data.wr_global >= 50 ? 'yellow' : 'red');
-      document.getElementById('profitDisplay').textContent = '$' + data.total_profit.toFixed(2);
-      document.getElementById('profitDisplay').className = 'stat-value ' + (data.total_profit >= 0 ? 'green' : 'red');
-      document.getElementById('totalOpsDisplay').textContent = data.total_ops;
-      document.getElementById('winsDisplay').textContent = data.total_wins;
-      document.getElementById('opsDisplay').textContent = data.total_ops;
+      document.getElementById('balanceDisplay').textContent = '$' + (data.balance_ficticio || 0).toFixed(2);
+      document.getElementById('balanceDisplay').className = 'stat-value ' + ((data.balance_ficticio || 0) >= 1000 ? 'green' : 'red');
+      document.getElementById('wrDisplay').textContent = (data.wr_global || 0).toFixed(1) + '%';
+      document.getElementById('wrDisplay').className = 'stat-value ' + ((data.wr_global || 0) >= 55 ? 'green' : (data.wr_global || 0) >= 50 ? 'yellow' : 'red');
+      document.getElementById('profitDisplay').textContent = '$' + (data.total_profit || 0).toFixed(2);
+      document.getElementById('profitDisplay').className = 'stat-value ' + ((data.total_profit || 0) >= 0 ? 'green' : 'red');
+      document.getElementById('totalOpsDisplay').textContent = data.total_ops || 0;
+      document.getElementById('winsDisplay').textContent = data.total_wins || 0;
+      document.getElementById('opsDisplay').textContent = data.total_ops || 0;
       
-      const roi = ((data.balance_ficticio - 1000) / 1000 * 100).toFixed(1);
+      const roi = (((data.balance_ficticio || 1000) - 1000) / 1000 * 100).toFixed(1);
       document.getElementById('roiDisplay').textContent = 'ROI: ' + roi + '%';
 
-      // Última operación
-      if (data.ultima_operacion) {
-        const op = data.ultima_operacion;
-        document.getElementById('lastOpDisplay').textContent = op.hora;
-        
-        // Agregar al historial si no existe
-        if (!historialOps.find(o => o.num === op.num)) {
-          historialOps.unshift(op);
-          updateHistoryTable();
-        }
-      }
-
       // Stats por activo
-      updateStatsTable(data.activos);
+      updateStatsTable(data.activos || []);
 
-      // Bar chart por activo
-      updateBarChart(data.activos);
+      // Bar chart
+      updateBarChart(data.activos || []);
 
-      // Line chart de balance
+      // Balance chart
       if (data.balance_points && data.balance_points.length > 0) {
         balanceChart.data.labels = data.balance_points.map(p => p.x);
         balanceChart.data.datasets[0].data = data.balance_points.map(p => p.y);
         balanceChart.update('none');
       }
 
-      // Price chart - ticks de cada activo
+      // Price charts - 4 separados
       if (data.ticks) {
-        const symOrder = ['BTC', 'ETH', 'SOL', 'XRP'];
-        symOrder.forEach((sym, idx) => {
-          if (data.ticks[sym] && data.ticks[sym].length > 0) {
-            priceChart.data.labels = data.ticks[sym].map(t => t.t);
-            priceChart.data.datasets[idx].data = data.ticks[sym].map(t => t.p);
+        ['BTC', 'ETH', 'SOL', 'XRP'].forEach(sym => {
+          if (data.ticks[sym] && data.ticks[sym].length > 0 && chartsMap[sym]) {
+            chartsMap[sym].data.labels = data.ticks[sym].map(t => t.t);
+            chartsMap[sym].data.datasets[0].data = data.ticks[sym].map(t => t.p);
+            chartsMap[sym].update('none');
+            
+            // Actualizar precio actual
+            const lastPrice = data.ticks[sym][data.ticks[sym].length - 1].p;
+            const priceEl = document.getElementById(priceMap[sym]);
+            if (priceEl) priceEl.textContent = lastPrice.toFixed(2);
           }
         });
-        priceChart.update('none');
+      }
+
+      // Última operación
+      if (data.ultima_operacion) {
+        const op = data.ultima_operacion;
+        if (!historialOps.find(o => o.num === op.num)) {
+          historialOps.unshift(op);
+          updateHistoryTable();
+        }
       }
     }
 
@@ -688,11 +616,13 @@
       const container = document.getElementById('barChart');
       container.innerHTML = '';
       
+      if (activos.length === 0) return;
+      
       const maxAbsProfit = Math.max(...activos.map(a => Math.abs(a.profit)), 1);
       
       activos.forEach(a => {
         const isPositive = a.profit >= 0;
-        const widthPercent = (Math.abs(a.profit) / maxAbsProfit * 45); // 45% max
+        const widthPercent = (Math.abs(a.profit) / maxAbsProfit * 45);
         
         const item = document.createElement('div');
         item.className = 'bar-item';
@@ -704,7 +634,7 @@
               ${isPositive ? '+' : ''}$${a.profit.toFixed(2)}
             </div>
           </div>
-          <div class="bar-value ${isPositive ? 'win' : 'loss'}">${a.wr.toFixed(1)}% WR</div>
+          <div class="bar-value ${isPositive ? 'win' : 'loss'}">${a.wr.toFixed(1)}%</div>
         `;
         container.appendChild(item);
       });
@@ -733,14 +663,13 @@
 
     // Clock
     function updateClock() {
-      const now = new Date();
       document.getElementById('clockDisplay').textContent = 
-        now.toLocaleTimeString('es-CO', { hour12: false });
+        new Date().toLocaleTimeString('es-CO', { hour12: false });
     }
     setInterval(updateClock, 1000);
     updateClock();
 
-    // Connect SSE on load
+    // Start SSE
     connectSSE();
   </script>
 </body>

@@ -1,6 +1,6 @@
 """
-BOT BINANCE CON INTEGRACION DJANGO
-Guarda operaciones en la base de datos via API
+BOT BINANCE - OPERACIONES DE 60 SEGUNDOS
+Versión corregida con logs visibles
 """
 
 import asyncio
@@ -8,42 +8,52 @@ import json
 import time
 import sys
 from datetime import datetime, timezone
-from collections import deque
 from dataclasses import dataclass, field
-from typing import Deque, Optional
+from typing import Optional, Tuple
 import websockets
 import statistics
 import urllib.request
-import urllib.error
 
 # ============================================================
 #  CONFIGURACION
 # ============================================================
 
 DJANGO_API_URL = "http://127.0.0.1:8000/api/binance/guardar/"
-DJANGO_ESTADO_URL = "http://127.0.0.1:8000/api/estado_binance/"
+DJANGO_TICK_URL = "http://127.0.0.1:8000/api/binance/tick/"
 
-STAKE = 10.0  # $10 por operación ficticia
-PAYOUT = 0.95  # 95% de payout
+STAKE = 1.0
+PAYOUT = 0.95
+DURACION_SEGUNDOS = 60
+COOLDOWN_TICKS = 150  # ~3-5 minutos entre operaciones
 
-# Probabilidad de win según confianza
-PROB_WIN_ALTA = 0.65
-PROB_WIN_MEDIA = 0.55
-PROB_WIN_BAJA = 0.50
+
+# ============================================================
+#  OPERACIÓN PENDIENTE
+# ============================================================
+
+@dataclass
+class OperacionPendiente:
+    simbolo: str
+    direccion: str
+    precio_entrada: float
+    tiempo_entrada: float
+    razon: str
+    confianza: str
+    num_operacion: int
 
 
 # ============================================================
 #  INDICADORES
 # ============================================================
 
-def calcular_ema(precio: float, ema_anterior: Optional[float], periodo: int) -> float:
+def calcular_ema(precio, ema_anterior, periodo):
     if ema_anterior is None:
         return precio
     alpha = 2.0 / (periodo + 1.0)
     return (alpha * precio) + ((1.0 - alpha) * ema_anterior)
 
 
-def calcular_rsi(precios: list, periodo: int = 14) -> float:
+def calcular_rsi(precios, periodo=14):
     if len(precios) < periodo + 1:
         return 50.0
     cambios = []
@@ -59,7 +69,7 @@ def calcular_rsi(precios: list, periodo: int = 14) -> float:
     return 100.0 - (100.0 / (1.0 + rs))
 
 
-def calcular_bollinger(precios: list, periodo: int = 20, num_std: float = 2.0) -> tuple:
+def calcular_bollinger(precios, periodo=20, num_std=2.0):
     if len(precios) < periodo:
         return 0.0, 0.0, 0.0
     arr = precios[-periodo:]
@@ -68,12 +78,26 @@ def calcular_bollinger(precios: list, periodo: int = 20, num_std: float = 2.0) -
     return media + (num_std * std), media, media - (num_std * std)
 
 
-def calcular_volatilidad(precios: list, ventana: int = 20) -> float:
-    if len(precios) < ventana + 1:
+def calcular_adx(precios, periodo=14):
+    if len(precios) < periodo + 1:
         return 0.0
-    arr = precios[-ventana-1:]
-    retornos = [(arr[i] - arr[i-1]) / arr[i-1] for i in range(1, len(arr)) if arr[i-1] != 0]
-    return statistics.stdev(retornos) if len(retornos) > 1 else 0.0
+    up_moves = []
+    down_moves = []
+    for i in range(-periodo, 0):
+        change = precios[i] - precios[i-1]
+        if change > 0:
+            up_moves.append(change)
+            down_moves.append(0)
+        else:
+            up_moves.append(0)
+            down_moves.append(abs(change))
+    avg_up = sum(up_moves) / len(up_moves) if up_moves else 0
+    avg_down = sum(down_moves) / len(down_moves) if down_moves else 0
+    if avg_up + avg_down == 0:
+        return 0.0
+    di_plus = (avg_up / (avg_up + avg_down)) * 100
+    di_minus = (avg_down / (avg_up + avg_down)) * 100
+    return abs(di_plus - di_minus)
 
 
 # ============================================================
@@ -85,9 +109,10 @@ class EstadoActivo:
     simbolo: str
     precios: list = field(default_factory=lambda: [])
     ema_rapida: Optional[float] = None
+    ema_media: Optional[float] = None
     ema_lenta: Optional[float] = None
     rsi: float = 50.0
-    volatilidad: float = 0.0
+    adx: float = 0.0
     cooldown: int = 0
     total_ops: int = 0
     wins: int = 0
@@ -95,108 +120,84 @@ class EstadoActivo:
     profit: float = 0.0
     win_streak: int = 0
     loss_streak: int = 0
+    operacion_pendiente: Optional[OperacionPendiente] = None
+    tick_count: int = 0
 
 
 # ============================================================
 #  ESTRATEGIA
 # ============================================================
 
-def evaluar_senal(estado: EstadoActivo, precio: float) -> tuple:
-    """Retorna (decision, razon, confianza)"""
+def evaluar_senal(estado, precio):
     estado.precios.append(precio)
-    
-    # Mantener solo últimos 200 precios
-    if len(estado.precios) > 200:
-        estado.precios = estado.precios[-200:]
+    if len(estado.precios) > 300:
+        estado.precios = estado.precios[-300:]
     
     if estado.cooldown > 0:
         estado.cooldown -= 1
-        return ("NEUTRAL", f"cooldown({estado.cooldown})", "media")
+        return ("NEUTRAL", f"cd{estado.cooldown}", "media")
     
-    if len(estado.precios) < 15:
+    if len(estado.precios) < 60:
         return ("NEUTRAL", "warmup", "baja")
     
-    # Calcular indicadores
     estado.ema_rapida = calcular_ema(precio, estado.ema_rapida, 9)
-    estado.ema_lenta = calcular_ema(precio, estado.ema_lenta, 21)
+    estado.ema_media = calcular_ema(precio, estado.ema_media, 21)
+    estado.ema_lenta = calcular_ema(precio, estado.ema_lenta, 50)
     estado.rsi = calcular_rsi(estado.precios, 14)
-    banda_sup, media_bb, banda_inf = calcular_bollinger(estado.precios, 20, 2.0)
-    estado.volatilidad = calcular_volatilidad(estado.precios, 20)
+    estado.adx = calcular_adx(estado.precios, 14)
     
-    # Tendencia
-    ema_gap = abs(estado.ema_rapida - estado.ema_lenta) / precio * 100
-    tendencia = "ALCISTA" if estado.ema_rapida > estado.ema_lenta else "BAJISTA"
+    ema_gap = abs(estado.ema_media - estado.ema_lenta) / precio * 100
+    tendencia_alcista = estado.ema_media > estado.ema_lenta
+    tendencia_bajista = estado.ema_media < estado.ema_lenta
     
-    # Momentum
     momentum = 0.0
-    if len(estado.precios) >= 6:
-        momentum = (precio - estado.precios[-6]) / estado.precios[-6] * 100
+    if len(estado.precios) >= 15:
+        momentum = (precio - estado.precios[-15]) / estado.precios[-15] * 100
     
-    # Posición en Bollinger
+    banda_sup, media_bb, banda_inf = calcular_bollinger(estado.precios, 20, 2.0)
     precio_vs_bb = 0.5
     if (banda_sup - banda_inf) > 0:
         precio_vs_bb = (precio - banda_inf) / (banda_sup - banda_inf)
     
-    # ===== SEÑALES SIMPLIFICADAS =====
+    triple_alcista = estado.ema_rapida > estado.ema_media > estado.ema_lenta
+    triple_bajista = estado.ema_rapida < estado.ema_media < estado.ema_lenta
     
-    # 1. RSI EXTREMO (más simple - solo RSI)
-    if estado.rsi < 30:
-        estado.cooldown = 2
-        return ("CALL", f"rsi_bajo_{estado.rsi:.0f}", "alta")
+    if ema_gap < 0.2:
+        return ("NEUTRAL", "gap_bajo", "baja")
+    if estado.adx < 20:
+        return ("NEUTRAL", "adx_bajo", "baja")
+    if estado.rsi < 30 or estado.rsi > 70:
+        return ("NEUTRAL", "rsi_extremo", "baja")
+    if not (triple_alcista or triple_bajista):
+        return ("NEUTRAL", "no_triple", "baja")
+    if precio_vs_bb < 0.2 or precio_vs_bb > 0.8:
+        return ("NEUTRAL", "bb_extremo", "baja")
     
-    if estado.rsi > 70:
-        estado.cooldown = 2
-        return ("PUT", f"rsi_alto_{estado.rsi:.0f}", "alta")
+    if triple_alcista and tendencia_alcista and momentum > 0:
+        estado.cooldown = COOLDOWN_TICKS
+        return ("CALL", "alineado_alc", "alta")
     
-    # 2. TEN + PULLBACK
-    if tendencia == "ALCISTA" and precio_vs_bb < 0.4:
-        estado.cooldown = 2
-        return ("CALL", f"pullback_alcista", "media")
+    if triple_bajista and tendencia_bajista and momentum < 0:
+        estado.cooldown = COOLDOWN_TICKS
+        return ("PUT", "alineado_baj", "alta")
     
-    if tendencia == "BAJISTA" and precio_vs_bb > 0.6:
-        estado.cooldown = 2
-        return ("PUT", f"pullback_bajista", "media")
-    
-    # 3. MOMENTUM FUERTE
-    if abs(momentum) > 0.3:
-        if momentum > 0:
-            estado.cooldown = 2
-            return ("CALL", f"momentum_up", "media")
-        else:
-            estado.cooldown = 2
-            return ("PUT", f"momentum_down", "media")
-    
-    # 4. EMA CROSS
-    if ema_gap > 0.1:
-        if tendencia == "ALCISTA":
-            estado.cooldown = 2
-            return ("CALL", f"ema_cross_up", "media")
-        else:
-            estado.cooldown = 2
-            return ("PUT", f"ema_cross_down", "media")
-    
-    return ("NEUTRAL", f"sin_señal_rsi{estado.rsi:.0f}", "baja")
+    return ("NEUTRAL", "sin_señal", "baja")
 
 
 # ============================================================
-#  GUARDAR OPERACION EN DJANGO
+#  GUARDAR EN DJANGO
 # ============================================================
 
-def guardar_operacion(simbolo: str, direccion: str, precio: float, 
-                      razon: str, confianza: str, es_win: bool, profit: float):
-    """Guarda la operación en Django via API"""
-    import random
-    
+def guardar_operacion(simbolo, direccion, precio_entrada, precio_salida, razon, confianza, es_win, profit, num):
     data = {
         "simbolo": simbolo,
         "direccion": direccion,
-        "precio_entrada": precio,
-        "razon": razon,
+        "precio_entrada": precio_entrada,
+        "razon": f"{razon}_out:{precio_salida:.2f}",
         "confianza": confianza,
         "es_win": es_win,
         "profit": profit,
     }
-    
     try:
         req = urllib.request.Request(
             DJANGO_API_URL,
@@ -205,21 +206,15 @@ def guardar_operacion(simbolo: str, direccion: str, precio: float,
             method='POST'
         )
         response = urllib.request.urlopen(req, timeout=5)
-        result = json.loads(response.read())
-        return result
+        return json.loads(response.read())
     except Exception as e:
-        print(f"Error guardando operación: {e}")
+        print(f"ERROR guardando: {e}", flush=True)
         return None
 
 
-def guardar_tick(simbolo: str, precio: float):
-    """Guarda tick de precio en Django via API"""
-    DJANGO_TICK_URL = "http://127.0.0.1:8000/api/binance/tick/"
-    data = {
-        "simbolo": simbolo,
-        "precio": precio,
-    }
+def guardar_tick(simbolo, precio):
     try:
+        data = {"simbolo": simbolo, "precio": precio}
         req = urllib.request.Request(
             DJANGO_TICK_URL,
             data=json.dumps(data).encode('utf-8'),
@@ -227,77 +222,64 @@ def guardar_tick(simbolo: str, precio: float):
             method='POST'
         )
         urllib.request.urlopen(req, timeout=2)
-    except Exception:
-        pass  # Silently ignore tick errors
+    except:
+        pass
 
 
 # ============================================================
-#  SIMULAR OPERACIÓN
+#  VERIFICAR PENDIENTES
 # ============================================================
 
-def simular_operacion(estado: EstadoActivo, decision: str, confianza: str, razon: str, precio: float):
-    """Simula operación ficticia"""
-    import random
+def verificar_pendientes(estado, precio_actual, hora):
+    if estado.operacion_pendiente is None:
+        return
     
-    # Probabilidad según confianza
-    if confianza == "alta":
-        prob_win = PROB_WIN_ALTA
-    elif confianza == "media":
-        prob_win = PROB_WIN_MEDIA
-    else:
-        prob_win = PROB_WIN_BAJA
+    op = estado.operacion_pendiente
+    tiempo_transcurrido = time.time() - op.tiempo_entrada
     
-    # Ajustar por volatilidad
-    if estado.volatilidad > 0.01:
-        prob_win -= 0.05
-    
-    # Simular resultado
-    es_win = random.random() < prob_win
-    
-    if es_win:
-        profit = STAKE * PAYOUT  # $9.50
-        estado.wins += 1
-        estado.win_streak += 1
-        estado.loss_streak = 0
-    else:
-        profit = -STAKE  # -$10.00
-        estado.losses += 1
-        estado.loss_streak += 1
-        estado.win_streak = 0
-    
-    estado.total_ops += 1
-    estado.profit += profit
-    
-    # Guardar en Django
-    resultado = guardar_operacion(estado.simbolo, decision, precio, razon, confianza, es_win, profit)
-    
-    wr = (estado.wins / estado.total_ops * 100) if estado.total_ops > 0 else 0
-    
-    return es_win, profit, wr
+    if tiempo_transcurrido >= DURACION_SEGUNDOS:
+        es_win = (precio_actual > op.precio_entrada) if op.direccion == "CALL" else (precio_actual < op.precio_entrada)
+        
+        profit = (STAKE * PAYOUT) if es_win else -STAKE
+        estado.total_ops += 1
+        estado.profit += profit
+        
+        if es_win:
+            estado.wins += 1
+            estado.win_streak += 1
+            estado.loss_streak = 0
+        else:
+            estado.losses += 1
+            estado.loss_streak += 1
+            estado.win_streak = 0
+        
+        guardar_operacion(op.simbolo, op.direccion, op.precio_entrada, precio_actual, op.razon, op.confianza, es_win, profit, op.num_operacion)
+        
+        wr = (estado.wins / estado.total_ops * 100) if estado.total_ops > 0 else 0
+        resultado = "WIN" if es_win else "LOSS"
+        print(f"[{hora}] {op.simbolo}: {op.direccion} | ${op.precio_entrada:.2f} -> ${precio_actual:.2f} | {resultado} ({profit:+.2f}) | WR:{wr:.1f}%", flush=True)
+        estado.operacion_pendiente = None
 
 
 # ============================================================
-#  WEBSOCKET BINANCE
+#  WEBSOCKET
 # ============================================================
 
-async def conectar_binance(simbolos: list):
-    """Conecta a Binance WebSocket"""
-    
+async def conectar_binance(simbolos):
     streams = [f"{sym.lower()}usdt@trade" for sym in simbolos]
     url = f"wss://stream.binance.com:9443/stream?streams={'/'.join(streams)}"
     
     estados = {sym: EstadoActivo(simbolo=sym) for sym in simbolos}
+    num_global = 0
     
-    print("="*60)
-    print("  BINANCE BOT - INTEGRADO CON DJANGO")
-    print(f"  Activos: {', '.join(simbolos)}")
-    print(f"  Stake: ${STAKE} | Payout: {PAYOUT*100}%")
-    print("="*60)
-    print()
+    print("="*50, flush=True)
+    print("  BINANCE BOT - 60 SEGUNDOS", flush=True)
+    print(f"  Activos: {', '.join(simbolos)}", flush=True)
+    print(f"  Stake: ${STAKE} | Duración: {DURACION_SEGUNDOS}s", flush=True)
+    print("="*50, flush=True)
     
-    async with websockets.connect(url) as ws:
-        print("[OK] Conectado a Binance WebSocket")
-        print()
+    async with websockets.connect(url, ping_interval=20, ping_timeout=10) as ws:
+        print("[OK] Conectado a Binance", flush=True)
         
         async for msg in ws:
             try:
@@ -314,28 +296,34 @@ async def conectar_binance(simbolos: list):
                     continue
                 
                 estado = estados[simbolo]
+                estado.tick_count += 1
                 
-                # Guardar tick cada 5 ticks por activo (para gráfico más fluido)
-                tick_count = getattr(estado, 'tick_count', 0) + 1
-                estado.tick_count = tick_count
-                if tick_count % 5 == 0:
+                # Guardar tick cada 10
+                if estado.tick_count % 10 == 0:
                     guardar_tick(simbolo, precio)
                 
-                # Evaluar señal
-                decision, razon, confianza = evaluar_senal(estado, precio)
+                # Verificar pendientes
+                verificar_pendientes(estado, precio, hora)
                 
-                if decision != "NEUTRAL":
-                    # Simular operación
-                    es_win, profit, wr = simular_operacion(estado, decision, razon, confianza, precio)
+                # Nueva señal
+                if estado.operacion_pendiente is None:
+                    decision, razon, confianza = evaluar_senal(estado, precio)
                     
-                    # Mostrar resultado
-                    resultado = "WIN" if es_win else "LOSS"
-                    print(f"[{hora}] {simbolo}: $" + str(round(precio, 2)) + 
-                          f" | {decision} | {resultado} ({profit:+.2f}) | " +
-                          f"WR:{wr:.1f}% | Ops:{estado.total_ops}")
+                    if decision != "NEUTRAL":
+                        num_global += 1
+                        estado.operacion_pendiente = OperacionPendiente(
+                            simbolo=simbolo,
+                            direccion=decision,
+                            precio_entrada=precio,
+                            tiempo_entrada=time.time(),
+                            razon=razon,
+                            confianza=confianza,
+                            num_operacion=num_global
+                        )
+                        print(f"[{hora}] {simbolo}: ENTRADA {decision} @ ${precio:.2f} | {razon}", flush=True)
                 
             except Exception as e:
-                print(f"Error: {e}")
+                print(f"ERROR: {e}", flush=True)
 
 
 # ============================================================
@@ -344,7 +332,17 @@ async def conectar_binance(simbolos: list):
 
 async def main():
     simbolos = ["BTC", "ETH", "SOL", "XRP"]
-    await conectar_binance(simbolos)
+    
+    while True:
+        try:
+            print("[CONECTANDO] Binance...", flush=True)
+            await conectar_binance(simbolos)
+        except websockets.exceptions.ConnectionClosedError as e:
+            print(f"[DESCONECTADO] {e}", flush=True)
+            await asyncio.sleep(5)
+        except Exception as e:
+            print(f"[ERROR] {e}", flush=True)
+            await asyncio.sleep(10)
 
 
 if __name__ == "__main__":
