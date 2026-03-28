@@ -16,11 +16,12 @@ class DecisionRiesgo:
 
 class GestorRiesgo:
     """
-    GESTIÓN DE RIESGO ESTRICTA (INNEGOCIABLE).
+    GESTIÓN DE RIESGO SIMPLIFICADA.
 
     REGLAS:
-    - RIESGO MÁXIMO POR OPERACIÓN: 1% (CONFIGURABLE).
-    - BLOQUEO SI SE SUPERA DRAWDOWN (CONFIGURABLE).
+    - El control de riesgo se hace vía CICLO (Take Profit / Stop Loss)
+    - No bloqueamos por drawdown histórico (no se recupera)
+    - Solo verificamos capital positivo
 
     NOTA:
     - ESTE MÓDULO NO DECIDE COMPRA/VENTA. SOLO PERMITE O BLOQUEA Y CALCULA TAMAÑOS.
@@ -42,17 +43,12 @@ class GestorRiesgo:
 
     def registrar_equity(self, capital_actual: float) -> None:
         """
-        ACTUALIZA CAPITAL Y EVALÚA DRAWDOWN PARA BLOQUEO.
+        ACTUALIZA CAPITAL.
+        El bloqueo por drawdown se maneja en el CICLO (TP/SL), no aquí.
         """
         self.capital_actual = float(capital_actual)
         self.max_capital_historico = max(self.max_capital_historico, self.capital_actual)
-
-        if self.max_capital_historico <= 0.0:
-            self.bloqueado = True
-        else:
-            drawdown = 1.0 - (self.capital_actual / self.max_capital_historico)
-            if drawdown >= self.max_drawdown:
-                self.bloqueado = True
+        # NO bloqueamos por drawdown - el ciclo maneja el riesgo
 
     def riesgo_disponible(self) -> float:
         """
