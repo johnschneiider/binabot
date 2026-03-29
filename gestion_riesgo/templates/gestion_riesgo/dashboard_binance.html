@@ -1,10 +1,9 @@
+{% extends "base.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es" data-theme="dark">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Binance - Trading Bot</title>
+
+{% block title %}Dashboard Binance - Trading Bot{% endblock %}
+
+{% block extra_css %}
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
@@ -25,16 +24,7 @@
       --cyan: #06b6d4;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-1);
-      color: var(--text-1);
-      min-height: 100vh;
-    }
-
-    .container {
+    .binance-container {
       max-width: 100%;
       margin: 0 auto;
       padding: 20px;
@@ -85,6 +75,12 @@
       background: rgba(239, 68, 68, 0.15);
       color: var(--red);
       border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .time-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: var(--text-2);
     }
 
     .stats-row {
@@ -166,44 +162,9 @@
       border-radius: 2px;
     }
 
-    .table-container {
-      overflow-x: auto;
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    table {
-      width: 100%;
-      min-width: 500px;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    th {
-      text-align: left;
-      padding: 12px;
-      font-weight: 600;
-      color: var(--text-3);
-      text-transform: uppercase;
-      font-size: 11px;
-      letter-spacing: 0.5px;
-      border-bottom: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      background: var(--bg-2);
-      z-index: 1;
-    }
-
-    td {
-      padding: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    tr:hover { background: var(--bg-3); }
-
-    .mono { font-family: 'JetBrains Mono', monospace; }
     .win { color: var(--green); }
     .loss { color: var(--red); }
+    .yellow { color: var(--yellow); }
 
     .chart-container {
       position: relative;
@@ -249,119 +210,41 @@
 
     .pulse { animation: pulse 2s infinite; }
 
-    .time-display {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
-      color: var(--text-2);
+    .table-container {
+      overflow-x: auto;
+      max-height: 400px;
+      overflow-y: auto;
     }
 
-    .charts-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
+    table {
       width: 100%;
+      min-width: 500px;
+      border-collapse: collapse;
+      font-size: 13px;
     }
-    
-    .price-charts-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-      width: 100%;
-    }
-    
-    .price-chart-box {
-      background: var(--bg-3);
-      border-radius: 8px;
+
+    th {
+      text-align: left;
       padding: 12px;
-      width: 100%;
-      overflow: hidden;
-    }
-    
-    .price-chart-box canvas {
-      width: 100% !important;
-      height: 180px !important;
-      max-width: 100%;
-    }
-    
-    .config-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-    }
-    
-    @media (max-width: 768px) {
-      .config-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .config-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    
-    .config-item {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    
-    .config-item label {
-      font-size: 12px;
+      font-weight: 600;
       color: var(--text-3);
       text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--bg-2);
+      z-index: 1;
     }
-    
-    .config-item input {
-      background: var(--bg-3);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px;
-      color: var(--text-1);
-      font-size: 14px;
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .mono {
       font-family: 'JetBrains Mono', monospace;
-    }
-    
-    .config-item input:focus {
-      outline: none;
-      border-color: var(--yellow);
-    }
-    
-    .btn-primary {
-      background: var(--green);
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    
-    .btn-primary:hover {
-      opacity: 0.9;
-    }
-    
-    .btn-secondary {
-      background: var(--bg-3);
-      color: var(--text-2);
-      border: 1px solid var(--border);
-      padding: 12px 24px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    
-    .btn-secondary:hover {
-      background: var(--bg-4);
-    }
-    
-    @media (max-width: 480px) {
-      .price-chart-box canvas {
-        height: 150px !important;
-      }
     }
 
     .bar-chart {
@@ -385,33 +268,21 @@
 
     .bar-track {
       flex: 1;
-      height: 32px;
-      background: var(--bg-4);
-      border-radius: 6px;
+      height: 24px;
+      background: var(--bg-3);
+      border-radius: 4px;
       position: relative;
       overflow: hidden;
     }
 
     .bar-fill {
       height: 100%;
-      border-radius: 6px;
-      transition: width 0.5s ease;
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      padding-right: 10px;
-      font-size: 12px;
-      font-weight: 700;
-      font-family: 'JetBrains Mono', monospace;
+      border-radius: 4px;
+      transition: width 0.3s;
     }
 
-    .bar-fill.positive {
-      background: linear-gradient(90deg, rgba(34, 197, 94, 0.3), var(--green));
-    }
-
-    .bar-fill.negative {
-      background: linear-gradient(90deg, var(--red), rgba(239, 68, 68, 0.3));
-    }
+    .bar-fill.positive { background: var(--green); }
+    .bar-fill.negative { background: var(--red); }
 
     .bar-value {
       width: 80px;
@@ -433,7 +304,7 @@
 
     /* Responsive */
     @media (max-width: 480px) {
-      .container { 
+      .binance-container { 
         padding: 10px; 
         max-width: 100%;
         overflow-x: hidden;
@@ -482,6 +353,10 @@
       .price-charts-grid {
         gap: 10px;
       }
+      .price-charts-grid > div {
+        padding: 8px;
+      }
+      
       table { 
         font-size: 11px; 
       }
@@ -499,10 +374,19 @@
         font-size: 12px;
       }
     }
+
+    @media (min-width: 481px) and (max-width: 768px) {
+      .binance-container { padding: 15px; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .stat-card { padding: 14px; }
+      .chart-container { height: 180px; }
+      .price-charts-grid canvas { height: 150px; }
+    }
   </style>
-</head>
-<body>
-  <div class="container">
+{% endblock %}
+
+{% block content %}
+<div class="binance-container">
     <!-- HEADER -->
     <div class="header">
       <div>
@@ -1132,5 +1016,5 @@
     connectSSE();
     cargarConfig();
   </script>
-</body>
-</html>
+</div>
+{% endblock %}
