@@ -21,10 +21,45 @@ import urllib.request
 DJANGO_API_URL = "http://127.0.0.1:8000/api/binance/guardar/"
 DJANGO_TICK_URL = "http://127.0.0.1:8000/api/binance/tick/"
 
+# Defaults (se sobrescriben desde la base de datos)
 STAKE = 1.0
 PAYOUT = 0.95
 DURACION_SEGUNDOS = 60
-COOLDOWN_TICKS = 150  # ~3-5 minutos entre operaciones
+COOLDOWN_TICKS = 150
+EMA_GAP_MIN = 0.2
+ADX_MIN = 20.0
+RSI_MIN = 30.0
+RSI_MAX = 70.0
+BB_MIN = 0.2
+BB_MAX = 0.8
+
+def cargar_configuracion():
+    """Carga la configuración desde la base de datos"""
+    global STAKE, PAYOUT, DURACION_SEGUNDOS, COOLDOWN_TICKS
+    global EMA_GAP_MIN, ADX_MIN, RSI_MIN, RSI_MAX, BB_MIN, BB_MAX
+    
+    try:
+        import os
+        import django
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'quant_deriv_bot.settings')
+        django.setup()
+        from gestion_riesgo.models import ConfiguracionEstrategia
+        
+        config = ConfiguracionEstrategia.get_activa()
+        STAKE = config.stake
+        PAYOUT = config.payout
+        DURACION_SEGUNDOS = config.duracion_segundos
+        COOLDOWN_TICKS = config.cooldown_ticks
+        EMA_GAP_MIN = config.ema_gap_min
+        ADX_MIN = config.adx_min
+        RSI_MIN = config.rsi_min
+        RSI_MAX = config.rsi_max
+        BB_MIN = config.bb_min
+        BB_MAX = config.bb_max
+        
+        print(f"[CONFIG] Cargada: STAKE=${STAKE}, DUR={DURACION_SEGUNDOS}s, CD={COOLDOWN_TICKS}, EMA>={EMA_GAP_MIN}%, ADX>={ADX_MIN}, RSI={RSI_MIN}-{RSI_MAX}", flush=True)
+    except Exception as e:
+        print(f"[CONFIG] Error cargando config: {e} - usando defaults", flush=True)
 
 
 # ============================================================
@@ -177,20 +212,32 @@ def evaluar_senal(estado, precio):
         if precio_vs_bb < 0.2 or precio_vs_bb > 0.8:
             razones_falla.append(f"bb extremo({precio_vs_bb:.2f})")
         
-        if razones_falla:
+        razones_falla = []
+        if ema_gap < EMA_GAP_MIN:
+            razones_falla.append(f"gap bajo({ema_gap:.3f}%)")
+        if estado.adx < ADX_MIN:
+            razones_falla.append(f"adx bajo({estado.adx:.0f})")
+        if estado.rsi < RSI_MIN or estado.rsi > RSI_MAX:
+            razones_falla.append(f"rsi {estado.rsi:.0f}")
+        if not (triple_alcista or triple_bajista):
+            razones_falla.append("no triple EMA")
+        if precio_vs_bb < BB_MIN or precio_vs_bb > BB_MAX:
+            razones_falla.append(f"bb extremo({precio_vs_bb:.2f})")
+        
+        if DEBUG and razones_falla:
             print(f"[{estado.simbolo}] NO ENTRA: {', '.join(razones_falla)}", flush=True)
-        else:
+        elif DEBUG:
             print(f"[{estado.simbolo}] CONDICIONES OK - evaluando entrada...", flush=True)
     
-    if ema_gap < 0.2:
+    if ema_gap < EMA_GAP_MIN:
         return ("NEUTRAL", "gap_bajo", "baja")
-    if estado.adx < 20:
+    if estado.adx < ADX_MIN:
         return ("NEUTRAL", "adx_bajo", "baja")
-    if estado.rsi < 30 or estado.rsi > 70:
+    if estado.rsi < RSI_MIN or estado.rsi > RSI_MAX:
         return ("NEUTRAL", "rsi_extremo", "baja")
     if not (triple_alcista or triple_bajista):
         return ("NEUTRAL", "no_triple", "baja")
-    if precio_vs_bb < 0.2 or precio_vs_bb > 0.8:
+    if precio_vs_bb < BB_MIN or precio_vs_bb > BB_MAX:
         return ("NEUTRAL", "bb_extremo", "baja")
     
     if triple_alcista and tendencia_alcista and momentum > 0:
@@ -351,6 +398,9 @@ async def conectar_binance(simbolos):
 # ============================================================
 
 async def main():
+    # Cargar configuración desde la base de datos
+    cargar_configuracion()
+    
     simbolos = ["BTC", "ETH", "SOL", "XRP"]
     
     while True:

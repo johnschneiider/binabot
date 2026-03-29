@@ -697,3 +697,73 @@ class TickBinance(models.Model):
         return f"{self.simbolo}: ${self.precio}"
 
 
+class ConfiguracionEstrategia(models.Model):
+    """
+    Configuración de la estrategia de trading.
+    Se guarda en la base de datos para poder modificarla desde el dashboard.
+    """
+    nombre = models.CharField(max_length=50, default="binance")
+    
+    # Condiciones de entrada
+    ema_gap_min = models.FloatField(default=0.2, help_text="Gap mínimo entre EMA21 y EMA50 (%)")
+    adx_min = models.FloatField(default=20.0, help_text="ADX mínimo para tendencia")
+    rsi_min = models.FloatField(default=30.0, help_text="RSI mínimo")
+    rsi_max = models.FloatField(default=70.0, help_text="RSI máximo")
+    bb_min = models.FloatField(default=0.2, help_text="Posición mínima en Bollinger Bands")
+    bb_max = models.FloatField(default=0.8, help_text="Posición máxima en Bollinger Bands")
+    
+    # Configuración de operaciones
+    cooldown_ticks = models.IntegerField(default=150, help_text="Ticks de espera entre operaciones")
+    stake = models.FloatField(default=1.0, help_text="Monto por operación")
+    duracion_segundos = models.IntegerField(default=60, help_text="Duración de cada operación")
+    payout = models.FloatField(default=0.95, help_text="Payout esperado")
+    
+    # Estado
+    activa = models.BooleanField(default=True, help_text="Si está activa, el bot usa esta config")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Configuración Estrategia"
+        verbose_name_plural = "Configuraciones Estrategia"
+    
+    def __str__(self) -> str:
+        return f"Configuración {self.nombre} - EMA:{self.ema_gap_min}% ADX:{self.adx_min} RSI:{self.rsi_min}-{self.rsi_max}"
+    
+    @classmethod
+    def get_activa(cls):
+        """Retorna la configuración activa o la默认值"""
+        config = cls.objects.filter(activa=True).first()
+        if not config:
+            config = cls.objects.create(
+                nombre="binance",
+                ema_gap_min=0.2,
+                adx_min=20.0,
+                rsi_min=30.0,
+                rsi_max=70.0,
+                bb_min=0.2,
+                bb_max=0.8,
+                cooldown_ticks=150,
+                stake=1.0,
+                duracion_segundos=60,
+                payout=0.95,
+                activa=True
+            )
+        return config
+    
+    def reset_to_default(self):
+        """Restablece todos los valores a los defaults"""
+        self.ema_gap_min = 0.2
+        self.adx_min = 20.0
+        self.rsi_min = 30.0
+        self.rsi_max = 70.0
+        self.bb_min = 0.2
+        self.bb_max = 0.8
+        self.cooldown_ticks = 150
+        self.stake = 1.0
+        self.duracion_segundos = 60
+        self.payout = 0.95
+        self.save()
+
+

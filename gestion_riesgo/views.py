@@ -2227,3 +2227,78 @@ def sse_binance_stream(request):
         }
     )
 
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def api_configuracion_estrategia(request):
+    """
+    API para obtener y modificar la configuración de la estrategia.
+    """
+    from django.views.decorators.http import require_http_methods
+    
+    config = ConfiguracionEstrategia.get_activa()
+    
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            
+            if data.get("reset"):
+                config.reset_to_default()
+            else:
+                if "ema_gap_min" in data:
+                    config.ema_gap_min = float(data["ema_gap_min"])
+                if "adx_min" in data:
+                    config.adx_min = float(data["adx_min"])
+                if "rsi_min" in data:
+                    config.rsi_min = float(data["rsi_min"])
+                if "rsi_max" in data:
+                    config.rsi_max = float(data["rsi_max"])
+                if "bb_min" in data:
+                    config.bb_min = float(data["bb_min"])
+                if "bb_max" in data:
+                    config.bb_max = float(data["bb_max"])
+                if "cooldown_ticks" in data:
+                    config.cooldown_ticks = int(data["cooldown_ticks"])
+                if "stake" in data:
+                    config.stake = float(data["stake"])
+                if "duracion_segundos" in data:
+                    config.duracion_segundos = int(data["duracion_segundos"])
+                if "payout" in data:
+                    config.payout = float(data["payout"])
+                
+                config.save()
+            
+            return JsonResponse({
+                "ok": True,
+                "config": {
+                    "ema_gap_min": config.ema_gap_min,
+                    "adx_min": config.adx_min,
+                    "rsi_min": config.rsi_min,
+                    "rsi_max": config.rsi_max,
+                    "bb_min": config.bb_min,
+                    "bb_max": config.bb_max,
+                    "cooldown_ticks": config.cooldown_ticks,
+                    "stake": config.stake,
+                    "duracion_segundos": config.duracion_segundos,
+                    "payout": config.payout,
+                }
+            })
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+    
+    # GET
+    return JsonResponse({
+        "config": {
+            "ema_gap_min": config.ema_gap_min,
+            "adx_min": config.adx_min,
+            "rsi_min": config.rsi_min,
+            "rsi_max": config.rsi_max,
+            "bb_min": config.bb_min,
+            "bb_max": config.bb_max,
+            "cooldown_ticks": config.cooldown_ticks,
+            "stake": config.stake,
+            "duracion_segundos": config.duracion_segundos,
+            "payout": config.payout,
+        }
+    })
+

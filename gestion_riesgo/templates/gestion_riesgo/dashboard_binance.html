@@ -283,6 +283,81 @@
       max-width: 100%;
     }
     
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    
+    @media (max-width: 768px) {
+      .config-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .config-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    .config-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .config-item label {
+      font-size: 12px;
+      color: var(--text-3);
+      text-transform: uppercase;
+    }
+    
+    .config-item input {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      color: var(--text-1);
+      font-size: 14px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .config-item input:focus {
+      outline: none;
+      border-color: var(--yellow);
+    }
+    
+    .btn-primary {
+      background: var(--green);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+    
+    .btn-secondary {
+      background: var(--bg-3);
+      color: var(--text-2);
+      border: 1px solid var(--border);
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .btn-secondary:hover {
+      background: var(--bg-4);
+    }
+    
     @media (max-width: 480px) {
       .price-chart-box canvas {
         height: 150px !important;
@@ -515,6 +590,57 @@
           </div>
           <canvas id="chartXRP"></canvas>
         </div>
+      </div>
+    </div>
+
+    <!-- CONFIGURACIÓN DE LA ESTRATEGIA -->
+    <div class="card">
+      <div class="card-title">Configuración de la Estrategia</div>
+      <div class="config-grid" id="configSection">
+        <div class="config-item">
+          <label>EMA Gap Mín (%)</label>
+          <input type="number" step="0.01" id="config_ema_gap_min" value="0.2">
+        </div>
+        <div class="config-item">
+          <label>ADX Mín</label>
+          <input type="number" step="1" id="config_adx_min" value="20">
+        </div>
+        <div class="config-item">
+          <label>RSI Mín</label>
+          <input type="number" step="1" id="config_rsi_min" value="30">
+        </div>
+        <div class="config-item">
+          <label>RSI Máx</label>
+          <input type="number" step="1" id="config_rsi_max" value="70">
+        </div>
+        <div class="config-item">
+          <label>BB Mín</label>
+          <input type="number" step="0.01" id="config_bb_min" value="0.2">
+        </div>
+        <div class="config-item">
+          <label>BB Máx</label>
+          <input type="number" step="0.01" id="config_bb_max" value="0.8">
+        </div>
+        <div class="config-item">
+          <label>Cooldown (ticks)</label>
+          <input type="number" step="10" id="config_cooldown" value="150">
+        </div>
+        <div class="config-item">
+          <label>Stake ($)</label>
+          <input type="number" step="0.1" id="config_stake" value="1.0">
+        </div>
+        <div class="config-item">
+          <label>Duración (seg)</label>
+          <input type="number" step="10" id="config_duracion" value="60">
+        </div>
+        <div class="config-item">
+          <label>Payout</label>
+          <input type="number" step="0.01" id="config_payout" value="0.95">
+        </div>
+      </div>
+      <div style="display: flex; gap: 12px; margin-top: 16px;">
+        <button class="btn-primary" onclick="guardarConfig()">Guardar</button>
+        <button class="btn-secondary" onclick="resetConfig()">Restablecer Defaults</button>
       </div>
     </div>
 
@@ -852,6 +978,84 @@
       }
     }
 
+    // Cargar configuración al inicio
+    function cargarConfig() {
+      fetch('/api/binance/config/')
+        .then(r => r.json())
+        .then(data => {
+          if (data.config) {
+            document.getElementById('config_ema_gap_min').value = data.config.ema_gap_min;
+            document.getElementById('config_adx_min').value = data.config.adx_min;
+            document.getElementById('config_rsi_min').value = data.config.rsi_min;
+            document.getElementById('config_rsi_max').value = data.config.rsi_max;
+            document.getElementById('config_bb_min').value = data.config.bb_min;
+            document.getElementById('config_bb_max').value = data.config.bb_max;
+            document.getElementById('config_cooldown').value = data.config.cooldown_ticks;
+            document.getElementById('config_stake').value = data.config.stake;
+            document.getElementById('config_duracion').value = data.config.duracion_segundos;
+            document.getElementById('config_payout').value = data.config.payout;
+          }
+        })
+        .catch(e => console.error('Error cargando config:', e));
+    }
+
+    function guardarConfig() {
+      const config = {
+        ema_gap_min: parseFloat(document.getElementById('config_ema_gap_min').value),
+        adx_min: parseFloat(document.getElementById('config_adx_min').value),
+        rsi_min: parseFloat(document.getElementById('config_rsi_min').value),
+        rsi_max: parseFloat(document.getElementById('config_rsi_max').value),
+        bb_min: parseFloat(document.getElementById('config_bb_min').value),
+        bb_max: parseFloat(document.getElementById('config_bb_max').value),
+        cooldown_ticks: parseInt(document.getElementById('config_cooldown').value),
+        stake: parseFloat(document.getElementById('config_stake').value),
+        duracion_segundos: parseInt(document.getElementById('config_duracion').value),
+        payout: parseFloat(document.getElementById('config_payout').value),
+      };
+      
+      fetch('/api/binance/config/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(config)
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          alert('Configuración guardada. Reinicia el bot para aplicar los cambios.');
+        } else {
+          alert('Error: ' + data.error);
+        }
+      })
+      .catch(e => alert('Error: ' + e));
+    }
+
+    function resetConfig() {
+      if (!confirm('¿Restablecer todos los valores a los defaults?')) return;
+      
+      fetch('/api/binance/config/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reset: true})
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok && data.config) {
+          document.getElementById('config_ema_gap_min').value = data.config.ema_gap_min;
+          document.getElementById('config_adx_min').value = data.config.adx_min;
+          document.getElementById('config_rsi_min').value = data.config.rsi_min;
+          document.getElementById('config_rsi_max').value = data.config.rsi_max;
+          document.getElementById('config_bb_min').value = data.config.bb_min;
+          document.getElementById('config_bb_max').value = data.config.bb_max;
+          document.getElementById('config_cooldown').value = data.config.cooldown_ticks;
+          document.getElementById('config_stake').value = data.config.stake;
+          document.getElementById('config_duracion').value = data.config.duracion_segundos;
+          document.getElementById('config_payout').value = data.config.payout;
+          alert('Configuración restablecida a defaults. Reinicia el bot para aplicar.');
+        }
+      })
+      .catch(e => alert('Error: ' + e));
+    }
+
     function updateStatsTable(activos) {
       const tbody = document.getElementById('statsTable');
       tbody.innerHTML = '';
@@ -931,6 +1135,7 @@
 
     // Start SSE
     connectSSE();
+    cargarConfig();
   </script>
 </body>
 </html>

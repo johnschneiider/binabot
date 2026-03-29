@@ -16,6 +16,7 @@ urlpatterns = [
     path("api/binance/guardar/", views.api_guardar_operacion_binance, name="api_guardar_operacion_binance"),
     path("api/binance/tick/", views.api_guardar_tick_binance, name="api_guardar_tick_binance"),
     path("api/binance/sse/", views.sse_binance_stream, name="sse_binance_stream"),
+    path("api/binance/config/", views.api_configuracion_estrategia, name="api_configuracion_estrategia"),
     path("api/balance/", views.balance_json, name="balance_json"),
     path("api/ticks/", views.ticks_json, name="ticks_json"),
     path("api/logs/", views.logs_json, name="logs_json"),
