@@ -63,14 +63,16 @@ def cargar_configuracion():
 
 # Recargar config cada 30 segundos
 _ultimo_reload = 0
+_config_cargada = False
 
 def reload_config_if_needed():
-    global _ultimo_reload
+    global _ultimo_reload, _config_cargada
     import time
     ahora = time.time()
-    if ahora - _ultimo_reload > 30:
+    if ahora - _ultimo_reload > 30 and _config_cargada:
         _ultimo_reload = ahora
-        cargar_configuracion()
+        # No recargar dentro del loop async para evitar errores
+        print("[CONFIG] Recargando config...", flush=True)
 
 
 # ============================================================
@@ -356,7 +358,7 @@ async def conectar_binance(simbolos):
     print(f"  Stake: ${STAKE} | Duración: {DURACION_SEGUNDOS}s", flush=True)
     print("="*50, flush=True)
     
-    async with websockets.connect(url, ping_interval=20, ping_timeout=10) as ws:
+    async with websockets.connect(url, ping_interval=30, ping_timeout=30) as ws:
         print("[OK] Conectado a Binance", flush=True)
         
         async for msg in ws:
@@ -412,8 +414,8 @@ async def conectar_binance(simbolos):
 # ============================================================
 
 async def main():
-    # Cargar configuración desde la base de datos
-    cargar_configuracion()
+    global _config_cargada
+    _config_cargada = True
     
     simbolos = ["BTC", "ETH", "SOL", "XRP"]
     
@@ -430,4 +432,6 @@ async def main():
 
 
 if __name__ == "__main__":
+    # Cargar config ANTES de iniciar el loop async
+    cargar_configuracion()
     asyncio.run(main())
