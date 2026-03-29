@@ -6,1432 +6,353 @@
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  .binance-container {
-    max-width: 100%;
-    margin: 0 auto;
-    padding: 20px;
-    overflow-x: hidden;
-  }
-
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .header h1 {
-    font-size: 24px;
-    font-weight: 700;
-    background: linear-gradient(135deg, #eab308, #f97316);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .header-info {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-  }
-
-  .badge {
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-
-  .badge-green {
-    background: rgba(16,185,129,0.15);
-    color: var(--green);
-    border: 1px solid rgba(16,185,129,0.3);
-  }
-
-  .badge-red {
-    background: rgba(239,68,68,0.15);
-    color: var(--red);
-    border: 1px solid rgba(239,68,68,0.3);
-  }
-
-  .stats-row {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    margin-bottom: 20px;
-    width: 100%;
-  }
-  
-  @media (min-width: 768px) {
-    .stats-row {
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-    }
-  }
-  
-  @media (min-width: 1024px) {
-    .stats-row {
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-    }
-  }
-
-  .stat-card {
-    background: var(--bg-3);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-  }
-
-  .stat-label {
-    font-size: 12px;
-    color: var(--text-4);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
-  }
-
-  .stat-value {
-    font-size: 28px;
-    font-weight: 700;
-  }
-
-  .stat-value.green { color: var(--green); }
-  .stat-value.red { color: var(--red); }
-  .stat-value.yellow { color: #eab308; }
-  .stat-value.blue { color: var(--accent); }
-
-  .stat-sub {
-    font-size: 11px;
-    color: var(--text-4);
-    margin-top: 4px;
-  }
-
-  .card {
-    background: var(--bg-3);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 20px;
-  }
-
-  .card-title {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .card-title::before {
-    content: '';
-    width: 4px;
-    height: 16px;
-    background: #eab308;
-    border-radius: 2px;
-  }
-
-  .win { color: var(--green); }
-  .loss { color: var(--red); }
-
-  .chart-container {
-    position: relative;
-    height: 300px;
-    margin-bottom: 20px;
-    width: 100%;
-    overflow: hidden;
-  }
-  
-  .chart-container canvas {
-    max-width: 100%;
-    height: auto !important;
-  }
-
-  .symbol-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-  }
-
-  .symbol-btc { background: rgba(234,179,8,0.15); color: #eab308; }
-  .symbol-eth { background: rgba(139,92,246,0.15); color: #8b5cf6; }
-  .symbol-sol { background: rgba(6,182,212,0.15); color: #06b6d4; }
-  .symbol-xrp { background: rgba(59,130,246,0.15); color: #3b82f6; }
-
-  .conf-badge {
-    display: inline-block;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 600;
-  }
-
-  .conf-alta { background: rgba(16,185,129,0.15); color: var(--green); }
-  .conf-media { background: rgba(234,179,8,0.15); color: #eab308; }
-
-  .table-container {
-    overflow-x: auto;
-    max-height: 400px;
-    overflow-y: auto;
-  }
-
-  table {
-    width: 100%;
-    min-width: 500px;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-
-  th {
-    text-align: left;
-    padding: 12px;
-    font-weight: 600;
-    color: var(--text-4);
-    text-transform: uppercase;
-    font-size: 11px;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    background: var(--bg-3);
-    z-index: 1;
-  }
-
-  td {
-    padding: 12px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .mono {
-    font-family: ui-monospace, SFMono-Regular, monospace;
-  }
-
-  .charts-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 20px;
-  }
-
-  .bar-chart {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .bar-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .bar-label {
-    width: 60px;
-    font-size: 12px;
-    font-weight: 600;
-    text-align: right;
-  }
-
-  .bar-track {
-    flex: 1;
-    height: 24px;
-    background: var(--bg-4);
-    border-radius: 4px;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .bar-fill {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 0.3s;
-  }
-
-  .bar-fill.positive { background: var(--green); }
-  .bar-fill.negative { background: var(--red); }
-
-  .bar-value {
-    width: 80px;
-    font-size: 13px;
-    font-weight: 700;
-    text-align: right;
-  }
-
-  .price-charts-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  
-  .price-chart-box {
-    background: var(--bg-4);
-    border-radius: 8px;
-    padding: 12px;
-    width: 100%;
-    overflow: hidden;
-  }
-  
-  .price-chart-box canvas {
-    width: 100% !important;
-    height: 180px !important;
-    max-width: 100%;
-  }
-
-  .config-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
-  
-  @media (max-width: 768px) {
-    .config-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-  
-  @media (max-width: 480px) {
-    .config-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-  
-  .config-item {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  
-  .config-item label {
-    font-size: 12px;
-    color: var(--text-4);
-    text-transform: uppercase;
-  }
-  
-  .config-item input {
-    background: var(--bg-4);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px;
-    color: var(--text-2);
-    font-size: 14px;
-  }
-  
-  .config-item input:focus {
-    outline: none;
-    border-color: #eab308;
-  }
-  
-  .btn-primary {
-    background: #eab308;
-    color: #000;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  
-  .btn-primary:hover {
-    opacity: 0.9;
-  }
-  
-  .btn-secondary {
-    background: var(--bg-4);
-    color: var(--text-3);
-    border: 1px solid var(--border);
-    padding: 12px 24px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  @media (max-width: 480px) {
-    .binance-container { 
-      padding: 10px; 
-    }
-    .header { 
-      flex-direction: column; 
-      align-items: flex-start;
-      gap: 8px;
-    }
-    .header h1 { font-size: 18px; }
-    .stats-row { 
-      grid-template-columns: 1fr 1fr; 
-      gap: 8px;
-    }
-    .stat-card { 
-      padding: 10px; 
-    }
-    .stat-value { 
-      font-size: 16px; 
-    }
-    .card { 
-      padding: 10px; 
-      margin-bottom: 12px;
-    }
-    .charts-grid {
-      grid-template-columns: 1fr;
-    }
-  }
+.binance-container { max-width: 100%; margin: 0 auto; padding: 20px; overflow-x: hidden; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 12px; }
+.header h1 { font-size: 24px; font-weight: 700; background: linear-gradient(135deg, #eab308, #f97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.header-info { display: flex; gap: 16px; align-items: center; }
+.badge { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+.badge-green { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+.badge-red { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+.stats-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; width: 100%; }
+@media (min-width: 768px) { .stats-row { grid-template-columns: repeat(2, 1fr); gap: 12px; } }
+@media (min-width: 1024px) { .stats-row { grid-template-columns: repeat(4, 1fr); gap: 16px; } }
+.stat-card { background: var(--bg-3); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.stat-label { font-size: 12px; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.stat-value { font-size: 28px; font-weight: 700; }
+.stat-value.green { color: var(--green); }
+.stat-value.red { color: var(--red); }
+.stat-value.yellow { color: #eab308; }
+.stat-value.blue { color: var(--accent); }
+.stat-sub { font-size: 11px; color: var(--text-4); margin-top: 4px; }
+.card { background: var(--bg-3); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+.card-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+.card-title::before { content: ''; width: 4px; height: 16px; background: #eab308; border-radius: 2px; display: inline-block; margin-right: 8px; vertical-align: middle; }
+.win { color: var(--green); }
+.loss { color: var(--red); }
+.chart-container { position: relative; height: 300px; margin-bottom: 20px; width: 100%; overflow: hidden; }
+.chart-container canvas { max-width: 100%; height: auto !important; }
+.symbol-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.symbol-btc { background: rgba(234,179,8,0.15); color: #eab308; }
+.symbol-eth { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+.symbol-sol { background: rgba(6,182,212,0.15); color: #06b6d4; }
+.symbol-xrp { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.conf-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+.conf-alta { background: rgba(16,185,129,0.15); color: var(--green); }
+.conf-media { background: rgba(234,179,8,0.15); color: #eab308; }
+.table-container { overflow-x: auto; max-height: 400px; overflow-y: auto; }
+table { width: 100%; min-width: 500px; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 12px; font-weight: 600; color: var(--text-4); text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg-3); z-index: 1; }
+td { padding: 12px; border-bottom: 1px solid var(--border); }
+.mono { font-family: ui-monospace, SFMono-Regular, monospace; }
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.bar-chart { display: flex; flex-direction: column; gap: 12px; }
+.bar-item { display: flex; align-items: center; gap: 12px; }
+.bar-label { width: 60px; font-size: 12px; font-weight: 600; text-align: right; }
+.bar-track { flex: 1; height: 24px; background: var(--bg-4); border-radius: 4px; position: relative; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.bar-fill.positive { background: var(--green); }
+.bar-fill.negative { background: var(--red); }
+.bar-value { width: 80px; font-size: 13px; font-weight: 700; text-align: right; }
+.price-charts-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.price-chart-box { background: var(--bg-4); border-radius: 8px; padding: 12px; width: 100%; overflow: hidden; }
+.price-chart-box canvas { width: 100% !important; height: 180px !important; max-width: 100%; }
+.config-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 768px) { .config-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .config-grid { grid-template-columns: 1fr; } }
+.config-item { display: flex; flex-direction: column; gap: 6px; }
+.config-item label { font-size: 12px; color: var(--text-4); text-transform: uppercase; }
+.config-item input { background: var(--bg-4); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: var(--text-2); font-size: 14px; }
+.config-item input:focus { outline: none; border-color: #eab308; }
+.btn-primary { background: #eab308; color: #000; border: none; padding: 12px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.btn-primary:hover { opacity: 0.9; }
+.btn-secondary { background: var(--bg-4); color: var(--text-3); border: 1px solid var(--border); padding: 12px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+@media (max-width: 480px) { .binance-container { padding: 10px; } .header { flex-direction: column; align-items: flex-start; gap: 8px; } .header h1 { font-size: 18px; } .stats-row { grid-template-columns: 1fr 1fr; gap: 8px; } .stat-card { padding: 10px; } .stat-value { font-size: 16px; } .card { padding: 10px; margin-bottom: 12px; } .charts-grid { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="binance-container">
-  <!-- HEADER -->
   <div class="header">
     <div>
       <h1>Dashboard Binance</h1>
-      <div style="font-size: 12px; color: var(--text-4); margin-top: 4px;">
-        Operaciones de 60 segundos - Datos reales Crypto
-      </div>
+      <div style="font-size: 12px; color: var(--text-4); margin-top: 4px;">Operaciones de 60 segundos - Datos reales Crypto</div>
     </div>
     <div class="header-info">
       <div id="clockDisplay" style="font-family: monospace; font-size: 14px; color: var(--text-3);">--:--:--</div>
       <div class="badge badge-red" id="sseStatus">DESCONECTADO</div>
     </div>
   </div>
-        gap: 12px;
-      }
-    }
-    
-    @media (min-width: 1024px) {
-      .stats-row {
-        grid-template-columns: repeat(4, 1fr);
-        gap: 16px;
-      }
-    }
 
-    .stat-card {
-      background: var(--bg-2);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-    }
+  <div id="senalDisplay" style="display:none; text-align:center; margin: 16px 0; padding: 12px; background: var(--bg-4); border-radius: 8px;"></div>
 
-    .stat-label {
-      font-size: 12px;
-      color: var(--text-3);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 8px;
-    }
-
-    .stat-value {
-      font-size: 28px;
-      font-weight: 700;
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    .stat-value.green { color: var(--green); }
-    .stat-value.red { color: var(--red); }
-    .stat-value.yellow { color: var(--yellow); }
-    .stat-value.blue { color: var(--blue); }
-
-    .stat-sub {
-      font-size: 11px;
-      color: var(--text-3);
-      margin-top: 4px;
-    }
-
-    .card {
-      background: var(--bg-2);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 20px;
-    }
-
-    .card-title {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .card-title::before {
-      content: '';
-      width: 4px;
-      height: 16px;
-      background: var(--yellow);
-      border-radius: 2px;
-    }
-
-    .table-container {
-      overflow-x: auto;
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    table {
-      width: 100%;
-      min-width: 500px;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    th {
-      text-align: left;
-      padding: 12px;
-      font-weight: 600;
-      color: var(--text-3);
-      text-transform: uppercase;
-      font-size: 11px;
-      letter-spacing: 0.5px;
-      border-bottom: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      background: var(--bg-2);
-      z-index: 1;
-    }
-
-    td {
-      padding: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    tr:hover { background: var(--bg-3); }
-
-    .mono { font-family: 'JetBrains Mono', monospace; }
-    .win { color: var(--green); }
-    .loss { color: var(--red); }
-
-    .chart-container {
-      position: relative;
-      height: 300px;
-      margin-bottom: 20px;
-      width: 100%;
-      overflow: hidden;
-    }
-    
-    .chart-container canvas {
-      max-width: 100%;
-      height: auto !important;
-    }
-
-    .symbol-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .symbol-btc { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
-    .symbol-eth { background: rgba(139, 92, 246, 0.15); color: var(--purple); }
-    .symbol-sol { background: rgba(6, 182, 212, 0.15); color: var(--cyan); }
-    .symbol-xrp { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
-
-    .conf-badge {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 600;
-    }
-
-    .conf-alta { background: rgba(34, 197, 94, 0.15); color: var(--green); }
-    .conf-media { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    .pulse { animation: pulse 2s infinite; }
-
-    .time-display {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
-      color: var(--text-2);
-    }
-
-    .charts-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
-      width: 100%;
-    }
-    
-    .price-charts-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-      width: 100%;
-    }
-    
-    .price-chart-box {
-      background: var(--bg-3);
-      border-radius: 8px;
-      padding: 12px;
-      width: 100%;
-      overflow: hidden;
-    }
-    
-    .price-chart-box canvas {
-      width: 100% !important;
-      height: 180px !important;
-      max-width: 100%;
-    }
-    
-    .config-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-    }
-    
-    @media (max-width: 768px) {
-      .config-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .config-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    
-    .config-item {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    
-    .config-item label {
-      font-size: 12px;
-      color: var(--text-3);
-      text-transform: uppercase;
-    }
-    
-    .config-item input {
-      background: var(--bg-3);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px;
-      color: var(--text-1);
-      font-size: 14px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    
-    .config-item input:focus {
-      outline: none;
-      border-color: var(--yellow);
-    }
-    
-    .btn-primary {
-      background: var(--green);
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    
-    .btn-primary:hover {
-      opacity: 0.9;
-    }
-    
-    .btn-secondary {
-      background: var(--bg-3);
-      color: var(--text-2);
-      border: 1px solid var(--border);
-      padding: 12px 24px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    
-    .btn-secondary:hover {
-      background: var(--bg-4);
-    }
-    
-    @media (max-width: 480px) {
-      .price-chart-box canvas {
-        height: 150px !important;
-      }
-    }
-
-    .bar-chart {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .bar-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .bar-label {
-      width: 60px;
-      font-size: 12px;
-      font-weight: 600;
-      text-align: right;
-    }
-
-    .bar-track {
-      flex: 1;
-      height: 32px;
-      background: var(--bg-4);
-      border-radius: 6px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .bar-fill {
-      height: 100%;
-      border-radius: 6px;
-      transition: width 0.5s ease;
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      padding-right: 10px;
-      font-size: 12px;
-      font-weight: 700;
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    .bar-fill.positive {
-      background: linear-gradient(90deg, rgba(34, 197, 94, 0.3), var(--green));
-    }
-
-    .bar-fill.negative {
-      background: linear-gradient(90deg, var(--red), rgba(239, 68, 68, 0.3));
-    }
-
-    .bar-value {
-      width: 80px;
-      font-size: 13px;
-      font-weight: 700;
-      font-family: 'JetBrains Mono', monospace;
-      text-align: right;
-    }
-
-    .bar-track::before {
-      content: '';
-      position: absolute;
-      left: 50%;
-      top: 0;
-      bottom: 0;
-      width: 2px;
-      background: var(--text-3);
-    }
-
-    /* Responsive */
-    @media (max-width: 480px) {
-      .container { 
-        padding: 10px; 
-        max-width: 100%;
-        overflow-x: hidden;
-      }
-      .header { 
-        flex-direction: column; 
-        align-items: flex-start;
-        gap: 8px;
-      }
-      .header h1 { font-size: 18px; }
-      .header-info { width: 100%; justify-content: space-between; }
-      
-      .stats-row { 
-        grid-template-columns: 1fr 1fr; 
-        gap: 8px;
-      }
-      .stat-card { 
-        padding: 10px; 
-        min-width: 0;
-      }
-      .stat-value { 
-        font-size: 16px; 
-      }
-      .stat-label { 
-        font-size: 10px; 
-      }
-      .stat-sub { 
-        font-size: 9px; 
-      }
-      
-      .card { 
-        padding: 10px; 
-        margin-bottom: 12px;
-        overflow-x: hidden;
-      }
-      .card-title { 
-        font-size: 12px; 
-        margin-bottom: 10px;
-      }
-      
-      .chart-container { 
-        height: 150px !important; 
-        min-width: 0;
-      }
-      
-      .price-charts-grid {
-        gap: 10px;
-      }
-      table { 
-        font-size: 11px; 
-      }
-      th, td { 
-        padding: 6px 4px; 
-      }
-      
-      .symbol-badge { 
-        font-size: 10px; 
-        padding: 2px 6px;
-      }
-      
-      #senalDisplay {
-        padding: 8px;
-        font-size: 12px;
-      }
-    }
-  </style>
-</head>
-
-    <!-- HEADER -->
-    <div class="header">
-      <div>
-        <h1>Dashboard Binance</h1>
-        <div style="font-size: 12px; color: var(--text-3); margin-top: 4px;">
-          Operaciones de 60 segundos - Datos reales
-        </div>
-      </div>
-      <div class="header-info">
-        <div class="time-display" id="clockDisplay">--:--:--</div>
-        <div class="badge badge-red" id="sseStatus">DESCONECTADO</div>
-      </div>
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Balance Ficticio</div>
+      <div class="stat-value green" id="balanceDisplay">$0.00</div>
+      <div class="stat-sub">Capital inicial: $1000</div>
     </div>
-
-    <!-- SEÑAL ACTIVA -->
-    <div id="senalDisplay" style="display:none; text-align:center; margin: 16px 0; padding: 12px; background: var(--bg-3); border-radius: 8px;"></div>
-
-    <!-- STATS ROW -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-label">Balance Ficticio</div>
-        <div class="stat-value green" id="balanceDisplay">$0.00</div>
-        <div class="stat-sub">Capital inicial: $1000</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Win Rate</div>
-        <div class="stat-value yellow" id="wrDisplay">0%</div>
-        <div class="stat-sub"><span id="winsDisplay">0</span> wins / <span id="opsDisplay">0</span> ops</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Profit Total</div>
-        <div class="stat-value green" id="profitDisplay">$0.00</div>
-        <div class="stat-sub" id="roiDisplay">ROI: 0%</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Operaciones</div>
-        <div class="stat-value blue" id="totalOpsDisplay">0</div>
-        <div class="stat-sub">Duración: 60s por operación</div>
-      </div>
+    <div class="stat-card">
+      <div class="stat-label">Win Rate</div>
+      <div class="stat-value yellow" id="wrDisplay">0%</div>
+      <div class="stat-sub"><span id="winsDisplay">0</span> wins / <span id="opsDisplay">0</span> ops</div>
     </div>
-
-    <!-- CHARTS -->
-    <div class="charts-grid">
-      <div class="card">
-        <div class="card-title">Balance por Operación</div>
-        <div class="chart-container">
-          <canvas id="balanceChart"></canvas>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Profit por Activo</div>
-        <div class="bar-chart" id="barChart"></div>
-      </div>
+    <div class="stat-card">
+      <div class="stat-label">Profit Total</div>
+      <div class="stat-value green" id="profitDisplay">$0.00</div>
+      <div class="stat-sub" id="roiDisplay">ROI: 0%</div>
     </div>
+    <div class="stat-card">
+      <div class="stat-label">Operaciones</div>
+      <div class="stat-value blue" id="totalOpsDisplay">0</div>
+      <div class="stat-sub">Duración: 60s por operación</div>
+    </div>
+  </div>
 
-    <!-- PRECIOS EN TIEMPO REAL - 4 GRÁFICOS (1 POR FILA) -->
+  <div class="charts-grid">
     <div class="card">
-      <div class="card-title">Precios en Tiempo Real (últimos 200 ticks)</div>
-      <div class="price-charts-grid">
-        <div class="price-chart-box">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-            <span class="symbol-badge symbol-btc">BTC</span>
-            <span id="btcPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--yellow);">--</span>
-          </div>
-          <canvas id="chartBTC"></canvas>
-        </div>
-        <div class="price-chart-box">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-            <span class="symbol-badge symbol-eth">ETH</span>
-            <span id="ethPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--purple);">--</span>
-          </div>
-          <canvas id="chartETH"></canvas>
-        </div>
-        <div class="price-chart-box">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-            <span class="symbol-badge symbol-sol">SOL</span>
-            <span id="solPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--cyan);">--</span>
-          </div>
-          <canvas id="chartSOL"></canvas>
-        </div>
-        <div class="price-chart-box">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-            <span class="symbol-badge symbol-xrp">XRP</span>
-            <span id="xrpPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--blue);">--</span>
-          </div>
-          <canvas id="chartXRP"></canvas>
-        </div>
-      </div>
+      <div class="card-title">Balance por Operación</div>
+      <div class="chart-container"><canvas id="balanceChart"></canvas></div>
     </div>
-
-    <!-- CONFIGURACIÓN DE LA ESTRATEGIA -->
     <div class="card">
-      <div class="card-title">Configuración de la Estrategia</div>
-      <div class="config-grid" id="configSection">
-        <div class="config-item">
-          <label>EMA Gap Mín (%)</label>
-          <input type="number" step="0.01" id="config_ema_gap_min" value="0.2">
-        </div>
-        <div class="config-item">
-          <label>ADX Mín</label>
-          <input type="number" step="1" id="config_adx_min" value="20">
-        </div>
-        <div class="config-item">
-          <label>RSI Mín</label>
-          <input type="number" step="1" id="config_rsi_min" value="30">
-        </div>
-        <div class="config-item">
-          <label>RSI Máx</label>
-          <input type="number" step="1" id="config_rsi_max" value="70">
-        </div>
-        <div class="config-item">
-          <label>BB Mín</label>
-          <input type="number" step="0.01" id="config_bb_min" value="0.2">
-        </div>
-        <div class="config-item">
-          <label>BB Máx</label>
-          <input type="number" step="0.01" id="config_bb_max" value="0.8">
-        </div>
-        <div class="config-item">
-          <label>Cooldown (ticks)</label>
-          <input type="number" step="10" id="config_cooldown" value="150">
-        </div>
-        <div class="config-item">
-          <label>Stake ($)</label>
-          <input type="number" step="0.1" id="config_stake" value="1.0">
-        </div>
-        <div class="config-item">
-          <label>Duración (seg)</label>
-          <input type="number" step="10" id="config_duracion" value="60">
-        </div>
-        <div class="config-item">
-          <label>Payout</label>
-          <input type="number" step="0.01" id="config_payout" value="0.95">
-        </div>
-      </div>
-      <div style="display: flex; gap: 12px; margin-top: 16px;">
-        <button class="btn-primary" onclick="guardarConfig()">Guardar</button>
-        <button class="btn-secondary" onclick="resetConfig()">Restablecer Defaults</button>
-      </div>
+      <div class="card-title">Profit por Activo</div>
+      <div class="bar-chart" id="barChart"></div>
     </div>
+  </div>
 
-    <!-- STATS POR ACTIVO -->
-    <div class="card">
-      <div class="card-title">Estadísticas por Activo</div>
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>Símbolo</th>
-              <th>Operaciones</th>
-              <th>Wins</th>
-              <th>Win Rate</th>
-              <th>Profit</th>
-              <th>Balance</th>
-              <th>Win Streak</th>
-              <th>Loss Streak</th>
-            </tr>
-          </thead>
-          <tbody id="statsTable"></tbody>
-        </table>
+  <div class="card">
+    <div class="card-title">Precios en Tiempo Real</div>
+    <div class="price-charts-grid">
+      <div class="price-chart-box">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span class="symbol-badge symbol-btc">BTC</span>
+          <span id="btcPrice" style="font-size:14px;font-weight:700;color:#eab308;">--</span>
+        </div>
+        <canvas id="chartBTC"></canvas>
       </div>
-    </div>
-
-    <!-- HISTORIAL -->
-    <div class="card">
-      <div class="card-title">Historial de Operaciones</div>
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Fecha</th>
-              <th>Símbolo</th>
-              <th>Dirección</th>
-              <th>Precio</th>
-              <th>Resultado</th>
-              <th>Profit</th>
-              <th>Razón</th>
-              <th>Confianza</th>
-            </tr>
-          </thead>
-          <tbody id="historyTable"></tbody>
-        </table>
+      <div class="price-chart-box">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span class="symbol-badge symbol-eth">ETH</span>
+          <span id="ethPrice" style="font-size:14px;font-weight:700;color:#8b5cf6;">--</span>
+        </div>
+        <canvas id="chartETH"></canvas>
+      </div>
+      <div class="price-chart-box">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span class="symbol-badge symbol-sol">SOL</span>
+          <span id="solPrice" style="font-size:14px;font-weight:700;color:#06b6d4;">--</span>
+        </div>
+        <canvas id="chartSOL"></canvas>
+      </div>
+      <div class="price-chart-box">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span class="symbol-badge symbol-xrp">XRP</span>
+          <span id="xrpPrice" style="font-size:14px;font-weight:700;color:#3b82f6;">--</span>
+        </div>
+        <canvas id="chartXRP"></canvas>
       </div>
     </div>
   </div>
 
-  <script>
-    // Charts
-    const balanceChart = new Chart(document.getElementById('balanceChart').getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Balance',
-          data: [],
-          borderColor: '#22c55e',
-          backgroundColor: 'rgba(34, 197, 94, 0.1)',
-          borderWidth: 2,
-          pointRadius: 3,
-          pointBackgroundColor: '#22c55e',
-          fill: true,
-          tension: 0.3
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { grid: { color: '#222' }, ticks: { color: '#666', maxTicksLimit: 15, font: { size: 10 } } },
-          y: { grid: { color: '#222' }, ticks: { color: '#666', callback: v => '$' + v, font: { size: 10 } } }
-        }
+  <div class="card">
+    <div class="card-title">Configuración de la Estrategia</div>
+    <div class="config-grid">
+      <div class="config-item"><label>EMA Gap Mín (%)</label><input type="number" step="0.01" id="config_ema_gap_min" value="0.2"></div>
+      <div class="config-item"><label>ADX Mín</label><input type="number" step="1" id="config_adx_min" value="20"></div>
+      <div class="config-item"><label>RSI Mín</label><input type="number" step="1" id="config_rsi_min" value="30"></div>
+      <div class="config-item"><label>RSI Máx</label><input type="number" step="1" id="config_rsi_max" value="70"></div>
+      <div class="config-item"><label>BB Mín</label><input type="number" step="0.01" id="config_bb_min" value="0.2"></div>
+      <div class="config-item"><label>BB Máx</label><input type="number" step="0.01" id="config_bb_max" value="0.8"></div>
+      <div class="config-item"><label>Cooldown (ticks)</label><input type="number" step="10" id="config_cooldown" value="150"></div>
+      <div class="config-item"><label>Stake ($)</label><input type="number" step="0.1" id="config_stake" value="1.0"></div>
+      <div class="config-item"><label>Duración (seg)</label><input type="number" step="10" id="config_duracion" value="60"></div>
+      <div class="config-item"><label>Payout</label><input type="number" step="0.01" id="config_payout" value="0.95"></div>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:16px;">
+      <button class="btn-primary" onclick="guardarConfig()">Guardar</button>
+      <button class="btn-secondary" onclick="resetConfig()">Restablecer Defaults</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Estadísticas por Activo</div>
+    <div class="table-container">
+      <table>
+        <thead><tr><th>Símbolo</th><th>Operaciones</th><th>Wins</th><th>Win Rate</th><th>Profit</th><th>Balance</th><th>Win Streak</th><th>Loss Streak</th></tr></thead>
+        <tbody id="statsTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Historial de Operaciones</div>
+    <div class="table-container">
+      <table>
+        <thead><tr><th>#</th><th>Fecha</th><th>Símbolo</th><th>Dirección</th><th>Precio</th><th>Resultado</th><th>Profit</th><th>Razón</th><th>Confianza</th></tr></thead>
+        <tbody id="historyTable"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const colors = { 'BTC': '#eab308', 'ETH': '#8b5cf6', 'SOL': '#06b6d4', 'XRP': '#3b82f6' };
+const priceMap = { 'BTC': 'btcPrice', 'ETH': 'ethPrice', 'SOL': 'solPrice', 'XRP': 'xrpPrice' };
+const symbolMap = { 'BTC': 'btc', 'ETH': 'eth', 'SOL': 'sol', 'XRP': 'xrp' };
+
+function createPriceChart(canvasId, color, label) {
+  return new Chart(document.getElementById(canvasId).getContext('2d'), {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: label, data: [], borderColor: color, backgroundColor: color+'20', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4, order: 1 },
+      { label: 'EMA 9', data: [], borderColor: '#22c55e', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.4, order: 2 },
+      { label: 'EMA 21', data: [], borderColor: '#f59e0b', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.4, order: 3 },
+      { label: 'EMA 50', data: [], borderColor: '#ef4444', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.4, order: 4 }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 9 } } }, y: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', font: { size: 9 } } } } } }
+  });
+}
+
+const chartBTC = createPriceChart('chartBTC', colors['BTC'], 'BTC');
+const chartETH = createPriceChart('chartETH', colors['ETH'], 'ETH');
+const chartSOL = createPriceChart('chartSOL', colors['SOL'], 'SOL');
+const chartXRP = createPriceChart('chartXRP', colors['XRP'], 'XRP');
+const chartsMap = { 'BTC': chartBTC, 'ETH': chartETH, 'SOL': chartSOL, 'XRP': chartXRP };
+
+const balanceChart = new Chart(document.getElementById('balanceChart').getContext('2d'), {
+  type: 'line',
+  data: { labels: [], datasets: [{ data: [], borderColor: '#3b82f6', backgroundColor: '#3b82f620', borderWidth: 2, fill: true, tension: 0.4 }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280' } }, y: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', callback: v => '$'+v } } } }
+});
+
+function connectSSE() {
+  const evtSource = new EventSource('/api/binance/sse/');
+  evtSource.onopen = () => { const el = document.getElementById('sseStatus'); el.textContent = 'CONECTADO'; el.className = 'badge badge-green pulse'; };
+  evtSource.onmessage = (event) => { try { const data = JSON.parse(event.data); if (data.type === 'update') updateDashboard(data); } catch (e) { console.error('Parse error:', e); } };
+  evtSource.onerror = () => { const el = document.getElementById('sseStatus'); el.textContent = 'RECONECTANDO'; el.className = 'badge badge-red pulse'; };
+}
+
+function updateDashboard(data) {
+  document.getElementById('balanceDisplay').textContent = '$' + (data.balance_ficticio || 0).toFixed(2);
+  document.getElementById('balanceDisplay').className = 'stat-value ' + ((data.balance_ficticio || 0) >= 1000 ? 'green' : 'red');
+  document.getElementById('wrDisplay').textContent = (data.wr_global || 0).toFixed(1) + '%';
+  document.getElementById('profitDisplay').textContent = '$' + (data.total_profit || 0).toFixed(2);
+  document.getElementById('profitDisplay').className = 'stat-value ' + ((data.total_profit || 0) >= 0 ? 'green' : 'red');
+  document.getElementById('totalOpsDisplay').textContent = data.total_ops || 0;
+  document.getElementById('winsDisplay').textContent = data.total_wins || 0;
+  document.getElementById('opsDisplay').textContent = data.total_ops || 0;
+  const roi = (((data.balance_ficticio || 1000) - 1000) / 1000 * 100).toFixed(1);
+  document.getElementById('roiDisplay').textContent = 'ROI: ' + roi + '%';
+
+  updateStatsTable(data.activos || []);
+
+  if (data.balance_points && data.balance_points.length > 0) {
+    balanceChart.data.labels = data.balance_points.map(p => p.x);
+    balanceChart.data.datasets[0].data = data.balance_points.map(p => p.y);
+    balanceChart.update('none');
+  }
+
+  if (data.ticks) {
+    ['BTC', 'ETH', 'SOL', 'XRP'].forEach(sym => {
+      if (data.ticks[sym] && data.ticks[sym].length > 0 && chartsMap[sym]) {
+        const ticks = data.ticks[sym];
+        chartsMap[sym].data.labels = ticks.map(t => t.t);
+        chartsMap[sym].data.datasets[0].data = ticks.map(t => t.p);
+        const prices = ticks.map(t => t.p);
+        const n = prices.length;
+        const ema9 = [], ema21 = [], ema50 = [];
+        if (n >= 9) { let e = prices[0]; for (let i = 1; i < n; i++) { e = prices[i] * (2/10) + e * (1 - 2/10); ema9.push(e); } }
+        if (n >= 21) { let e = prices[0]; for (let i = 1; i < n; i++) { e = prices[i] * (2/22) + e * (1 - 2/22); ema21.push(e); } }
+        if (n >= 50) { let e = prices[0]; for (let i = 1; i < n; i++) { e = prices[i] * (2/52) + e * (1 - 2/52); ema50.push(e); } }
+        chartsMap[sym].data.datasets[1].data = ema9.map((v, i) => i < n - ema9.length ? null : v);
+        chartsMap[sym].data.datasets[2].data = ema21.map((v, i) => i < n - ema21.length ? null : v);
+        chartsMap[sym].data.datasets[3].data = ema50.map((v, i) => i < n - ema50.length ? null : v);
+        chartsMap[sym].update('none');
+        const lastPrice = ticks[ticks.length - 1].p;
+        const priceEl = document.getElementById(priceMap[sym]);
+        if (priceEl) priceEl.textContent = lastPrice.toFixed(2);
       }
     });
+  }
 
-    // ===== 4 CHARTS SEPARADOS POR ACTIVO =====
-    function createPriceChart(canvasId, color, label) {
-      return new Chart(document.getElementById(canvasId).getContext('2d'), {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [
-            {
-              label: label,
-              data: [],
-              borderColor: color,
-              backgroundColor: color + '20',
-              borderWidth: 2,
-              pointRadius: 0,
-              fill: true,
-              tension: 0.4,
-              order: 1
-            },
-            {
-              label: 'EMA 9',
-              data: [],
-              borderColor: '#00ff88',
-              borderWidth: 1,
-              pointRadius: 0,
-              fill: false,
-              tension: 0.4,
-              order: 2
-            },
-            {
-              label: 'EMA 21',
-              data: [],
-              borderColor: '#ffaa00',
-              borderWidth: 1,
-              pointRadius: 0,
-              fill: false,
-              tension: 0.4,
-              order: 3
-            },
-            {
-              label: 'EMA 50',
-              data: [],
-              borderColor: '#ff4444',
-              borderWidth: 1,
-              pointRadius: 0,
-              fill: false,
-              tension: 0.4,
-              order: 4
-            },
-            {
-              label: 'BB Sup',
-              data: [],
-              borderColor: '#666666',
-              borderWidth: 1,
-              borderDash: [5, 5],
-              pointRadius: 0,
-              fill: false,
-              tension: 0.4,
-              order: 5
-            },
-            {
-              label: 'BB Inf',
-              data: [],
-              borderColor: '#666666',
-              borderWidth: 1,
-              borderDash: [5, 5],
-              pointRadius: 0,
-              fill: '-1',
-              backgroundColor: 'rgba(100,100,100,0.1)',
-              tension: 0.4,
-              order: 6
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { 
-            legend: { display: false },
-            annotation: {
-              annotations: {}
-            }
-          },
-          scales: {
-            x: { grid: { color: '#222' }, ticks: { color: '#666', maxTicksLimit: 8, font: { size: 9 } } },
-            y: { grid: { color: '#222' }, ticks: { color: '#666', font: { size: 9 } } }
-          }
-        }
-      });
+  if (data.senal_activa) {
+    const senal = data.senal_activa;
+    const signalEl = document.getElementById('senalDisplay');
+    if (signalEl) {
+      const isCall = senal.direccion === 'CALL';
+      signalEl.innerHTML = '<span style="background:' + (isCall ? '#10b981' : '#ef4444') + ';color:white;padding:4px 12px;border-radius:4px;font-weight:bold">' + senal.simbolo + ' ' + senal.direccion + ' ' + senal.hora + '</span>';
+      signalEl.style.display = 'block';
     }
+  }
 
-    const chartBTC = createPriceChart('chartBTC', '#f7931a', 'BTC');
-    const chartETH = createPriceChart('chartETH', '#627eea', 'ETH');
-    const chartSOL = createPriceChart('chartSOL', '#00d18c', 'SOL');
-    const chartXRP = createPriceChart('chartXRP', '#00aae4', 'XRP');
+  if (data.historial && data.historial.length > 0) updateHistoryTable(data.historial);
+}
 
-    const chartsMap = { 'BTC': chartBTC, 'ETH': chartETH, 'SOL': chartSOL, 'XRP': chartXRP };
-    const priceMap = { 'BTC': 'btcPrice', 'ETH': 'ethPrice', 'SOL': 'solPrice', 'XRP': 'xrpPrice' };
+function updateStatsTable(activos) {
+  const tbody = document.getElementById('statsTable');
+  tbody.innerHTML = '';
+  activos.forEach(a => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td><span class="symbol-badge symbol-' + a.simbolo.toLowerCase() + '">' + a.simbolo + '</span></td><td class="mono">' + a.ops + '</td><td class="mono win">' + Math.round(a.ops * a.wr / 100) + '</td><td class="mono ' + (a.wr >= 55 ? 'win' : a.wr >= 50 ? 'yellow' : 'loss') + '">' + a.wr.toFixed(1) + '%</td><td class="mono ' + (a.profit >= 0 ? 'win' : 'loss') + '">$' + a.profit.toFixed(2) + '</td><td class="mono">$' + (1000 + a.profit).toFixed(2) + '</td><td class="mono">' + (a.win_streak || 0) + '</td><td class="mono">' + (a.loss_streak || 0) + '</td>';
+    tbody.appendChild(tr);
+  });
+}
 
-    // SSE Connection
-    function connectSSE() {
-      const evtSource = new EventSource('/api/binance/sse/');
-      
-      evtSource.onopen = () => {
-        const el = document.getElementById('sseStatus');
-        el.textContent = 'CONECTADO';
-        el.className = 'badge badge-green pulse';
-      };
+function updateHistoryTable(operaciones) {
+  const tbody = document.getElementById('historyTable');
+  tbody.innerHTML = '';
+  operaciones.forEach(op => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td class="mono">' + op.num + '</td><td class="mono" style="font-size:11px">' + op.hora + '</td><td><span class="symbol-badge symbol-' + op.simbolo.toLowerCase() + '">' + op.simbolo + '</span></td><td class="' + (op.direccion === 'CALL' ? 'win' : 'loss') + '">' + op.direccion + ' ' + (op.direccion === 'CALL' ? '↑' : '↓') + '</td><td class="mono" style="font-size:11px">' + op.precio.toFixed(2) + '</td><td><span class="badge ' + (op.es_win ? 'badge-green' : 'badge-red') + '">' + (op.es_win ? 'WIN' : 'LOSS') + '</span></td><td class="mono ' + (op.profit >= 0 ? 'win' : 'loss') + '">' + (op.profit >= 0 ? '+' : '') + op.profit.toFixed(2) + '</td><td style="font-size:11px;color:var(--text-3);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + op.razon + '</td><td><span class="conf-badge conf-' + op.confianza + '">' + op.confianza.toUpperCase() + '</span></td>';
+    tbody.appendChild(tr);
+  });
+}
 
-      evtSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'update') updateDashboard(data);
-        } catch (e) {
-          console.error('Parse error:', e);
-        }
-      };
-
-      evtSource.onerror = () => {
-        const el = document.getElementById('sseStatus');
-        el.textContent = 'RECONECTANDO';
-        el.className = 'badge badge-red pulse';
-      };
+function cargarConfig() {
+  fetch('/api/binance/config/').then(r => r.json()).then(data => {
+    if (data.config) {
+      document.getElementById('config_ema_gap_min').value = data.config.ema_gap_min;
+      document.getElementById('config_adx_min').value = data.config.adx_min;
+      document.getElementById('config_rsi_min').value = data.config.rsi_min;
+      document.getElementById('config_rsi_max').value = data.config.rsi_max;
+      document.getElementById('config_bb_min').value = data.config.bb_min;
+      document.getElementById('config_bb_max').value = data.config.bb_max;
+      document.getElementById('config_cooldown').value = data.config.cooldown_ticks;
+      document.getElementById('config_stake').value = data.config.stake;
+      document.getElementById('config_duracion').value = data.config.duracion_segundos;
+      document.getElementById('config_payout').value = data.config.payout;
     }
+  }).catch(e => console.error('Error:', e));
+}
 
-    function updateDashboard(data) {
-      // Stats
-      document.getElementById('balanceDisplay').textContent = '$' + (data.balance_ficticio || 0).toFixed(2);
-      document.getElementById('balanceDisplay').className = 'stat-value ' + ((data.balance_ficticio || 0) >= 1000 ? 'green' : 'red');
-      document.getElementById('wrDisplay').textContent = (data.wr_global || 0).toFixed(1) + '%';
-      document.getElementById('wrDisplay').className = 'stat-value ' + ((data.wr_global || 0) >= 55 ? 'green' : (data.wr_global || 0) >= 50 ? 'yellow' : 'red');
-      document.getElementById('profitDisplay').textContent = '$' + (data.total_profit || 0).toFixed(2);
-      document.getElementById('profitDisplay').className = 'stat-value ' + ((data.total_profit || 0) >= 0 ? 'green' : 'red');
-      document.getElementById('totalOpsDisplay').textContent = data.total_ops || 0;
-      document.getElementById('winsDisplay').textContent = data.total_wins || 0;
-      document.getElementById('opsDisplay').textContent = data.total_ops || 0;
-      
-      const roi = (((data.balance_ficticio || 1000) - 1000) / 1000 * 100).toFixed(1);
-      document.getElementById('roiDisplay').textContent = 'ROI: ' + roi + '%';
+function guardarConfig() {
+  const config = {
+    ema_gap_min: parseFloat(document.getElementById('config_ema_gap_min').value),
+    adx_min: parseFloat(document.getElementById('config_adx_min').value),
+    rsi_min: parseFloat(document.getElementById('config_rsi_min').value),
+    rsi_max: parseFloat(document.getElementById('config_rsi_max').value),
+    bb_min: parseFloat(document.getElementById('config_bb_min').value),
+    bb_max: parseFloat(document.getElementById('config_bb_max').value),
+    cooldown_ticks: parseInt(document.getElementById('config_cooldown').value),
+    stake: parseFloat(document.getElementById('config_stake').value),
+    duracion_segundos: parseInt(document.getElementById('config_duracion').value),
+    payout: parseFloat(document.getElementById('config_payout').value),
+  };
+  fetch('/api/binance/config/', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(config) }).then(r => r.json()).then(data => { alert(data.ok ? 'Configuración guardada. Reinicia el bot.' : 'Error: ' + data.error); }).catch(e => alert('Error: ' + e));
+}
 
-      // Stats por activo
-      updateStatsTable(data.activos || []);
+function resetConfig() {
+  if (!confirm('¿Restablecer defaults?')) return;
+  fetch('/api/binance/config/', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reset: true}) }).then(r => r.json()).then(data => { if (data.ok && data.config) { cargarConfig(); alert('Restablecido.'); } }).catch(e => alert('Error: ' + e));
+}
 
-      // Bar chart
-      updateBarChart(data.activos || []);
-
-      // Balance chart
-      if (data.balance_points && data.balance_points.length > 0) {
-        balanceChart.data.labels = data.balance_points.map(p => p.x);
-        balanceChart.data.datasets[0].data = data.balance_points.map(p => p.y);
-        balanceChart.update('none');
-      }
-
-      // Price charts - 4 separados
-      if (data.ticks) {
-        ['BTC', 'ETH', 'SOL', 'XRP'].forEach(sym => {
-          if (data.ticks[sym] && data.ticks[sym].length > 0 && chartsMap[sym]) {
-            const ticks = data.ticks[sym];
-            chartsMap[sym].data.labels = ticks.map(t => t.t);
-            chartsMap[sym].data.datasets[0].data = ticks.map(t => t.p);
-            
-            // Calcular EMAs y BBs
-            const prices = ticks.map(t => t.p);
-            const n = prices.length;
-            
-            // EMA 9
-            const ema9 = [];
-            if (n >= 9) {
-              let e = prices[0];
-              for (let i = 1; i < n; i++) {
-                e = prices[i] * (2/10) + e * (1 - 2/10);
-                ema9.push(e);
-              }
-            }
-            chartsMap[sym].data.datasets[1].data = ema9.map((v, i) => i < n - ema9.length ? null : v);
-            
-            // EMA 21
-            const ema21 = [];
-            if (n >= 21) {
-              let e = prices[0];
-              for (let i = 1; i < n; i++) {
-                e = prices[i] * (2/22) + e * (1 - 2/22);
-                ema21.push(e);
-              }
-            }
-            chartsMap[sym].data.datasets[2].data = ema21.map((v, i) => i < n - ema21.length ? null : v);
-            
-            // EMA 50
-            const ema50 = [];
-            if (n >= 50) {
-              let e = prices[0];
-              for (let i = 1; i < n; i++) {
-                e = prices[i] * (2/52) + e * (1 - 2/52);
-                ema50.push(e);
-              }
-            }
-            chartsMap[sym].data.datasets[3].data = ema50.map((v, i) => i < n - ema50.length ? null : v);
-            
-            // Bollinger Bands
-            const bbSup = [];
-            const bbInf = [];
-            if (n >= 20) {
-              for (let i = 19; i < n; i++) {
-                const slice = prices.slice(i - 19, i + 1);
-                const sma = slice.reduce((a, b) => a + b, 0) / 20;
-                const variance = slice.reduce((a, b) => a + Math.pow(b - sma, 2), 0) / 20;
-                const std = Math.sqrt(variance);
-                bbSup.push(sma + 2 * std);
-                bbInf.push(sma - 2 * std);
-              }
-            }
-            chartsMap[sym].data.datasets[4].data = bbSup.map((v, i) => i < n - bbSup.length ? null : v);
-            chartsMap[sym].data.datasets[5].data = bbInf.map((v, i) => i < n - bbInf.length ? null : v);
-            
-            chartsMap[sym].update('none');
-            
-            // Actualizar precio actual y mostrar indicadores
-            const lastPrice = ticks[ticks.length - 1].p;
-            const priceEl = document.getElementById(priceMap[sym]);
-            if (priceEl) {
-              const ind = data.indicadores && data.indicadores[sym];
-              if (ind && ind.rsi) {
-                priceEl.innerHTML = lastPrice.toFixed(2) + 
-                  ' <span style="font-size:10px;color:#666">| RSI:' + ind.rsi + 
-                  ' | EMA9:' + (ind.ema9 ? ind.ema9.toFixed(0) : '-') + 
-                  ' | EMA21:' + (ind.ema21 ? ind.ema21.toFixed(0) : '-') + '</span>';
-              } else {
-                priceEl.textContent = lastPrice.toFixed(2);
-              }
-            }
-          }
-        });
-      }
-      
-      // Mostrar señal de entrada si existe
-      if (data.senal_activa) {
-        const senal = data.senal_activa;
-        const signalEl = document.getElementById('senalDisplay');
-        if (signalEl) {
-          const isCall = senal.direccion === 'CALL';
-          signalEl.innerHTML = '<span style="background:' + (isCall ? '#00c853' : '#ff1744') + 
-            ';color:white;padding:4px 12px;border-radius:4px;font-weight:bold">' + 
-            senal.simbolo + ' ' + senal.direccion + ' ' + senal.hora + '</span>';
-          signalEl.style.display = 'block';
-        }
-      }
-
-      // Actualizar historial completo
-      if (data.historial && data.historial.length > 0) {
-        updateHistoryTable(data.historial);
-      }
-    }
-
-    // Cargar configuración al inicio
-    function cargarConfig() {
-      fetch('/api/binance/config/')
-        .then(r => r.json())
-        .then(data => {
-          if (data.config) {
-            document.getElementById('config_ema_gap_min').value = data.config.ema_gap_min;
-            document.getElementById('config_adx_min').value = data.config.adx_min;
-            document.getElementById('config_rsi_min').value = data.config.rsi_min;
-            document.getElementById('config_rsi_max').value = data.config.rsi_max;
-            document.getElementById('config_bb_min').value = data.config.bb_min;
-            document.getElementById('config_bb_max').value = data.config.bb_max;
-            document.getElementById('config_cooldown').value = data.config.cooldown_ticks;
-            document.getElementById('config_stake').value = data.config.stake;
-            document.getElementById('config_duracion').value = data.config.duracion_segundos;
-            document.getElementById('config_payout').value = data.config.payout;
-          }
-        })
-        .catch(e => console.error('Error cargando config:', e));
-    }
-
-    function guardarConfig() {
-      const config = {
-        ema_gap_min: parseFloat(document.getElementById('config_ema_gap_min').value),
-        adx_min: parseFloat(document.getElementById('config_adx_min').value),
-        rsi_min: parseFloat(document.getElementById('config_rsi_min').value),
-        rsi_max: parseFloat(document.getElementById('config_rsi_max').value),
-        bb_min: parseFloat(document.getElementById('config_bb_min').value),
-        bb_max: parseFloat(document.getElementById('config_bb_max').value),
-        cooldown_ticks: parseInt(document.getElementById('config_cooldown').value),
-        stake: parseFloat(document.getElementById('config_stake').value),
-        duracion_segundos: parseInt(document.getElementById('config_duracion').value),
-        payout: parseFloat(document.getElementById('config_payout').value),
-      };
-      
-      fetch('/api/binance/config/', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(config)
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok) {
-          alert('Configuración guardada. Reinicia el bot para aplicar los cambios.');
-        } else {
-          alert('Error: ' + data.error);
-        }
-      })
-      .catch(e => alert('Error: ' + e));
-    }
-
-    function resetConfig() {
-      if (!confirm('¿Restablecer todos los valores a los defaults?')) return;
-      
-      fetch('/api/binance/config/', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({reset: true})
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok && data.config) {
-          document.getElementById('config_ema_gap_min').value = data.config.ema_gap_min;
-          document.getElementById('config_adx_min').value = data.config.adx_min;
-          document.getElementById('config_rsi_min').value = data.config.rsi_min;
-          document.getElementById('config_rsi_max').value = data.config.rsi_max;
-          document.getElementById('config_bb_min').value = data.config.bb_min;
-          document.getElementById('config_bb_max').value = data.config.bb_max;
-          document.getElementById('config_cooldown').value = data.config.cooldown_ticks;
-          document.getElementById('config_stake').value = data.config.stake;
-          document.getElementById('config_duracion').value = data.config.duracion_segundos;
-          document.getElementById('config_payout').value = data.config.payout;
-          alert('Configuración restablecida a defaults. Reinicia el bot para aplicar.');
-        }
-      })
-      .catch(e => alert('Error: ' + e));
-    }
-
-    function updateStatsTable(activos) {
-      const tbody = document.getElementById('statsTable');
-      tbody.innerHTML = '';
-      
-      activos.forEach(a => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><span class="symbol-badge symbol-${a.simbolo.toLowerCase()}">${a.simbolo}</span></td>
-          <td class="mono">${a.ops}</td>
-          <td class="mono win">${Math.round(a.ops * a.wr / 100)}</td>
-          <td class="mono ${a.wr >= 55 ? 'win' : a.wr >= 50 ? 'yellow' : 'loss'}">${a.wr.toFixed(1)}%</td>
-          <td class="mono ${a.profit >= 0 ? 'win' : 'loss'}">$${a.profit.toFixed(2)}</td>
-          <td class="mono">${a.balance ? '$' + a.balance.toFixed(2) : '—'}</td>
-          <td class="mono win">${a.win_streak || 0}</td>
-          <td class="mono loss">${a.loss_streak || 0}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function updateBarChart(activos) {
-      const container = document.getElementById('barChart');
-      container.innerHTML = '';
-      
-      if (activos.length === 0) return;
-      
-      const maxAbsProfit = Math.max(...activos.map(a => Math.abs(a.profit)), 1);
-      
-      activos.forEach(a => {
-        const isPositive = a.profit >= 0;
-        const widthPercent = (Math.abs(a.profit) / maxAbsProfit * 45);
-        
-        const item = document.createElement('div');
-        item.className = 'bar-item';
-        item.innerHTML = `
-          <div class="bar-label symbol-badge symbol-${a.simbolo.toLowerCase()}">${a.simbolo}</div>
-          <div class="bar-track">
-            <div class="bar-fill ${isPositive ? 'positive' : 'negative'}"
-                 style="width: ${widthPercent}%; margin-left: ${isPositive ? '50%' : 50 - widthPercent + '%'}">
-              ${isPositive ? '+' : ''}$${a.profit.toFixed(2)}
-            </div>
-          </div>
-          <div class="bar-value ${isPositive ? 'win' : 'loss'}">${a.wr.toFixed(1)}%</div>
-        `;
-        container.appendChild(item);
-      });
-    }
-
-    function updateHistoryTable(operaciones) {
-      const tbody = document.getElementById('historyTable');
-      tbody.innerHTML = '';
-      
-      operaciones.forEach(op => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="mono">${op.num}</td>
-          <td class="mono" style="font-size:11px">${op.hora}</td>
-          <td><span class="symbol-badge symbol-${op.simbolo.toLowerCase()}">${op.simbolo}</span></td>
-          <td class="${op.direccion === 'CALL' ? 'win' : 'loss'}">${op.direccion} ${op.direccion === 'CALL' ? '↑' : '↓'}</td>
-          <td class="mono" style="font-size:11px">${op.precio.toFixed(2)}</td>
-          <td><span class="badge ${op.es_win ? 'badge-green' : 'badge-red'}">${op.es_win ? 'WIN' : 'LOSS'}</span></td>
-          <td class="mono ${op.profit >= 0 ? 'win' : 'loss'}">${op.profit >= 0 ? '+' : ''}${op.profit.toFixed(2)}</td>
-          <td style="font-size:11px;color:var(--text-3);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${op.razon}</td>
-          <td><span class="conf-badge conf-${op.confianza}">${op.confianza.toUpperCase()}</span></td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    // Clock - Colombia time (UTC-5)
-    function updateClock() {
-      const now = new Date();
-      const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-      document.getElementById('clockDisplay').textContent = 
-        colombiaTime.toLocaleTimeString('es-CO', { hour12: false });
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    // Start SSE
-    connectSSE();
-    cargarConfig();
-  </script>
+function updateClock() {
+  const now = new Date();
+  const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  document.getElementById('clockDisplay').textContent = colombiaTime.toLocaleTimeString('es-CO', { hour12: false });
+}
+setInterval(updateClock, 1000);
+updateClock();
+connectSSE();
+cargarConfig();
+</script>
 {% endblock %}
