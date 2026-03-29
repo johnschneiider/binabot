@@ -1,103 +1,406 @@
+{% extends "base.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es" data-theme="dark">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Binance - Trading Bot</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <style>
-    :root {
-      --bg-1: #0a0a0a;
-      --bg-2: #111;
-      --bg-3: #1a1a1a;
-      --bg-4: #222;
-      --text-1: #e5e5e5;
-      --text-2: #999;
-      --text-3: #666;
-      --border: #2a2a2a;
-      --green: #22c55e;
-      --red: #ef4444;
-      --yellow: #eab308;
-      --blue: #3b82f6;
-      --purple: #8b5cf6;
-      --orange: #f97316;
-      --cyan: #06b6d4;
-    }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-1);
-      color: var(--text-1);
-      min-height: 100vh;
-    }
+{% block title %}Dashboard Binance - Trading Bot{% endblock %}
 
-    .container {
-      max-width: 100%;
-      margin: 0 auto;
-      padding: 20px;
-      overflow-x: hidden;
-    }
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  .binance-container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+    overflow-x: hidden;
+  }
 
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border);
-      flex-wrap: wrap;
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #eab308, #f97316);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header-info {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .badge {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .badge-green {
+    background: rgba(16,185,129,0.15);
+    color: var(--green);
+    border: 1px solid rgba(16,185,129,0.3);
+  }
+
+  .badge-red {
+    background: rgba(239,68,68,0.15);
+    color: var(--red);
+    border: 1px solid rgba(239,68,68,0.3);
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+    width: 100%;
+  }
+  
+  @media (min-width: 768px) {
+    .stats-row {
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
     }
-
-    .header h1 {
-      font-size: 24px;
-      font-weight: 700;
-      background: linear-gradient(135deg, var(--yellow), var(--orange));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .header-info {
-      display: flex;
-      gap: 16px;
-      align-items: center;
-    }
-
-    .badge {
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-
-    .badge-green {
-      background: rgba(34, 197, 94, 0.15);
-      color: var(--green);
-      border: 1px solid rgba(34, 197, 94, 0.3);
-    }
-
-    .badge-red {
-      background: rgba(239, 68, 68, 0.15);
-      color: var(--red);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-    }
-
+  }
+  
+  @media (min-width: 1024px) {
     .stats-row {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      margin-bottom: 20px;
-      width: 100%;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
     }
-    
-    @media (min-width: 768px) {
-      .stats-row {
-        grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stat-card {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--text-4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.yellow { color: #eab308; }
+  .stat-value.blue { color: var(--accent); }
+
+  .stat-sub {
+    font-size: 11px;
+    color: var(--text-4);
+    margin-top: 4px;
+  }
+
+  .card {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    background: #eab308;
+    border-radius: 2px;
+  }
+
+  .win { color: var(--green); }
+  .loss { color: var(--red); }
+
+  .chart-container {
+    position: relative;
+    height: 300px;
+    margin-bottom: 20px;
+    width: 100%;
+    overflow: hidden;
+  }
+  
+  .chart-container canvas {
+    max-width: 100%;
+    height: auto !important;
+  }
+
+  .symbol-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .symbol-btc { background: rgba(234,179,8,0.15); color: #eab308; }
+  .symbol-eth { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+  .symbol-sol { background: rgba(6,182,212,0.15); color: #06b6d4; }
+  .symbol-xrp { background: rgba(59,130,246,0.15); color: #3b82f6; }
+
+  .conf-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .conf-alta { background: rgba(16,185,129,0.15); color: var(--green); }
+  .conf-media { background: rgba(234,179,8,0.15); color: #eab308; }
+
+  .table-container {
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  table {
+    width: 100%;
+    min-width: 500px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    text-align: left;
+    padding: 12px;
+    font-weight: 600;
+    color: var(--text-4);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg-3);
+    z-index: 1;
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  .bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .bar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .bar-label {
+    width: 60px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 24px;
+    background: var(--bg-4);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s;
+  }
+
+  .bar-fill.positive { background: var(--green); }
+  .bar-fill.negative { background: var(--red); }
+
+  .bar-value {
+    width: 80px;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .price-charts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .price-chart-box {
+    background: var(--bg-4);
+    border-radius: 8px;
+    padding: 12px;
+    width: 100%;
+    overflow: hidden;
+  }
+  
+  .price-chart-box canvas {
+    width: 100% !important;
+    height: 180px !important;
+    max-width: 100%;
+  }
+
+  .config-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  
+  @media (max-width: 768px) {
+    .config-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .config-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  
+  .config-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .config-item label {
+    font-size: 12px;
+    color: var(--text-4);
+    text-transform: uppercase;
+  }
+  
+  .config-item input {
+    background: var(--bg-4);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    color: var(--text-2);
+    font-size: 14px;
+  }
+  
+  .config-item input:focus {
+    outline: none;
+    border-color: #eab308;
+  }
+  
+  .btn-primary {
+    background: #eab308;
+    color: #000;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  
+  .btn-primary:hover {
+    opacity: 0.9;
+  }
+  
+  .btn-secondary {
+    background: var(--bg-4);
+    color: var(--text-3);
+    border: 1px solid var(--border);
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  @media (max-width: 480px) {
+    .binance-container { 
+      padding: 10px; 
+    }
+    .header { 
+      flex-direction: column; 
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .header h1 { font-size: 18px; }
+    .stats-row { 
+      grid-template-columns: 1fr 1fr; 
+      gap: 8px;
+    }
+    .stat-card { 
+      padding: 10px; 
+    }
+    .stat-value { 
+      font-size: 16px; 
+    }
+    .card { 
+      padding: 10px; 
+      margin-bottom: 12px;
+    }
+    .charts-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="binance-container">
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <h1>Dashboard Binance</h1>
+      <div style="font-size: 12px; color: var(--text-4); margin-top: 4px;">
+        Operaciones de 60 segundos - Datos reales Crypto
+      </div>
+    </div>
+    <div class="header-info">
+      <div id="clockDisplay" style="font-family: monospace; font-size: 14px; color: var(--text-3);">--:--:--</div>
+      <div class="badge badge-red" id="sseStatus">DESCONECTADO</div>
+    </div>
+  </div>
         gap: 12px;
       }
     }
@@ -501,17 +804,7 @@
     }
   </style>
 </head>
-<body>
-  <!-- NAVIGATION BAR -->
-  <div style="background: #111; border-bottom: 1px solid #2a2a2a; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center;">
-    <div style="display: flex; gap: 20px; align-items: center;">
-      <a href="/" style="color: #e5e5e5; text-decoration: none; font-weight: 600; font-size: 14px;">← QUANT·DERIV</a>
-      <a href="/panel/" style="color: #666; text-decoration: none; font-size: 13px;">Dashboard</a>
-      <a href="/panel/binance/" style="color: #eab308; text-decoration: none; font-size: 13px; font-weight: 600;">Binance</a>
-    </div>
-  </div>
-  
-  <div class="container">
+{% endblock %}
     <!-- HEADER -->
     <div class="header">
       <div>
@@ -1141,5 +1434,4 @@
     connectSSE();
     cargarConfig();
   </script>
-</body>
-</html>
+{% endblock %}
