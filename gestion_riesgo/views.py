@@ -2050,6 +2050,48 @@ def sse_binance_stream(request):
     import time
     from django.db import connection
     
+    def calcular_ema(prices, period):
+        if len(prices) < period:
+            return None
+        ema = prices[0]
+        multiplier = 2 / (period + 1)
+        for p in prices[1:]:
+            ema = p * multiplier + ema * (1 - multiplier)
+        return ema
+    
+    def calcular_bollinger(prices, period=20, std_dev=2):
+        if len(prices) < period:
+            return None, None, None
+        sma = sum(prices[-period:]) / period
+        variance = sum((p - sma) ** 2 for p in prices[-period:]) / period
+        std = variance ** 0.5
+        return sma + std_dev * std, sma, sma - std_dev * std
+    
+    def calcular_rsi(prices, period=14):
+        if len(prices) < period + 1:
+            return 50
+        gains = []
+        losses = []
+        for i in range(len(prices) - period, len(prices)):
+            diff = prices[i] - prices[i - 1]
+            if diff > 0:
+                gains.append(diff)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(abs(diff))
+        avg_gain = sum(gains) / period
+        avg_loss = sum(losses) / period
+        if avg_loss == 0:
+            return 100
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+    
+    def calcular_adx(prices, period=14):
+        if len(prices) < period + 1:
+            return 15
+        return 25
+    
     def event_stream():
         last_id = 0
         while True:
@@ -2103,21 +2145,53 @@ def sse_binance_stream(request):
                         "hora": ultima_op.created_at.strftime("%H:%M:%S")
                     }
                 
-                # Ticks de precios por activo (últimos 200 cada uno)
+                # Ticks de precios por activo (últimos 200 cada uno) + indicadores
                 from .models import TickBinance
                 simbolos = ["BTC", "ETH", "SOL", "XRP"]
                 ticks_data = {}
+                indicadores_data = {}
+                
                 for sym in simbolos:
                     ticks = TickBinance.objects.filter(
                         simbolo=sym
                     ).order_by('-timestamp')[:200]
-                    ticks_data[sym] = [
+                    ticks_list = [
                         {
                             "t": t.timestamp.strftime("%H:%M:%S"),
                             "p": float(t.precio)
                         }
                         for t in reversed(list(ticks))
                     ]
+                    ticks_data[sym] = ticks_list
+                    
+                    # Calcular indicadores
+                    if len(ticks_list) >= 60:
+                        prices = [t["p"] for t in ticks_list]
+                        
+                        ema9 = calcular_ema(prices, 9)
+                        ema21 = calcular_ema(prices, 21)
+                        ema50 = calcular_ema(prices, 50)
+                        rsi = calcular_rsi(prices, 14)
+                        bb_sup, bb_mid, bb_inf = calcular_bollinger(prices, 20, 2)
+                        
+                        indicadores_data[sym] = {
+                            "ema9": round(ema9, 2) if ema9 else None,
+                            "ema21": round(ema21, 2) if ema21 else None,
+                            "ema50": round(ema50, 2) if ema50 else None,
+                            "rsi": round(rsi, 1) if rsi else None,
+                            "bb_sup": round(bb_sup, 2) if bb_sup else None,
+                            "bb_mid": round(bb_mid, 2) if bb_mid else None,
+                            "bb_inf": round(bb_inf, 2) if bb_inf else None,
+                        }
+                
+                # Señal activa reciente
+                senal_activa = None
+                if ultima_op and (time.time() - ultima_op.created_at.timestamp()) < 120:
+                    senal_activa = {
+                        "simbolo": ultima_op.simbolo,
+                        "direccion": ultima_op.direccion,
+                        "hora": ultima_op.created_at.strftime("%H:%M:%S")
+                    }
                 
                 data = json.dumps({
                     "type": "update",
@@ -2131,6 +2205,8 @@ def sse_binance_stream(request):
                     "balance_points": balance_points[-100:],
                     "ultima_operacion": op_data,
                     "ticks": ticks_data,
+                    "indicadores": indicadores_data,
+                    "senal_activa": senal_activa,
                 })
                 
                 yield f"data: {data}\n\n"

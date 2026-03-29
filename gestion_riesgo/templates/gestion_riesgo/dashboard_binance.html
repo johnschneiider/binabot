@@ -324,6 +324,9 @@
       </div>
     </div>
 
+    <!-- SEÑAL ACTIVA -->
+    <div id="senalDisplay" style="display:none; text-align:center; margin: 16px 0; padding: 12px; background: var(--bg-3); border-radius: 8px;"></div>
+
     <!-- STATS ROW -->
     <div class="stats-row">
       <div class="stat-card">
@@ -478,21 +481,82 @@
         type: 'line',
         data: {
           labels: [],
-          datasets: [{
-            label: label,
-            data: [],
-            borderColor: color,
-            backgroundColor: color + '20',
-            borderWidth: 2,
-            pointRadius: 0,
-            fill: true,
-            tension: 0.4
-          }]
+          datasets: [
+            {
+              label: label,
+              data: [],
+              borderColor: color,
+              backgroundColor: color + '20',
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: true,
+              tension: 0.4,
+              order: 1
+            },
+            {
+              label: 'EMA 9',
+              data: [],
+              borderColor: '#00ff88',
+              borderWidth: 1,
+              pointRadius: 0,
+              fill: false,
+              tension: 0.4,
+              order: 2
+            },
+            {
+              label: 'EMA 21',
+              data: [],
+              borderColor: '#ffaa00',
+              borderWidth: 1,
+              pointRadius: 0,
+              fill: false,
+              tension: 0.4,
+              order: 3
+            },
+            {
+              label: 'EMA 50',
+              data: [],
+              borderColor: '#ff4444',
+              borderWidth: 1,
+              pointRadius: 0,
+              fill: false,
+              tension: 0.4,
+              order: 4
+            },
+            {
+              label: 'BB Sup',
+              data: [],
+              borderColor: '#666666',
+              borderWidth: 1,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              fill: false,
+              tension: 0.4,
+              order: 5
+            },
+            {
+              label: 'BB Inf',
+              data: [],
+              borderColor: '#666666',
+              borderWidth: 1,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              fill: '-1',
+              backgroundColor: 'rgba(100,100,100,0.1)',
+              tension: 0.4,
+              order: 6
+            }
+          ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: { 
+            legend: { display: false },
+            annotation: {
+              annotations: {}
+            }
+          },
           scales: {
             x: { grid: { color: '#222' }, ticks: { color: '#666', maxTicksLimit: 8, font: { size: 9 } } },
             y: { grid: { color: '#222' }, ticks: { color: '#666', font: { size: 9 } } }
@@ -570,16 +634,94 @@
       if (data.ticks) {
         ['BTC', 'ETH', 'SOL', 'XRP'].forEach(sym => {
           if (data.ticks[sym] && data.ticks[sym].length > 0 && chartsMap[sym]) {
-            chartsMap[sym].data.labels = data.ticks[sym].map(t => t.t);
-            chartsMap[sym].data.datasets[0].data = data.ticks[sym].map(t => t.p);
+            const ticks = data.ticks[sym];
+            chartsMap[sym].data.labels = ticks.map(t => t.t);
+            chartsMap[sym].data.datasets[0].data = ticks.map(t => t.p);
+            
+            // Calcular EMAs y BBs
+            const prices = ticks.map(t => t.p);
+            const n = prices.length;
+            
+            // EMA 9
+            const ema9 = [];
+            if (n >= 9) {
+              let e = prices[0];
+              for (let i = 1; i < n; i++) {
+                e = prices[i] * (2/10) + e * (1 - 2/10);
+                ema9.push(e);
+              }
+            }
+            chartsMap[sym].data.datasets[1].data = ema9.map((v, i) => i < n - ema9.length ? null : v);
+            
+            // EMA 21
+            const ema21 = [];
+            if (n >= 21) {
+              let e = prices[0];
+              for (let i = 1; i < n; i++) {
+                e = prices[i] * (2/22) + e * (1 - 2/22);
+                ema21.push(e);
+              }
+            }
+            chartsMap[sym].data.datasets[2].data = ema21.map((v, i) => i < n - ema21.length ? null : v);
+            
+            // EMA 50
+            const ema50 = [];
+            if (n >= 50) {
+              let e = prices[0];
+              for (let i = 1; i < n; i++) {
+                e = prices[i] * (2/52) + e * (1 - 2/52);
+                ema50.push(e);
+              }
+            }
+            chartsMap[sym].data.datasets[3].data = ema50.map((v, i) => i < n - ema50.length ? null : v);
+            
+            // Bollinger Bands
+            const bbSup = [];
+            const bbInf = [];
+            if (n >= 20) {
+              for (let i = 19; i < n; i++) {
+                const slice = prices.slice(i - 19, i + 1);
+                const sma = slice.reduce((a, b) => a + b, 0) / 20;
+                const variance = slice.reduce((a, b) => a + Math.pow(b - sma, 2), 0) / 20;
+                const std = Math.sqrt(variance);
+                bbSup.push(sma + 2 * std);
+                bbInf.push(sma - 2 * std);
+              }
+            }
+            chartsMap[sym].data.datasets[4].data = bbSup.map((v, i) => i < n - bbSup.length ? null : v);
+            chartsMap[sym].data.datasets[5].data = bbInf.map((v, i) => i < n - bbInf.length ? null : v);
+            
             chartsMap[sym].update('none');
             
-            // Actualizar precio actual
-            const lastPrice = data.ticks[sym][data.ticks[sym].length - 1].p;
+            // Actualizar precio actual y mostrar indicadores
+            const lastPrice = ticks[ticks.length - 1].p;
             const priceEl = document.getElementById(priceMap[sym]);
-            if (priceEl) priceEl.textContent = lastPrice.toFixed(2);
+            if (priceEl) {
+              const ind = data.indicadores && data.indicadores[sym];
+              if (ind && ind.rsi) {
+                priceEl.innerHTML = lastPrice.toFixed(2) + 
+                  ' <span style="font-size:10px;color:#666">| RSI:' + ind.rsi + 
+                  ' | EMA9:' + (ind.ema9 ? ind.ema9.toFixed(0) : '-') + 
+                  ' | EMA21:' + (ind.ema21 ? ind.ema21.toFixed(0) : '-') + '</span>';
+              } else {
+                priceEl.textContent = lastPrice.toFixed(2);
+              }
+            }
           }
         });
+      }
+      
+      // Mostrar señal de entrada si existe
+      if (data.senal_activa) {
+        const senal = data.senal_activa;
+        const signalEl = document.getElementById('senalDisplay');
+        if (signalEl) {
+          const isCall = senal.direccion === 'CALL';
+          signalEl.innerHTML = '<span style="background:' + (isCall ? '#00c853' : '#ff1744') + 
+            ';color:white;padding:4px 12px;border-radius:4px;font-weight:bold">' + 
+            senal.simbolo + ' ' + senal.direccion + ' ' + senal.hora + '</span>';
+          signalEl.style.display = 'block';
+        }
       }
 
       // Última operación
