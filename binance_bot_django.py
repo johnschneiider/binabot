@@ -128,6 +128,8 @@ class EstadoActivo:
 #  ESTRATEGIA
 # ============================================================
 
+DEBUG = True
+
 def evaluar_senal(estado, precio):
     estado.precios.append(precio)
     if len(estado.precios) > 300:
@@ -161,6 +163,24 @@ def evaluar_senal(estado, precio):
     
     triple_alcista = estado.ema_rapida > estado.ema_media > estado.ema_lenta
     triple_bajista = estado.ema_rapida < estado.ema_media < estado.ema_lenta
+    
+    if DEBUG and estado.tick_count % 50 == 0:
+        razones_falla = []
+        if ema_gap < 0.2:
+            razones_falla.append(f"gap bajo({ema_gap:.3f}%)")
+        if estado.adx < 20:
+            razones_falla.append(f"adx bajo({estado.adx:.0f})")
+        if estado.rsi < 30 or estado.rsi > 70:
+            razones_falla.append(f"rsi {estado.rsi:.0f}")
+        if not (triple_alcista or triple_bajista):
+            razones_falla.append("no triple EMA")
+        if precio_vs_bb < 0.2 or precio_vs_bb > 0.8:
+            razones_falla.append(f"bb extremo({precio_vs_bb:.2f})")
+        
+        if razones_falla:
+            print(f"[{estado.simbolo}] NO ENTRA: {', '.join(razones_falla)}", flush=True)
+        else:
+            print(f"[{estado.simbolo}] CONDICIONES OK - evaluando entrada...", flush=True)
     
     if ema_gap < 0.2:
         return ("NEUTRAL", "gap_bajo", "baja")

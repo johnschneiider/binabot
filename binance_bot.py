@@ -278,61 +278,61 @@ async def conectar_binance(simbolos: List[str]):
     """
     Conecta a Binance WebSocket y recibe ticks en tiempo real.
     """
-    # Crear stream para múltiples símbolos
-    streams = [f"{sym.lower()}usdt@trade" for sym in simbolos]
-    stream_url = f"wss://stream.binance.com:9443/stream?streams={'/'.join(streams)}"
-    
-    # Estados por símbolo
-    estados = {sym: EstadoActivo(simbolo=sym) for sym in simbolos}
-    
-    print(f"\n{'='*60}")
-    print(f"  BINANCE TRADING BOT - MERCADOS REALES")
-    print(f"  Símbolos: {', '.join(simbolos)}")
-    print(f"  WebSocket: {stream_url[:50]}...")
-    print(f"{'='*60}\n")
-    
-    try:
-        async with websockets.connect(stream_url) as websocket:
-            print("✓ Conectado a Binance WebSocket\n")
-            
-            async for message in websocket:
-                try:
-                    data = json.loads(message)
-                    
-                    # Extraer precio del trade
-                    if 'data' in data:
-                        trade = data['data']
-                        simbolo = trade['s'].replace('USDT', '')
-                        precio = float(trade['p'])  # 'p' es el precio
-                        timestamp = trade['T']
-                        
-                        if simbolo in estados:
-                            estado = estados[simbolo]
-                            
-                            # Evaluar señal
-                            señal = evaluar_senal(estado, precio)
-                            
-                            # Mostrar tick
-                            hora = datetime.fromtimestamp(timestamp/1000, tz=timezone.utc).strftime('%H:%M:%S')
-                            
-                            if señal.decision != "NEUTRAL":
-                                print(f"[{hora}] {simbolo}: $" + str(round(precio, 2)) + f" | {señal.decision} | {señal.razon}")
-                                
-                                # Simular operación
-                                simular_operacion(estado, señal, precio)
-                            else:
-                                # Solo mostrar cada 10 ticks si no hay señal
-                                if len(estado.precios) % 10 == 0:
-                                    print(f"[{hora}] {simbolo}: $" + str(round(precio, 2)) + f" | RSI:{estado.rsi:.0f} | {señal.razon}")
+    while True:
+        # Crear stream para múltiples símbolos
+        streams = [f"{sym.lower()}usdt@trade" for sym in simbolos]
+        stream_url = f"wss://stream.binance.com:9443/stream?streams={'/'.join(streams)}"
+        
+        # Estados por símbolo
+        estados = {sym: EstadoActivo(simbolo=sym) for sym in simbolos}
+        
+        print(f"\n{'='*60}")
+        print(f"  BINANCE TRADING BOT - MERCADOS REALES")
+        print(f"  Símbolos: {', '.join(simbolos)}")
+        print(f"  WebSocket: {stream_url[:50]}...")
+        print(f"{'='*60}\n")
+        
+        try:
+            async with websockets.connect(stream_url) as websocket:
+                print("✓ Conectado a Binance WebSocket\n")
                 
-                except Exception as e:
-                    print(f"Error procesando tick: {e}")
-    
-    except Exception as e:
-        print(f"Error de conexión: {e}")
-        print("Reintentando en 5 segundos...")
-        await asyncio.sleep(5)
-        await conectar_binance(simbolos)
+                async for message in websocket:
+                    try:
+                        data = json.loads(message)
+                        
+                        # Extraer precio del trade
+                        if 'data' in data:
+                            trade = data['data']
+                            simbolo = trade['s'].replace('USDT', '')
+                            precio = float(trade['p'])  # 'p' es el precio
+                            timestamp = trade['T']
+                            
+                            if simbolo in estados:
+                                estado = estados[simbolo]
+                                
+                                # Evaluar señal
+                                señal = evaluar_senal(estado, precio)
+                                
+                                # Mostrar tick
+                                hora = datetime.fromtimestamp(timestamp/1000, tz=timezone.utc).strftime('%H:%M:%S')
+                                
+                                if señal.decision != "NEUTRAL":
+                                    print(f"[{hora}] {simbolo}: $" + str(round(precio, 2)) + f" | {señal.decision} | {señal.razon}")
+                                    
+                                    # Simular operación
+                                    simular_operacion(estado, señal, precio)
+                                else:
+                                    # Solo mostrar cada 10 ticks si no hay señal
+                                    if len(estado.precios) % 10 == 0:
+                                        print(f"[{hora}] {simbolo}: $" + str(round(precio, 2)) + f" | RSI:{estado.rsi:.0f} | {señal.razon}")
+                    
+                    except Exception as e:
+                        print(f"Error procesando tick: {e}")
+        
+        except Exception as e:
+            print(f"Error de conexión: {e}")
+            print("Reintentando en 5 segundos...")
+            await asyncio.sleep(5)
 
 
 # ============================================================
