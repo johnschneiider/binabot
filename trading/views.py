@@ -1,3 +1,4 @@
+from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -5,6 +6,11 @@ from django.db import connection
 from django.utils import timezone
 import json
 import time
+
+
+def dashboard(request):
+    """Dashboard principal para Forex trading."""
+    return render(request, 'trading/dashboard.html')
 
 
 @csrf_exempt

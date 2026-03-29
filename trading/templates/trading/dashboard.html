@@ -1,0 +1,886 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Dashboard Trading - Forex{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  .trading-container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+    overflow-x: hidden;
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header-info {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .badge {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .badge-green {
+    background: rgba(16,185,129,0.15);
+    color: var(--green);
+    border: 1px solid rgba(16,185,129,0.3);
+  }
+
+  .badge-red {
+    background: rgba(239,68,68,0.15);
+    color: var(--red);
+    border: 1px solid rgba(239,68,68,0.3);
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+    width: 100%;
+  }
+  
+  @media (min-width: 768px) {
+    .stats-row {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .stats-row {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+  }
+
+  .stat-card {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--text-4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-value.blue { color: var(--accent); }
+
+  .stat-sub {
+    font-size: 11px;
+    color: var(--text-4);
+    margin-top: 4px;
+  }
+
+  .card {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+
+  .win { color: var(--green); }
+  .loss { color: var(--red); }
+
+  .chart-container {
+    position: relative;
+    height: 300px;
+    margin-bottom: 20px;
+    width: 100%;
+    overflow: hidden;
+  }
+  
+  .chart-container canvas {
+    max-width: 100%;
+    height: auto !important;
+  }
+
+  .symbol-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .symbol-eurusd { background: rgba(59,130,246,0.15); color: var(--accent-light); }
+  .symbol-gbpusd { background: rgba(139,92,246,0.15); color: #a78bfa; }
+  .symbol-usdjpy { background: rgba(16,185,129,0.15); color: var(--green-light); }
+  .symbol-audusd { background: rgba(234,179,8,0.15); color: #fbbf24; }
+  .symbol-usdcad { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+  .conf-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .conf-alta { background: rgba(16,185,129,0.15); color: var(--green); }
+  .conf-media { background: rgba(234,179,8,0.15); color: var(--yellow); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .pulse { animation: pulse 2s infinite; }
+
+  .table-container {
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  table {
+    width: 100%;
+    min-width: 500px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    text-align: left;
+    padding: 12px;
+    font-weight: 600;
+    color: var(--text-4);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg-3);
+    z-index: 1;
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+
+  .price-charts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .price-chart-box {
+    background: var(--bg-4);
+    border-radius: 8px;
+    padding: 12px;
+    width: 100%;
+    overflow: hidden;
+  }
+  
+  .price-chart-box canvas {
+    width: 100% !important;
+    height: 180px !important;
+    max-width: 100%;
+  }
+
+  .config-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  
+  @media (max-width: 768px) {
+    .config-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .config-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  
+  .config-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .config-item label {
+    font-size: 12px;
+    color: var(--text-4);
+    text-transform: uppercase;
+  }
+  
+  .config-item input {
+    background: var(--bg-4);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    color: var(--text-2);
+    font-size: 14px;
+  }
+  
+  .config-item input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  
+  .btn-primary:hover {
+    opacity: 0.9;
+  }
+  
+  .btn-secondary {
+    background: var(--bg-4);
+    color: var(--text-3);
+    border: 1px solid var(--border);
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  @media (max-width: 480px) {
+    .trading-container { 
+      padding: 10px; 
+    }
+    .header { 
+      flex-direction: column; 
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .header h1 { font-size: 18px; }
+    .stats-row { 
+      grid-template-columns: 1fr 1fr; 
+      gap: 8px;
+    }
+    .stat-card { 
+      padding: 10px; 
+    }
+    .stat-value { 
+      font-size: 16px; 
+    }
+    .card { 
+      padding: 10px; 
+      margin-bottom: 12px;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="trading-container">
+  <!-- NAVIGATION BAR -->
+  <div style="background: var(--bg-2); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; margin: -20px -20px 20px -20px;">
+    <div style="display: flex; gap: 20px; align-items: center;">
+      <a href="/" style="color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 14px;">← QUANT·DERIV</a>
+      <a href="/panel/" style="color: var(--text-4); text-decoration: none; font-size: 13px;">Dashboard</a>
+      <a href="/panel/binance/" style="color: var(--text-4); text-decoration: none; font-size: 13px;">Binance</a>
+      <a href="/panel/trading/" style="color: var(--accent-light); text-decoration: none; font-size: 13px; font-weight: 600;">Forex</a>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <h1>Dashboard Forex Trading</h1>
+      <div style="font-size: 12px; color: var(--text-4); margin-top: 4px;">
+        Operaciones de 60 segundos - Datos reales Forex
+      </div>
+    </div>
+    <div class="header-info">
+      <div id="clockDisplay" style="font-family: monospace; font-size: 14px; color: var(--text-3);">--:--:--</div>
+      <div class="badge badge-red" id="sseStatus">DESCONECTADO</div>
+    </div>
+  </div>
+
+  <!-- SEÑAL ACTIVA -->
+  <div id="senalDisplay" style="display:none; text-align:center; margin: 16px 0; padding: 12px; background: var(--bg-4); border-radius: 8px;"></div>
+
+  <!-- STATS ROW -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Balance Ficticio</div>
+      <div class="stat-value green" id="balanceDisplay">$0.00</div>
+      <div class="stat-sub">Capital inicial: $1000</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Win Rate</div>
+      <div class="stat-value yellow" id="wrDisplay">0%</div>
+      <div class="stat-sub"><span id="winsDisplay">0</span> wins / <span id="opsDisplay">0</span> ops</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Profit Total</div>
+      <div class="stat-value green" id="profitDisplay">$0.00</div>
+      <div class="stat-sub" id="roiDisplay">ROI: 0%</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Operaciones</div>
+      <div class="stat-value blue" id="totalOpsDisplay">0</div>
+      <div class="stat-sub">Duración: 60s por operación</div>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+    <div class="card">
+      <div class="card-title">Balance por Operación</div>
+      <div class="chart-container">
+        <canvas id="balanceChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Profit por Activo</div>
+      <div id="barChart"></div>
+    </div>
+  </div>
+
+  <!-- PRECIOS EN TIEMPO REAL -->
+  <div class="card">
+    <div class="card-title">Precios en Tiempo Real (Forex)</div>
+    <div class="price-charts-grid">
+      <div class="price-chart-box">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="symbol-badge symbol-eurusd">EURUSD</span>
+          <span id="eurusdPrice" style="font-size: 14px; font-weight: 700; color: var(--accent-light);">--</span>
+        </div>
+        <canvas id="chartEURUSD"></canvas>
+      </div>
+      <div class="price-chart-box">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="symbol-badge symbol-gbpusd">GBPUSD</span>
+          <span id="gbpusdPrice" style="font-size: 14px; font-weight: 700; color: #a78bfa;">--</span>
+        </div>
+        <canvas id="chartGBPUSD"></canvas>
+      </div>
+      <div class="price-chart-box">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="symbol-badge symbol-usdjpy">USDJPY</span>
+          <span id="usdjpyPrice" style="font-size: 14px; font-weight: 700; color: var(--green-light);">--</span>
+        </div>
+        <canvas id="chartUSDJPY"></canvas>
+      </div>
+      <div class="price-chart-box">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="symbol-badge symbol-audusd">AUDUSD</span>
+          <span id="audusdPrice" style="font-size: 14px; font-weight: 700; color: #fbbf24;">--</span>
+        </div>
+        <canvas id="chartAUDUSD"></canvas>
+      </div>
+      <div class="price-chart-box">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="symbol-badge symbol-usdcad">USDCAD</span>
+          <span id="usdcadPrice" style="font-size: 14px; font-weight: 700; color: #fca5a5;">--</span>
+        </div>
+        <canvas id="chartUSDCAD"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIGURACIÓN -->
+  <div class="card">
+    <div class="card-title">Configuración de la Estrategia</div>
+    <div class="config-grid" id="configSection">
+      <div class="config-item">
+        <label>EMA Gap Mín (%)</label>
+        <input type="number" step="0.01" id="config_ema_gap_min" value="0.2">
+      </div>
+      <div class="config-item">
+        <label>ADX Mín</label>
+        <input type="number" step="1" id="config_adx_min" value="20">
+      </div>
+      <div class="config-item">
+        <label>RSI Mín</label>
+        <input type="number" step="1" id="config_rsi_min" value="30">
+      </div>
+      <div class="config-item">
+        <label>RSI Máx</label>
+        <input type="number" step="1" id="config_rsi_max" value="70">
+      </div>
+      <div class="config-item">
+        <label>BB Mín</label>
+        <input type="number" step="0.01" id="config_bb_min" value="0.2">
+      </div>
+      <div class="config-item">
+        <label>BB Máx</label>
+        <input type="number" step="0.01" id="config_bb_max" value="0.8">
+      </div>
+      <div class="config-item">
+        <label>Cooldown (ticks)</label>
+        <input type="number" step="10" id="config_cooldown" value="150">
+      </div>
+      <div class="config-item">
+        <label>Stake ($)</label>
+        <input type="number" step="0.1" id="config_stake" value="1.0">
+      </div>
+      <div class="config-item">
+        <label>Duración (seg)</label>
+        <input type="number" step="10" id="config_duracion" value="60">
+      </div>
+      <div class="config-item">
+        <label>Payout</label>
+        <input type="number" step="0.01" id="config_payout" value="0.95">
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px; margin-top: 16px;">
+      <button class="btn-primary" onclick="guardarConfig()">Guardar</button>
+      <button class="btn-secondary" onclick="resetConfig()">Restablecer Defaults</button>
+    </div>
+  </div>
+
+  <!-- STATS POR ACTIVO -->
+  <div class="card">
+    <div class="card-title">Estadísticas por Activo</div>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Símbolo</th>
+            <th>Operaciones</th>
+            <th>Wins</th>
+            <th>Win Rate</th>
+            <th>Profit</th>
+            <th>Balance</th>
+          </tr>
+        </thead>
+        <tbody id="statsTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- HISTORIAL -->
+  <div class="card">
+    <div class="card-title">Historial de Operaciones</div>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Fecha</th>
+            <th>Símbolo</th>
+            <th>Dirección</th>
+            <th>Precio</th>
+            <th>Resultado</th>
+            <th>Profit</th>
+            <th>Razón</th>
+          </tr>
+        </thead>
+        <tbody id="historyTable"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Chart colors
+  const colors = {
+    'EURUSD': '#3b82f6',
+    'GBPUSD': '#8b5cf6',
+    'USDJPY': '#10b981',
+    'AUDUSD': '#eab308',
+    'USDCAD': '#ef4444'
+  };
+
+  function createPriceChart(canvasId, color, label) {
+    return new Chart(document.getElementById(canvasId).getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: label,
+            data: [],
+            borderColor: color,
+            backgroundColor: color + '20',
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.4,
+            order: 1
+          },
+          {
+            label: 'EMA 9',
+            data: [],
+            borderColor: '#22c55e',
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+            tension: 0.4,
+            order: 2
+          },
+          {
+            label: 'EMA 21',
+            data: [],
+            borderColor: '#f59e0b',
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+            tension: 0.4,
+            order: 3
+          },
+          {
+            label: 'EMA 50',
+            data: [],
+            borderColor: '#ef4444',
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+            tension: 0.4,
+            order: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 9 } } },
+          y: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', font: { size: 9 } } }
+        }
+      }
+    });
+  }
+
+  const chartEURUSD = createPriceChart('chartEURUSD', colors['EURUSD'], 'EURUSD');
+  const chartGBPUSD = createPriceChart('chartGBPUSD', colors['GBPUSD'], 'GBPUSD');
+  const chartUSDJPY = createPriceChart('chartUSDJPY', colors['USDJPY'], 'USDJPY');
+  const chartAUDUSD = createPriceChart('chartAUDUSD', colors['AUDUSD'], 'AUDUSD');
+  const chartUSDCAD = createPriceChart('chartUSDCAD', colors['USDCAD'], 'USDCAD');
+
+  const chartsMap = { 
+    'EURUSD': chartEURUSD, 
+    'GBPUSD': chartGBPUSD, 
+    'USDJPY': chartUSDJPY, 
+    'AUDUSD': chartAUDUSD,
+    'USDCAD': chartUSDCAD 
+  };
+  const priceMap = { 
+    'EURUSD': 'eurusdPrice', 
+    'GBPUSD': 'gbpusdPrice', 
+    'USDJPY': 'usdjpyPrice', 
+    'AUDUSD': 'audusdPrice',
+    'USDCAD': 'usdcadPrice'
+  };
+
+  // Balance Chart
+  const balanceChart = new Chart(document.getElementById('balanceChart').getContext('2d'), {
+    type: 'line',
+    data: { labels: [], datasets: [{ data: [], borderColor: '#3b82f6', backgroundColor: '#3b82f620', borderWidth: 2, fill: true, tension: 0.4 }] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280' } },
+        y: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', callback: v => '$' + v } }
+      }
+    }
+  });
+
+  function connectSSE() {
+    const evtSource = new EventSource('/api/trading/sse/');
+    
+    evtSource.onopen = () => {
+      const el = document.getElementById('sseStatus');
+      el.textContent = 'CONECTADO';
+      el.className = 'badge badge-green pulse';
+    };
+
+    evtSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'update') updateDashboard(data);
+      } catch (e) {
+        console.error('Parse error:', e);
+      }
+    };
+
+    evtSource.onerror = () => {
+      const el = document.getElementById('sseStatus');
+      el.textContent = 'RECONECTANDO';
+      el.className = 'badge badge-red pulse';
+    };
+  }
+
+  function updateDashboard(data) {
+    document.getElementById('balanceDisplay').textContent = '$' + (data.balance_ficticio || 0).toFixed(2);
+    document.getElementById('balanceDisplay').className = 'stat-value ' + ((data.balance_ficticio || 0) >= 1000 ? 'green' : 'red');
+    document.getElementById('wrDisplay').textContent = (data.wr_global || 0).toFixed(1) + '%';
+    document.getElementById('wrDisplay').className = 'stat-value ' + ((data.wr_global || 0) >= 55 ? 'green' : (data.wr_global || 0) >= 50 ? 'yellow' : 'red');
+    document.getElementById('profitDisplay').textContent = '$' + (data.total_profit || 0).toFixed(2);
+    document.getElementById('profitDisplay').className = 'stat-value ' + ((data.total_profit || 0) >= 0 ? 'green' : 'red');
+    document.getElementById('totalOpsDisplay').textContent = data.total_ops || 0;
+    document.getElementById('winsDisplay').textContent = data.total_wins || 0;
+    document.getElementById('opsDisplay').textContent = data.total_ops || 0;
+    
+    const roi = (((data.balance_ficticio || 1000) - 1000) / 1000 * 100).toFixed(1);
+    document.getElementById('roiDisplay').textContent = 'ROI: ' + roi + '%';
+
+    updateStatsTable(data.activos || []);
+
+    if (data.balance_points && data.balance_points.length > 0) {
+      balanceChart.data.labels = data.balance_points.map(p => p.x);
+      balanceChart.data.datasets[0].data = data.balance_points.map(p => p.y);
+      balanceChart.update('none');
+    }
+
+    // Price charts
+    if (data.ticks) {
+      ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD'].forEach(sym => {
+        if (data.ticks[sym] && data.ticks[sym].length > 0 && chartsMap[sym]) {
+          const ticks = data.ticks[sym];
+          chartsMap[sym].data.labels = ticks.map(t => t.t);
+          chartsMap[sym].data.datasets[0].data = ticks.map(t => t.p);
+          
+          const prices = ticks.map(t => t.p);
+          const n = prices.length;
+          
+          // EMAs
+          const ema9 = [], ema21 = [], ema50 = [];
+          if (n >= 9) { let e = prices[0]; for (let i = 1; i < n; i++) { e = prices[i] * (2/10) + e * (1 - 2/10); ema9.push(e); } }
+          if (n >= 21) { let e = prices[0]; for (let i = 1; i < n; i++) { e = prices[i] * (2/22) + e * (1 - 2/22); ema21.push(e); } }
+          if (n >= 50) { let e = prices[0]; for (let i = 1; i < n; i++) { e = prices[i] * (2/52) + e * (1 - 2/52); ema50.push(e); } }
+          
+          chartsMap[sym].data.datasets[1].data = ema9.map((v, i) => i < n - ema9.length ? null : v);
+          chartsMap[sym].data.datasets[2].data = ema21.map((v, i) => i < n - ema21.length ? null : v);
+          chartsMap[sym].data.datasets[3].data = ema50.map((v, i) => i < n - ema50.length ? null : v);
+          
+          chartsMap[sym].update('none');
+          
+          const lastPrice = ticks[ticks.length - 1].p;
+          const priceEl = document.getElementById(priceMap[sym]);
+          if (priceEl) {
+            const ind = data.indicadores && data.indicadores[sym];
+            if (ind && ind.rsi) {
+              priceEl.innerHTML = lastPrice.toFixed(5) + 
+                ' <span style="font-size:10px;color:#666">| RSI:' + ind.rsi + '</span>';
+            } else {
+              priceEl.textContent = lastPrice.toFixed(5);
+            }
+          }
+        }
+      });
+    }
+
+    // Señal activa
+    if (data.senal_activa) {
+      const senal = data.senal_activa;
+      const signalEl = document.getElementById('senalDisplay');
+      if (signalEl) {
+        const isCall = senal.direccion === 'CALL';
+        signalEl.innerHTML = '<span style="background:' + (isCall ? '#10b981' : '#ef4444') + 
+          ';color:white;padding:4px 12px;border-radius:4px;font-weight:bold">' + 
+          senal.simbolo + ' ' + senal.direccion + ' ' + senal.hora + '</span>';
+        signalEl.style.display = 'block';
+      }
+    }
+
+    // Historial
+    if (data.historial && data.historial.length > 0) {
+      updateHistoryTable(data.historial);
+    }
+  }
+
+  function updateStatsTable(activos) {
+    const tbody = document.getElementById('statsTable');
+    tbody.innerHTML = '';
+    
+    activos.forEach(a => {
+      const tr = document.createElement('tr');
+      const symClass = 'symbol-' + a.simbolo.toLowerCase().replace('usd', '').replace('usd', '');
+      tr.innerHTML = `
+        <td><span class="symbol-badge ${symClass}">${a.simbolo}</span></td>
+        <td class="mono">${a.ops}</td>
+        <td class="mono win">${Math.round(a.ops * a.wr / 100)}</td>
+        <td class="mono ${a.wr >= 55 ? 'win' : a.wr >= 50 ? 'yellow' : 'loss'}">${a.wr.toFixed(1)}%</td>
+        <td class="mono ${a.profit >= 0 ? 'win' : 'loss'}">$${a.profit.toFixed(2)}</td>
+        <td class="mono">$${(1000 + a.profit).toFixed(2)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function updateHistoryTable(operaciones) {
+    const tbody = document.getElementById('historyTable');
+    tbody.innerHTML = '';
+    
+    operaciones.forEach(op => {
+      const tr = document.createElement('tr');
+      const symClass = 'symbol-' + op.simbolo.toLowerCase().replace('usd', '').replace('usd', '');
+      tr.innerHTML = `
+        <td class="mono">${op.num}</td>
+        <td class="mono" style="font-size:11px">${op.hora}</td>
+        <td><span class="symbol-badge ${symClass}">${op.simbolo}</span></td>
+        <td class="${op.direccion === 'CALL' ? 'win' : 'loss'}">${op.direccion} ${op.direccion === 'CALL' ? '↑' : '↓'}</td>
+        <td class="mono" style="font-size:11px">${op.precio.toFixed(5)}</td>
+        <td><span class="badge ${op.es_win ? 'badge-green' : 'badge-red'}">${op.es_win ? 'WIN' : 'LOSS'}</span></td>
+        <td class="mono ${op.profit >= 0 ? 'win' : 'loss'}">${op.profit >= 0 ? '+' : ''}${op.profit.toFixed(2)}</td>
+        <td style="font-size:11px;color:var(--text-4);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${op.razon}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function cargarConfig() {
+    fetch('/api/trading/config/')
+      .then(r => r.json())
+      .then(data => {
+        if (data.config) {
+          document.getElementById('config_ema_gap_min').value = data.config.ema_gap_min;
+          document.getElementById('config_adx_min').value = data.config.adx_min;
+          document.getElementById('config_rsi_min').value = data.config.rsi_min;
+          document.getElementById('config_rsi_max').value = data.config.rsi_max;
+          document.getElementById('config_bb_min').value = data.config.bb_min;
+          document.getElementById('config_bb_max').value = data.config.bb_max;
+          document.getElementById('config_cooldown').value = data.config.cooldown_ticks;
+          document.getElementById('config_stake').value = data.config.stake;
+          document.getElementById('config_duracion').value = data.config.duracion_segundos;
+          document.getElementById('config_payout').value = data.config.payout;
+        }
+      })
+      .catch(e => console.error('Error cargando config:', e));
+  }
+
+  function guardarConfig() {
+    const config = {
+      ema_gap_min: parseFloat(document.getElementById('config_ema_gap_min').value),
+      adx_min: parseFloat(document.getElementById('config_adx_min').value),
+      rsi_min: parseFloat(document.getElementById('config_rsi_min').value),
+      rsi_max: parseFloat(document.getElementById('config_rsi_max').value),
+      bb_min: parseFloat(document.getElementById('config_bb_min').value),
+      bb_max: parseFloat(document.getElementById('config_bb_max').value),
+      cooldown_ticks: parseInt(document.getElementById('config_cooldown').value),
+      stake: parseFloat(document.getElementById('config_stake').value),
+      duracion_segundos: parseInt(document.getElementById('config_duracion').value),
+      payout: parseFloat(document.getElementById('config_payout').value),
+    };
+    
+    fetch('/api/trading/config/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(config)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        alert('Configuración guardada. Reinicia el bot para aplicar los cambios.');
+      } else {
+        alert('Error: ' + data.error);
+      }
+    })
+    .catch(e => alert('Error: ' + e));
+  }
+
+  function resetConfig() {
+    if (!confirm('¿Restablecer todos los valores a los defaults?')) return;
+    
+    fetch('/api/trading/config/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({reset: true})
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok && data.config) {
+        document.getElementById('config_ema_gap_min').value = data.config.ema_gap_min;
+        document.getElementById('config_adx_min').value = data.config.adx_min;
+        document.getElementById('config_rsi_min').value = data.config.rsi_min;
+        document.getElementById('config_rsi_max').value = data.config.rsi_max;
+        document.getElementById('config_bb_min').value = data.config.bb_min;
+        document.getElementById('config_bb_max').value = data.config.bb_max;
+        document.getElementById('config_cooldown').value = data.config.cooldown_ticks;
+        document.getElementById('config_stake').value = data.config.stake;
+        document.getElementById('config_duracion').value = data.config.duracion_segundos;
+        document.getElementById('config_payout').value = data.config.payout;
+        alert('Configuración restablecida a defaults.');
+      }
+    })
+    .catch(e => alert('Error: ' + e));
+  }
+
+  // Clock - Colombia time
+  function updateClock() {
+    const now = new Date();
+    const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+    document.getElementById('clockDisplay').textContent = colombiaTime.toLocaleTimeString('es-CO', { hour12: false });
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  connectSSE();
+  cargarConfig();
+</script>
+{% endblock %}
