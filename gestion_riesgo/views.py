@@ -23,6 +23,7 @@ from .models import (
     BalanceInversionista, Cuenta, OperacionDeriv,
     Deposito, Retiro, RendimientoFondo,
     OperacionBinance, EstadisticasBinance,
+    ConfiguracionEstrategia,
 )
 import json
 import time
