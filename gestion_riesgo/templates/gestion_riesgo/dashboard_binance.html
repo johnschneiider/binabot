@@ -209,6 +209,13 @@
       position: relative;
       height: 300px;
       margin-bottom: 20px;
+      width: 100%;
+      overflow: hidden;
+    }
+    
+    .chart-container canvas {
+      max-width: 100%;
+      height: auto !important;
     }
 
     .symbol-badge {
@@ -260,6 +267,26 @@
       grid-template-columns: 1fr;
       gap: 12px;
       width: 100%;
+    }
+    
+    .price-chart-box {
+      background: var(--bg-3);
+      border-radius: 8px;
+      padding: 12px;
+      width: 100%;
+      overflow: hidden;
+    }
+    
+    .price-chart-box canvas {
+      width: 100% !important;
+      height: 180px !important;
+      max-width: 100%;
+    }
+    
+    @media (max-width: 480px) {
+      .price-chart-box canvas {
+        height: 150px !important;
+      }
     }
 
     .bar-chart {
@@ -380,13 +407,6 @@
       .price-charts-grid {
         gap: 10px;
       }
-      .price-charts-grid > div {
-        padding: 8px;
-      }
-      .price-charts-grid canvas {
-        height: 120px !important;
-      }
-      
       table { 
         font-size: 11px; 
       }
@@ -403,14 +423,6 @@
         padding: 8px;
         font-size: 12px;
       }
-    }
-    
-    @media (min-width: 481px) and (max-width: 768px) {
-      .container { padding: 15px; }
-      .stats-row { grid-template-columns: 1fr 1fr; }
-      .stat-card { padding: 14px; }
-      .chart-container { height: 180px; }
-      .price-charts-grid canvas { height: 150px; }
     }
   </style>
 </head>
@@ -475,33 +487,33 @@
     <div class="card">
       <div class="card-title">Precios en Tiempo Real (últimos 200 ticks)</div>
       <div class="price-charts-grid">
-        <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
+        <div class="price-chart-box">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <span class="symbol-badge symbol-btc">BTC</span>
             <span id="btcPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--yellow);">--</span>
           </div>
-          <div style="height: 200px;"><canvas id="chartBTC"></canvas></div>
+          <canvas id="chartBTC"></canvas>
         </div>
-        <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
+        <div class="price-chart-box">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <span class="symbol-badge symbol-eth">ETH</span>
             <span id="ethPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--purple);">--</span>
           </div>
-          <div style="height: 200px;"><canvas id="chartETH"></canvas></div>
+          <canvas id="chartETH"></canvas>
         </div>
-        <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
+        <div class="price-chart-box">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <span class="symbol-badge symbol-sol">SOL</span>
             <span id="solPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--cyan);">--</span>
           </div>
-          <div style="height: 200px;"><canvas id="chartSOL"></canvas></div>
+          <canvas id="chartSOL"></canvas>
         </div>
-        <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
+        <div class="price-chart-box">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <span class="symbol-badge symbol-xrp">XRP</span>
             <span id="xrpPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--blue);">--</span>
           </div>
-          <div style="height: 200px;"><canvas id="chartXRP"></canvas></div>
+          <canvas id="chartXRP"></canvas>
         </div>
       </div>
     </div>
