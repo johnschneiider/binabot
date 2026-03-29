@@ -35,9 +35,10 @@
     }
 
     .container {
-      max-width: 1400px;
+      max-width: 100%;
       margin: 0 auto;
       padding: 20px;
+      overflow-x: hidden;
     }
 
     .header {
@@ -89,20 +90,22 @@
     .stats-row {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      margin-bottom: 24px;
+      gap: 10px;
+      margin-bottom: 20px;
+      width: 100%;
     }
     
     @media (min-width: 768px) {
       .stats-row {
         grid-template-columns: repeat(2, 1fr);
-        gap: 16px;
+        gap: 12px;
       }
     }
     
     @media (min-width: 1024px) {
       .stats-row {
         grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
       }
     }
 
@@ -171,6 +174,7 @@
 
     table {
       width: 100%;
+      min-width: 500px;
       border-collapse: collapse;
       font-size: 13px;
     }
@@ -248,36 +252,14 @@
       display: grid;
       grid-template-columns: 1fr;
       gap: 16px;
-    }
-    
-    @media (min-width: 768px) {
-      .charts-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    
-    @media (min-width: 1200px) {
-      .charts-grid {
-        grid-template-columns: 1fr;
-      }
+      width: 100%;
     }
     
     .price-charts-grid {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 16px;
-    }
-    
-    @media (min-width: 768px) {
-      .price-charts-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    
-    @media (min-width: 1400px) {
-      .price-charts-grid {
-        grid-template-columns: 1fr;
-      }
+      gap: 12px;
+      width: 100%;
     }
 
     .bar-chart {
@@ -347,12 +329,88 @@
       background: var(--text-3);
     }
 
-    @media (max-width: 600px) {
-      .container { padding: 12px; }
-      .stats-row { grid-template-columns: 1fr 1fr; gap: 8px; }
-      .stat-card { padding: 12px; }
-      .stat-value { font-size: 20px; }
-      h1 { font-size: 18px; }
+    /* Responsive */
+    @media (max-width: 480px) {
+      .container { 
+        padding: 10px; 
+        max-width: 100%;
+        overflow-x: hidden;
+      }
+      .header { 
+        flex-direction: column; 
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .header h1 { font-size: 18px; }
+      .header-info { width: 100%; justify-content: space-between; }
+      
+      .stats-row { 
+        grid-template-columns: 1fr 1fr; 
+        gap: 8px;
+      }
+      .stat-card { 
+        padding: 10px; 
+        min-width: 0;
+      }
+      .stat-value { 
+        font-size: 16px; 
+      }
+      .stat-label { 
+        font-size: 10px; 
+      }
+      .stat-sub { 
+        font-size: 9px; 
+      }
+      
+      .card { 
+        padding: 10px; 
+        margin-bottom: 12px;
+        overflow-x: hidden;
+      }
+      .card-title { 
+        font-size: 12px; 
+        margin-bottom: 10px;
+      }
+      
+      .chart-container { 
+        height: 150px !important; 
+        min-width: 0;
+      }
+      
+      .price-charts-grid {
+        gap: 10px;
+      }
+      .price-charts-grid > div {
+        padding: 8px;
+      }
+      .price-charts-grid canvas {
+        height: 120px !important;
+      }
+      
+      table { 
+        font-size: 11px; 
+      }
+      th, td { 
+        padding: 6px 4px; 
+      }
+      
+      .symbol-badge { 
+        font-size: 10px; 
+        padding: 2px 6px;
+      }
+      
+      #senalDisplay {
+        padding: 8px;
+        font-size: 12px;
+      }
+    }
+    
+    @media (min-width: 481px) and (max-width: 768px) {
+      .container { padding: 15px; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .stat-card { padding: 14px; }
+      .chart-container { height: 180px; }
+      .price-charts-grid canvas { height: 150px; }
     }
   </style>
 </head>
