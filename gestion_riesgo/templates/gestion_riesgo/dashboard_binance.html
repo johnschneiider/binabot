@@ -674,7 +674,7 @@
           <thead>
             <tr>
               <th>#</th>
-              <th>Hora</th>
+              <th>Fecha</th>
               <th>Símbolo</th>
               <th>Dirección</th>
               <th>Precio</th>
@@ -816,9 +816,6 @@
 
     const chartsMap = { 'BTC': chartBTC, 'ETH': chartETH, 'SOL': chartSOL, 'XRP': chartXRP };
     const priceMap = { 'BTC': 'btcPrice', 'ETH': 'ethPrice', 'SOL': 'solPrice', 'XRP': 'xrpPrice' };
-
-    // Historial
-    const historialOps = [];
 
     // SSE Connection
     function connectSSE() {
@@ -968,13 +965,9 @@
         }
       }
 
-      // Última operación
-      if (data.ultima_operacion) {
-        const op = data.ultima_operacion;
-        if (!historialOps.find(o => o.num === op.num)) {
-          historialOps.unshift(op);
-          updateHistoryTable();
-        }
+      // Actualizar historial completo
+      if (data.historial && data.historial.length > 0) {
+        updateHistoryTable(data.historial);
       }
     }
 
@@ -1104,11 +1097,11 @@
       });
     }
 
-    function updateHistoryTable() {
+    function updateHistoryTable(operaciones) {
       const tbody = document.getElementById('historyTable');
       tbody.innerHTML = '';
       
-      historialOps.slice(0, 50).forEach(op => {
+      operaciones.forEach(op => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td class="mono">${op.num}</td>
@@ -1125,10 +1118,12 @@
       });
     }
 
-    // Clock
+    // Clock - Colombia time (UTC-5)
     function updateClock() {
+      const now = new Date();
+      const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
       document.getElementById('clockDisplay').textContent = 
-        new Date().toLocaleTimeString('es-CO', { hour12: false });
+        colombiaTime.toLocaleTimeString('es-CO', { hour12: false });
     }
     setInterval(updateClock, 1000);
     updateClock();

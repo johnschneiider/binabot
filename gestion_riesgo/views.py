@@ -2133,6 +2133,9 @@ def sse_binance_stream(request):
                 ultima_op = OperacionBinance.objects.order_by('-created_at').first()
                 op_data = None
                 if ultima_op:
+                    # Convertir a hora Colombia (UTC-5)
+                    from datetime import timedelta
+                    hora_colombia = ultima_op.created_at - timedelta(hours=5)
                     op_data = {
                         "num": ultima_op.num_operacion,
                         "simbolo": ultima_op.simbolo,
@@ -2143,8 +2146,25 @@ def sse_binance_stream(request):
                         "es_win": ultima_op.es_win,
                         "profit": float(ultima_op.profit),
                         "wr_momento": float(ultima_op.win_rate_momento),
-                        "hora": ultima_op.created_at.strftime("%H:%M:%S")
+                        "hora": hora_colombia.strftime("%d-%m-%Y %H:%M:%S")
                     }
+                
+                # Enviar historial completo (últimas 50 operaciones)
+                historial_data = []
+                ultimas_ops = OperacionBinance.objects.order_by('-created_at')[:50]
+                for op in ultimas_ops:
+                    hora_col = op.created_at - timedelta(hours=5)
+                    historial_data.append({
+                        "num": op.num_operacion,
+                        "simbolo": op.simbolo,
+                        "direccion": op.direccion,
+                        "precio": float(op.precio_entrada),
+                        "razon": op.razon,
+                        "confianza": op.confianza,
+                        "es_win": op.es_win,
+                        "profit": float(op.profit),
+                        "hora": hora_col.strftime("%d-%m-%Y %H:%M:%S")
+                    })
                 
                 # Ticks de precios por activo (últimos 200 cada uno) + indicadores
                 from .models import TickBinance
@@ -2205,6 +2225,7 @@ def sse_binance_stream(request):
                     "activos": activos_data,
                     "balance_points": balance_points[-100:],
                     "ultima_operacion": op_data,
+                    "historial": historial_data,
                     "ticks": ticks_data,
                     "indicadores": indicadores_data,
                     "senal_activa": senal_activa,
