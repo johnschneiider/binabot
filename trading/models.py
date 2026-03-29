@@ -144,3 +144,50 @@ class TickTrading(models.Model):
     
     def __str__(self):
         return f"{self.simbolo}: {self.precio}"
+
+
+# ============================================================
+#  FUNCIONES AUXILIARES
+# ============================================================
+
+def calcular_ema(prices, period):
+    """Calcula EMA para una lista de precios."""
+    if len(prices) < period:
+        return None
+    ema = prices[0]
+    multiplier = 2 / (period + 1)
+    for p in prices[1:]:
+        ema = p * multiplier + ema * (1 - multiplier)
+    return ema
+
+
+def calcular_rsi(prices, period=14):
+    """Calcula RSI para una lista de precios."""
+    if len(prices) < period + 1:
+        return 50
+    gains = []
+    losses = []
+    for i in range(len(prices) - period, len(prices)):
+        diff = prices[i] - prices[i - 1]
+        if diff > 0:
+            gains.append(diff)
+            losses.append(0)
+        else:
+            gains.append(0)
+            losses.append(abs(diff))
+    avg_gain = sum(gains) / period
+    avg_loss = sum(losses) / period
+    if avg_loss == 0:
+        return 100
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+
+def calcular_bollinger(prices, period=20, std_dev=2):
+    """Calcula Bollinger Bands."""
+    if len(prices) < period:
+        return None, None, None
+    sma = sum(prices[-period:]) / period
+    variance = sum((p - sma) ** 2 for p in prices[-period:]) / period
+    std = variance ** 0.5
+    return sma + std_dev * std, sma, sma - std_dev * std
