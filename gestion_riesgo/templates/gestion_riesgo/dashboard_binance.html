@@ -47,6 +47,8 @@
       margin-bottom: 24px;
       padding-bottom: 16px;
       border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+      gap: 12px;
     }
 
     .header h1 {
@@ -86,9 +88,22 @@
 
     .stats-row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
       margin-bottom: 24px;
+    }
+    
+    @media (min-width: 768px) {
+      .stats-row {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+      }
+    }
+    
+    @media (min-width: 1024px) {
+      .stats-row {
+        grid-template-columns: repeat(4, 1fr);
+      }
     }
 
     .stat-card {
@@ -231,8 +246,38 @@
 
     .charts-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    
+    @media (min-width: 768px) {
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    @media (min-width: 1200px) {
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    .price-charts-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    
+    @media (min-width: 768px) {
+      .price-charts-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    @media (min-width: 1400px) {
+      .price-charts-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .bar-chart {
@@ -302,9 +347,12 @@
       background: var(--text-3);
     }
 
-    @media (max-width: 900px) {
-      .charts-grid { grid-template-columns: 1fr; }
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    @media (max-width: 600px) {
+      .container { padding: 12px; }
+      .stats-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .stat-card { padding: 12px; }
+      .stat-value { font-size: 20px; }
+      h1 { font-size: 18px; }
     }
   </style>
 </head>
@@ -365,37 +413,37 @@
       </div>
     </div>
 
-    <!-- PRECIOS EN TIEMPO REAL - 4 GRÁFICOS -->
+    <!-- PRECIOS EN TIEMPO REAL - 4 GRÁFICOS (1 POR FILA) -->
     <div class="card">
       <div class="card-title">Precios en Tiempo Real (últimos 200 ticks)</div>
-      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+      <div class="price-charts-grid">
         <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <span class="symbol-badge symbol-btc">BTC</span>
             <span id="btcPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--yellow);">--</span>
           </div>
-          <div style="height: 180px;"><canvas id="chartBTC"></canvas></div>
+          <div style="height: 200px;"><canvas id="chartBTC"></canvas></div>
         </div>
         <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <span class="symbol-badge symbol-eth">ETH</span>
             <span id="ethPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--purple);">--</span>
           </div>
-          <div style="height: 180px;"><canvas id="chartETH"></canvas></div>
+          <div style="height: 200px;"><canvas id="chartETH"></canvas></div>
         </div>
         <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <span class="symbol-badge symbol-sol">SOL</span>
             <span id="solPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--cyan);">--</span>
           </div>
-          <div style="height: 180px;"><canvas id="chartSOL"></canvas></div>
+          <div style="height: 200px;"><canvas id="chartSOL"></canvas></div>
         </div>
         <div style="background: var(--bg-3); border-radius: 8px; padding: 12px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <span class="symbol-badge symbol-xrp">XRP</span>
             <span id="xrpPrice" class="mono" style="font-size: 14px; font-weight: 700; color: var(--blue);">--</span>
           </div>
-          <div style="height: 180px;"><canvas id="chartXRP"></canvas></div>
+          <div style="height: 200px;"><canvas id="chartXRP"></canvas></div>
         </div>
       </div>
     </div>
