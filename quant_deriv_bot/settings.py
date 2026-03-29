@@ -67,6 +67,8 @@ INSTALLED_APPS = [
     "pages",
     # PANEL DE ADMINISTRACIÓN PROPIO
     "admin_panel",
+    # TRADING (Forex/Futures)
+    "trading",
 ]
 
 MIDDLEWARE = [
