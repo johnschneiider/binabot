@@ -61,6 +61,17 @@ def cargar_configuracion():
     except Exception as e:
         print(f"[CONFIG] Error cargando config: {e} - usando defaults", flush=True)
 
+# Recargar config cada 30 segundos
+_ultimo_reload = 0
+
+def reload_config_if_needed():
+    global _ultimo_reload
+    import time
+    ahora = time.time()
+    if ahora - _ultimo_reload > 30:
+        _ultimo_reload = ahora
+        cargar_configuracion()
+
 
 # ============================================================
 #  OPERACIÓN PENDIENTE
@@ -371,6 +382,9 @@ async def conectar_binance(simbolos):
                 
                 # Verificar pendientes
                 verificar_pendientes(estado, precio, hora)
+                
+                # Recargar config cada 30 segundos
+                reload_config_if_needed()
                 
                 # Nueva señal
                 if estado.operacion_pendiente is None:
