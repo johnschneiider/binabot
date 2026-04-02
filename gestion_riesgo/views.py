@@ -1470,7 +1470,7 @@ def api_navbar_balance(request):
     try:
         inv = request.user.inversionista
     except Inversionista.DoesNotExist:
-        return JsonResponse({"capital": 0, "rendimiento_pct": 0}, status=404)
+        return JsonResponse({"capital": 0, "rendimiento_pct": 0, "capital_inicial": 0, "ganancia_acumulada": 0, "balance_fondo": 0})
 
     cuenta = Cuenta.objects.first()
     balance_fondo = float(cuenta.balance_deriv) if cuenta and cuenta.balance_deriv else 0.0
@@ -1839,6 +1839,7 @@ def dashboard_binance(request):
     from django.utils import timezone
     from datetime import datetime, timezone as dt_tz
     from decimal import Decimal
+    from trading.models import BalanceGlobal
     
     # Obtener estadísticas por activo
     stats = EstadisticasBinance.objects.all().order_by("-profit_total")
@@ -1847,7 +1848,10 @@ def dashboard_binance(request):
     total_ops = sum(s.total_ops for s in stats)
     total_wins = sum(s.wins for s in stats)
     total_profit = sum(float(s.profit_total) for s in stats)
-    balance_ficticio = sum(float(s.balance_ficticio) for s in stats)
+    
+    # Obtener balance global unificado
+    balance_global = BalanceGlobal.get_balance_float()
+    capital_inicial = float(BalanceGlobal.get_balance().capital_inicial)
     
     # Win rate global
     wr_global = (total_wins / total_ops * 100) if total_ops > 0 else 0
@@ -1855,11 +1859,11 @@ def dashboard_binance(request):
     # Últimas 50 operaciones para historial
     historial_ops = OperacionBinance.objects.all().order_by("-created_at")[:50]
     
-    # Datos para gráfico de balance (balance acumulado por operación)
+    # Datos para gráfico de balance usando balance global
     todas_ops = OperacionBinance.objects.all().order_by("created_at")
     chart_labels = []
     chart_balance = []
-    balance_acumulado = 1000  # Capital inicial
+    balance_acumulado = capital_inicial
     
     for op in todas_ops:
         balance_acumulado += float(op.profit)
@@ -1878,7 +1882,8 @@ def dashboard_binance(request):
         "total_wins": total_wins,
         "wr_global": wr_global,
         "total_profit": total_profit,
-        "balance_ficticio": balance_ficticio,
+        "balance_ficticio": balance_global,
+        "capital_inicial": capital_inicial,
         "historial_ops": historial_ops,
         "ultimas_ops": historial_ops[:20],
         "bot_activo": bot_activo,
@@ -1939,6 +1944,10 @@ def api_guardar_operacion_binance(request):
     stats.balance_ficticio += profit_decimal
     stats.ultima_operacion = timezone.now()
     stats.save()
+    
+    # Actualizar balance global unificado
+    from trading.models import BalanceGlobal
+    BalanceGlobal.actualizar_balance(profit)
     
     # Guardar operación
     operacion = OperacionBinance.objects.create(
@@ -2255,14 +2264,25 @@ def sse_binance_stream(request):
 def api_configuracion_estrategia(request):
     """
     API para obtener y modificar la configuración de la estrategia.
+    Soporta tipos: estricta, media, flexible
     """
     from django.views.decorators.http import require_http_methods
     
-    config = ConfiguracionEstrategia.get_activa()
+    tipo_param = request.GET.get('tipo')
+    tipo_activo = ConfiguracionEstrategia.get_tipo_activo(mercado='binance')
+    tipo = tipo_param if tipo_param else tipo_activo
+    config = ConfiguracionEstrategia.get_activa(tipo=tipo, mercado='binance')
     
     if request.method == "POST":
         try:
             data = json.loads(request.body)
+            
+            # Cambiar tipo de estrategia activa
+            if "tipo" in data:
+                nuevo_tipo = data["tipo"]
+                ConfiguracionEstrategia.objects.filter(nombre='binance', tipo=nuevo_tipo).update(activa=True)
+                ConfiguracionEstrategia.objects.filter(nombre='binance').exclude(tipo=nuevo_tipo).update(activa=False)
+                config = ConfiguracionEstrategia.get_activa(tipo=nuevo_tipo, mercado='binance')
             
             if data.get("reset"):
                 config.reset_to_default()
@@ -2292,6 +2312,7 @@ def api_configuracion_estrategia(request):
             
             return JsonResponse({
                 "ok": True,
+                "tipo_activo": config.tipo,
                 "config": {
                     "ema_gap_min": config.ema_gap_min,
                     "adx_min": config.adx_min,
@@ -2310,6 +2331,7 @@ def api_configuracion_estrategia(request):
     
     # GET
     return JsonResponse({
+        "tipo_activo": config.tipo,
         "config": {
             "ema_gap_min": config.ema_gap_min,
             "adx_min": config.adx_min,

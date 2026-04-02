@@ -1,12 +1,53 @@
 from django.db import models
 from django.utils import timezone
+from decimal import Decimal
+
+
+class BalanceGlobal(models.Model):
+    """Balance unificado para todos los mercados (Forex + Binance)"""
+    balance = models.DecimalField(max_digits=20, decimal_places=2, default=1000)
+    capital_inicial = models.DecimalField(max_digits=20, decimal_places=2, default=1000)
+    ultima_actualizacion = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Balance Global"
+        verbose_name_plural = "Balances Globales"
+    
+    @classmethod
+    def get_balance(cls):
+        """Obtiene el balance global (singleton)"""
+        balance_obj, _ = cls.objects.get_or_create(pk=1, defaults={'balance': 1000, 'capital_inicial': 1000})
+        return balance_obj
+    
+    @classmethod
+    def actualizar_balance(cls, profit):
+        """Actualiza el balance con el profit de una operación"""
+        balance_obj = cls.get_balance()
+        balance_obj.balance += Decimal(str(profit))
+        balance_obj.save()
+        return balance_obj.balance
+    
+    @classmethod
+    def get_balance_float(cls):
+        """Retorna el balance como float"""
+        return float(cls.get_balance().balance)
+    
+    def __str__(self):
+        return f"Balance: ${self.balance}"
 
 
 class ConfiguracionTrading(models.Model):
     """
     Configuración general para operaciones de trading.
     """
+    TIPO_CHOICES = [
+        ('estricta', 'Estricta'),
+        ('media', 'Media'),
+        ('flexible', 'Flexible'),
+    ]
+    
     nombre = models.CharField(max_length=50, default="forex")
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='estricta')
     
     ema_gap_min = models.FloatField(default=0.2, help_text="Gap mínimo entre EMA21 y EMA50 (%)")
     adx_min = models.FloatField(default=20.0, help_text="ADX mínimo para tendencia")
@@ -33,18 +74,38 @@ class ConfiguracionTrading(models.Model):
         return f"Config {self.nombre} - EMA:{self.ema_gap_min}% ADX:{self.adx_min}"
     
     @classmethod
-    def get_activa(cls):
-        config = cls.objects.filter(activa=True).first()
+    def get_tipo_activo(cls):
+        """Retorna el tipo de estrategia activa actualmente"""
+        config = cls.objects.filter(nombre='forex', activa=True).first()
+        return config.tipo if config else 'estricta'
+    
+    @classmethod
+    def get_activa(cls, tipo='estricta'):
+        config = cls.objects.filter(nombre='forex', tipo=tipo, activa=True).first()
         if not config:
+            if tipo == 'estricta':
+                ema_gap_min, adx_min, rsi_min, rsi_max = 0.1, 20.0, 30.0, 70.0
+                bb_min, bb_max = 0.15, 0.85
+                cooldown_ticks = 100
+            elif tipo == 'media':
+                ema_gap_min, adx_min, rsi_min, rsi_max = 0.05, 15.0, 25.0, 75.0
+                bb_min, bb_max = 0.1, 0.9
+                cooldown_ticks = 50
+            else:  # flexible
+                ema_gap_min, adx_min, rsi_min, rsi_max = 0.02, 10.0, 20.0, 80.0
+                bb_min, bb_max = 0.05, 0.95
+                cooldown_ticks = 20
+            
             config = cls.objects.create(
-                nombre="forex",
-                ema_gap_min=0.2,
-                adx_min=20.0,
-                rsi_min=30.0,
-                rsi_max=70.0,
-                bb_min=0.2,
-                bb_max=0.8,
-                cooldown_ticks=150,
+                nombre='forex',
+                tipo=tipo,
+                ema_gap_min=ema_gap_min,
+                adx_min=adx_min,
+                rsi_min=rsi_min,
+                rsi_max=rsi_max,
+                bb_min=bb_min,
+                bb_max=bb_max,
+                cooldown_ticks=cooldown_ticks,
                 stake=1.0,
                 duracion_segundos=60,
                 payout=0.95,
@@ -53,13 +114,30 @@ class ConfiguracionTrading(models.Model):
         return config
     
     def reset_to_default(self):
-        self.ema_gap_min = 0.2
-        self.adx_min = 20.0
-        self.rsi_min = 30.0
-        self.rsi_max = 70.0
-        self.bb_min = 0.2
-        self.bb_max = 0.8
-        self.cooldown_ticks = 150
+        if self.tipo == 'estricta':
+            self.ema_gap_min = 0.1
+            self.adx_min = 20.0
+            self.rsi_min = 30.0
+            self.rsi_max = 70.0
+            self.bb_min = 0.15
+            self.bb_max = 0.85
+            self.cooldown_ticks = 100
+        elif self.tipo == 'media':
+            self.ema_gap_min = 0.05
+            self.adx_min = 15.0
+            self.rsi_min = 25.0
+            self.rsi_max = 75.0
+            self.bb_min = 0.1
+            self.bb_max = 0.9
+            self.cooldown_ticks = 50
+        else:  # flexible
+            self.ema_gap_min = 0.02
+            self.adx_min = 10.0
+            self.rsi_min = 20.0
+            self.rsi_max = 80.0
+            self.bb_min = 0.05
+            self.bb_max = 0.95
+            self.cooldown_ticks = 20
         self.stake = 1.0
         self.duracion_segundos = 60
         self.payout = 0.95
@@ -135,15 +213,67 @@ class OperacionTrading(models.Model):
 class TickTrading(models.Model):
     simbolo = models.CharField(max_length=20, db_index=True)
     precio = models.DecimalField(max_digits=20, decimal_places=8)
+    precio_bid = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    precio_ask = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    volumen = models.FloatField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     
     class Meta:
         verbose_name = "Tick Trading"
         verbose_name_plural = "Ticks Trading"
         ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=['simbolo', '-timestamp']),
+        ]
     
     def __str__(self):
         return f"{self.simbolo}: {self.precio}"
+
+
+class HistorialTicks(models.Model):
+    """Historial estructurado de ticks por símbolo para backtesting"""
+    simbolo = models.CharField(max_length=20, db_index=True)
+    timestamp = models.DateTimeField(db_index=True)
+    open_price = models.DecimalField(max_digits=20, decimal_places=8)
+    high_price = models.DecimalField(max_digits=20, decimal_places=8)
+    low_price = models.DecimalField(max_digits=20, decimal_places=8)
+    close_price = models.DecimalField(max_digits=20, decimal_places=8)
+    tick_count = models.IntegerField(default=0)
+    
+    class Meta:
+        verbose_name = "Historial Ticks"
+        verbose_name_plural = "Historial Ticks"
+        ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=['simbolo', '-timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.simbolo} {self.timestamp}"
+
+
+class EstadisticasSymbolo(models.Model):
+    """Estadísticas por símbolo para análisis de rentabilidad"""
+    simbolo = models.CharField(max_length=20, unique=True)
+    total_ticks = models.IntegerField(default=0)
+    total_ops = models.IntegerField(default=0)
+    ops_ganadas = models.IntegerField(default=0)
+    ops_perdidas = models.IntegerField(default=0)
+    profit_total = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    ultima_actualizacion = models.DateTimeField(auto_now=True)
+    
+    @property
+    def win_rate(self):
+        if self.total_ops == 0:
+            return 0
+        return (self.ops_ganadas / self.total_ops) * 100
+    
+    class Meta:
+        verbose_name = "Estadísticas Símbolo"
+        verbose_name_plural = "Estadísticas Símbolos"
+    
+    def __str__(self):
+        return f"{self.simbolo}: {self.win_rate:.1f}% WR"
 
 
 # ============================================================

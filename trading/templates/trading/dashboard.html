@@ -224,8 +224,20 @@
 
   .price-charts-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
+  }
+  
+  @media (max-width: 1024px) {
+    .price-charts-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .price-charts-grid {
+      grid-template-columns: 1fr;
+    }
   }
   
   .price-chart-box {
@@ -234,12 +246,34 @@
     padding: 12px;
     width: 100%;
     overflow: hidden;
+    position: relative;
   }
   
   .price-chart-box canvas {
     width: 100% !important;
-    height: 180px !important;
+    height: 150px !important;
     max-width: 100%;
+  }
+  
+  .market-closed-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    z-index: 10;
+  }
+  
+  .market-open {
+    color: #10b981;
   }
 
   .config-grid {
@@ -411,45 +445,63 @@
   <div class="card">
     <div class="card-title">Precios en Tiempo Real (Forex)</div>
     <div class="price-charts-grid">
-      <div class="price-chart-box">
+      <div class="price-chart-box" id="eurusdBox">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
           <span class="symbol-badge symbol-eurusd">EURUSD</span>
           <span id="eurusdPrice" style="font-size: 14px; font-weight: 700; color: var(--accent-light);">--</span>
         </div>
         <canvas id="chartEURUSD"></canvas>
+        <div id="eurusdOverlay" class="market-closed-overlay">Mercado Cerrado</div>
       </div>
-      <div class="price-chart-box">
+      <div class="price-chart-box" id="gbpusdBox">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
           <span class="symbol-badge symbol-gbpusd">GBPUSD</span>
           <span id="gbpusdPrice" style="font-size: 14px; font-weight: 700; color: #a78bfa;">--</span>
         </div>
         <canvas id="chartGBPUSD"></canvas>
+        <div id="gbpusdOverlay" class="market-closed-overlay">Mercado Cerrado</div>
       </div>
-      <div class="price-chart-box">
+      <div class="price-chart-box" id="usdjpyBox">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
           <span class="symbol-badge symbol-usdjpy">USDJPY</span>
           <span id="usdjpyPrice" style="font-size: 14px; font-weight: 700; color: var(--green-light);">--</span>
         </div>
         <canvas id="chartUSDJPY"></canvas>
+        <div id="usdjpyOverlay" class="market-closed-overlay">Mercado Cerrado</div>
       </div>
-      <div class="price-chart-box">
+      <div class="price-chart-box" id="audusdBox">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
           <span class="symbol-badge symbol-audusd">AUDUSD</span>
           <span id="audusdPrice" style="font-size: 14px; font-weight: 700; color: #fbbf24;">--</span>
         </div>
         <canvas id="chartAUDUSD"></canvas>
+        <div id="audusdOverlay" class="market-closed-overlay">Mercado Cerrado</div>
       </div>
-      <div class="price-chart-box">
+      <div class="price-chart-box" id="usdcadBox">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
           <span class="symbol-badge symbol-usdcad">USDCAD</span>
           <span id="usdcadPrice" style="font-size: 14px; font-weight: 700; color: #fca5a5;">--</span>
         </div>
         <canvas id="chartUSDCAD"></canvas>
+        <div id="usdcadOverlay" class="market-closed-overlay">Mercado Cerrado</div>
       </div>
     </div>
   </div>
 
   <!-- CONFIGURACIÓN -->
+  <div class="card">
+    <div class="card-title">Tipo de Estrategia</div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;">
+      <button class="btn-primary" id="btnEstricta" onclick="activarEstrategia('estricta')">Estricta</button>
+      <button class="btn-secondary" id="btnMedia" onclick="activarEstrategia('media')">Media</button>
+      <button class="btn-secondary" id="btnFlexible" onclick="activarEstrategia('flexible')">Flexible</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-4);margin-bottom:16px;">
+      <span id="tipoActual">Tipo actual: Estricta</span> - 
+      <span style="color:var(--accent);">Cambia el tipo para operar con diferentes niveles de agresividad</span>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-title">Configuración de la Estrategia</div>
     <div class="config-grid" id="configSection">
@@ -635,6 +687,21 @@
     'USDCAD': 'usdcadPrice'
   };
 
+  // Initialize market closed overlays
+  const overlayMap = {
+    'EURUSD': 'eurusdOverlay',
+    'GBPUSD': 'gbpusdOverlay',
+    'USDJPY': 'usdjpyOverlay',
+    'AUDUSD': 'audusdOverlay',
+    'USDCAD': 'usdcadOverlay'
+  };
+  
+  // Show overlays initially (market closed until data arrives)
+  Object.values(overlayMap).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'flex';
+  });
+
   // Balance Chart
   const balanceChart = new Chart(document.getElementById('balanceChart').getContext('2d'), {
     type: 'line',
@@ -649,6 +716,20 @@
       }
     }
   });
+
+  let tipoEstrategiaActual = null;
+
+  function obtenerTipoActivo() {
+    return fetch('/api/trading/config/')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.tipo_activo) {
+          tipoEstrategiaActual = data.tipo_activo;
+          actualizarBotonesTipo(data.tipo_activo);
+        }
+        return tipoEstrategiaActual;
+      });
+  }
 
   function connectSSE() {
     const evtSource = new EventSource('/api/trading/sse/');
@@ -700,7 +781,12 @@
     // Price charts
     if (data.ticks) {
       ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD'].forEach(sym => {
+        const overlayEl = document.getElementById(overlayMap[sym]);
+        
         if (data.ticks[sym] && data.ticks[sym].length > 0 && chartsMap[sym]) {
+          // Hide overlay when market is open
+          if (overlayEl) overlayEl.style.display = 'none';
+          
           const ticks = data.ticks[sym];
           chartsMap[sym].data.labels = ticks.map(t => t.t);
           chartsMap[sym].data.datasets[0].data = ticks.map(t => t.p);
@@ -731,6 +817,9 @@
               priceEl.textContent = lastPrice.toFixed(5);
             }
           }
+        } else {
+          // Show overlay when market is closed
+          if (overlayEl) overlayEl.style.display = 'flex';
         }
       });
     }
@@ -795,7 +884,7 @@
   }
 
   function cargarConfig() {
-    fetch('/api/trading/config/')
+    fetch('/api/trading/config/?tipo=' + tipoEstrategiaActual)
       .then(r => r.json())
       .then(data => {
         if (data.config) {
@@ -810,8 +899,34 @@
           document.getElementById('config_duracion').value = data.config.duracion_segundos;
           document.getElementById('config_payout').value = data.config.payout;
         }
+        if (data.tipo_activo) {
+          tipoEstrategiaActual = data.tipo_activo;
+          actualizarBotonesTipo(data.tipo_activo);
+        }
       })
       .catch(e => console.error('Error cargando config:', e));
+  }
+
+  function actualizarBotonesTipo(tipo) {
+    document.getElementById('btnEstricta').className = tipo === 'estricta' ? 'btn-primary' : 'btn-secondary';
+    document.getElementById('btnMedia').className = tipo === 'media' ? 'btn-primary' : 'btn-secondary';
+    document.getElementById('btnFlexible').className = tipo === 'flexible' ? 'btn-primary' : 'btn-secondary';
+    var nombres = {'estricta': 'Estricta', 'media': 'Media', 'flexible': 'Flexible'};
+    document.getElementById('tipoActual').textContent = 'Tipo actual: ' + nombres[tipo];
+  }
+
+  function activarEstrategia(tipo) {
+    tipoEstrategiaActual = tipo;
+    fetch('/api/trading/config/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tipo: tipo})
+    }).then(r => r.json()).then(data => {
+      if (data.ok) {
+        actualizarBotonesTipo(data.tipo_activo);
+        cargarConfig();
+      }
+    }).catch(e => console.error('Error:', e));
   }
 
   function guardarConfig() {
@@ -881,6 +996,8 @@
   updateClock();
 
   connectSSE();
-  cargarConfig();
+  obtenerTipoActivo().then(function() {
+    cargarConfig();
+  });
 </script>
 {% endblock %}

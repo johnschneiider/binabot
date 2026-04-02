@@ -154,6 +154,19 @@ td { padding: 12px; border-bottom: 1px solid var(--border); }
   </div>
 
   <div class="card">
+    <div class="card-title">Tipo de Estrategia</div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;">
+      <button class="btn-primary" id="btnEstricta" onclick="activarEstrategia('estricta')">Estricta</button>
+      <button class="btn-secondary" id="btnMedia" onclick="activarEstrategia('media')">Media</button>
+      <button class="btn-secondary" id="btnFlexible" onclick="activarEstrategia('flexible')">Flexible</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-4);margin-bottom:16px;">
+      <span id="tipoActual">Tipo actual: Estricta</span> - 
+      <span style="color:var(--accent);">Cambia el tipo para operar con diferentes niveles de agresividad</span>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="card-title">Configuración de la Estrategia</div>
     <div class="config-grid">
       <div class="config-item"><label>EMA Gap Mín (%)</label><input type="number" step="0.01" id="config_ema_gap_min" value="0.2"></div>
@@ -202,13 +215,32 @@ const symbolMap = { 'BTC': 'btc', 'ETH': 'eth', 'SOL': 'sol', 'XRP': 'xrp' };
 function createPriceChart(canvasId, color, label) {
   return new Chart(document.getElementById(canvasId).getContext('2d'), {
     type: 'line',
-    data: { labels: [], datasets: [
-      { label: label, data: [], borderColor: color, backgroundColor: color+'20', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4, order: 1 },
-      { label: 'EMA 9', data: [], borderColor: '#22c55e', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.4, order: 2 },
-      { label: 'EMA 21', data: [], borderColor: '#f59e0b', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.4, order: 3 },
-      { label: 'EMA 50', data: [], borderColor: '#ef4444', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.4, order: 4 }
-    ]},
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 9 } } }, y: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', font: { size: 9 } } } } } }
+    data: { 
+      labels: [], 
+      datasets: [
+        { label: label, data: [], borderColor: color, backgroundColor: color + '20', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4, order: 1 },
+        { label: 'EMA 9', data: [], borderColor: '#22c55e', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.4, order: 2 },
+        { label: 'EMA 21', data: [], borderColor: '#f59e0b', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.4, order: 3 },
+        { label: 'EMA 50', data: [], borderColor: '#ef4444', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.4, order: 4 }
+      ]
+    },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false, 
+      plugins: { 
+        legend: { display: false } 
+      }, 
+      scales: { 
+        x: { 
+          grid: { color: '#1f2937' }, 
+          ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 9 } } 
+        }, 
+        y: { 
+          grid: { color: '#1f2937' }, 
+          ticks: { color: '#6b7280', font: { size: 9 } } 
+        } 
+      } 
+    }
   });
 }
 
@@ -220,9 +252,36 @@ const chartsMap = { 'BTC': chartBTC, 'ETH': chartETH, 'SOL': chartSOL, 'XRP': ch
 
 const balanceChart = new Chart(document.getElementById('balanceChart').getContext('2d'), {
   type: 'line',
-  data: { labels: [], datasets: [{ data: [], borderColor: '#3b82f6', backgroundColor: '#3b82f620', borderWidth: 2, fill: true, tension: 0.4 }] },
-  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280' } }, y: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', callback: v => '$'+v } } } }
+  data: { 
+    labels: [], 
+    datasets: [{ data: [], borderColor: '#3b82f6', backgroundColor: '#3b82f620', borderWidth: 2, fill: true, tension: 0.4 }]
+  },
+  options: { 
+    responsive: true, 
+    maintainAspectRatio: false, 
+    plugins: { 
+      legend: { display: false } 
+    }, 
+    scales: { 
+      x: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280' } }, 
+      y: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', callback: function(v) { return '$' + v; } } } 
+    } 
+  }
 });
+
+let tipoEstrategiaActual = null;
+
+function obtenerTipoActivo() {
+  return fetch('/api/binance/config/')
+    .then(r => r.json())
+    .then(data => {
+      if (data.tipo_activo) {
+        tipoEstrategiaActual = data.tipo_activo;
+        actualizarBotonesTipo(data.tipo_activo);
+      }
+      return tipoEstrategiaActual;
+    });
+}
 
 function connectSSE() {
   const evtSource = new EventSource('/api/binance/sse/');
@@ -308,7 +367,7 @@ function updateHistoryTable(operaciones) {
 }
 
 function cargarConfig() {
-  fetch('/api/binance/config/').then(r => r.json()).then(data => {
+  fetch('/api/binance/config/?tipo=' + tipoEstrategiaActual).then(r => r.json()).then(data => {
     if (data.config) {
       document.getElementById('config_ema_gap_min').value = data.config.ema_gap_min;
       document.getElementById('config_adx_min').value = data.config.adx_min;
@@ -320,6 +379,32 @@ function cargarConfig() {
       document.getElementById('config_stake').value = data.config.stake;
       document.getElementById('config_duracion').value = data.config.duracion_segundos;
       document.getElementById('config_payout').value = data.config.payout;
+    }
+    if (data.tipo_activo) {
+      tipoEstrategiaActual = data.tipo_activo;
+      actualizarBotonesTipo(data.tipo_activo);
+    }
+  }).catch(e => console.error('Error:', e));
+}
+
+function actualizarBotonesTipo(tipo) {
+  document.getElementById('btnEstricta').className = tipo === 'estricta' ? 'btn-primary' : 'btn-secondary';
+  document.getElementById('btnMedia').className = tipo === 'media' ? 'btn-primary' : 'btn-secondary';
+  document.getElementById('btnFlexible').className = tipo === 'flexible' ? 'btn-primary' : 'btn-secondary';
+  var nombres = {'estricta': 'Estricta', 'media': 'Media', 'flexible': 'Flexible'};
+  document.getElementById('tipoActual').textContent = 'Tipo actual: ' + nombres[tipo];
+}
+
+function activarEstrategia(tipo) {
+  tipoEstrategiaActual = tipo;
+  fetch('/api/binance/config/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({tipo: tipo})
+  }).then(r => r.json()).then(data => {
+    if (data.ok) {
+      actualizarBotonesTipo(data.tipo_activo);
+      cargarConfig();
     }
   }).catch(e => console.error('Error:', e));
 }
@@ -353,6 +438,8 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 connectSSE();
-cargarConfig();
+obtenerTipoActivo().then(function() {
+  cargarConfig();
+});
 </script>
 {% endblock %}

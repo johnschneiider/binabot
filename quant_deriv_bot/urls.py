@@ -9,7 +9,6 @@ urlpatterns = [
     path("api/", include("subscriptions.urls")),
     path("", include("pages.urls")),
     path("", include("gestion_riesgo.urls")),
-    path("", include("trading.urls")),
     path("admin-panel/", include("admin_panel.urls")),
 ]
 

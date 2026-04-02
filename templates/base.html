@@ -577,15 +577,15 @@
             e.preventDefault();
             var fd = new FormData(e.target);
             fetch('/api/auth/login/', {method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}, body:fd, credentials:'same-origin'})
-              .then(r => r.json().then(d => ({ ok: r.ok, status: r.status, data: d })))
-              .then(({ ok, status, data }) => {
-                if (ok && data.token) {
-                  localStorage.setItem('qd_token', data.token);
-                  localStorage.setItem('qd_user', JSON.stringify(data.user));
+              .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, status: r.status, data: d }; }); })
+              .then(function(r) {
+                if (r.ok && r.data.token) {
+                  localStorage.setItem('qd_token', r.data.token);
+                  localStorage.setItem('qd_user', JSON.stringify(r.data.user));
                   window.location.href = '/';
                 } else {
                   var err = document.getElementById('loginError');
-                  err.textContent = data.detail || data.error || (status === 400 ? 'Credenciales inválidas.' : 'Error de autenticación.');
+                  err.textContent = r.data.detail || r.data.error || (r.status === 400 ? 'Credenciales inválidas.' : 'Error de autenticación.');
                   err.style.display = 'block';
                 }
               });

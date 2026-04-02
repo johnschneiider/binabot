@@ -1,5 +1,5 @@
 """
-BOT BINANCE - OPERACIONES DE 60 SEGUNDOS
+BOT BINANCE - OPERACIONES DE 120 SEGUNDOS
 Versión corregida con logs visibles
 """
 
@@ -24,8 +24,8 @@ DJANGO_TICK_URL = "http://127.0.0.1:8000/api/binance/tick/"
 # Defaults (se sobrescriben desde la base de datos)
 STAKE = 1.0
 PAYOUT = 0.95
-DURACION_SEGUNDOS = 60
-COOLDOWN_TICKS = 150
+DURACION_SEGUNDOS = 120
+COOLDOWN_TICKS = 10
 EMA_GAP_MIN = 0.2
 ADX_MIN = 20.0
 RSI_MIN = 30.0
@@ -45,7 +45,8 @@ def cargar_configuracion():
         django.setup()
         from gestion_riesgo.models import ConfiguracionEstrategia
         
-        config = ConfiguracionEstrategia.get_activa()
+        tipo_activo = ConfiguracionEstrategia.get_tipo_activo(mercado='binance')
+        config = ConfiguracionEstrategia.get_activa(tipo=tipo_activo, mercado='binance')
         STAKE = config.stake
         PAYOUT = config.payout
         DURACION_SEGUNDOS = config.duracion_segundos
@@ -65,14 +66,44 @@ def cargar_configuracion():
 _ultimo_reload = 0
 _config_cargada = False
 
-def reload_config_if_needed():
-    global _ultimo_reload, _config_cargada
+_reload_lock = False
+
+async def reload_config_if_needed():
+    global _ultimo_reload, _config_cargada, _reload_lock
     import time
     ahora = time.time()
-    if ahora - _ultimo_reload > 30 and _config_cargada:
+    if ahora - _ultimo_reload > 30 and _config_cargada and not _reload_lock:
+        _reload_lock = True
         _ultimo_reload = ahora
-        # No recargar dentro del loop async para evitar errores
-        print("[CONFIG] Recargando config...", flush=True)
+        try:
+            from asgiref.sync import sync_to_async
+            from gestion_riesgo.models import ConfiguracionEstrategia
+            
+            @sync_to_async
+            def get_config():
+                tipo_activo = ConfiguracionEstrategia.get_tipo_activo(mercado='binance')
+                config = ConfiguracionEstrategia.get_activa(tipo=tipo_activo, mercado='binance')
+                return tipo_activo, config
+            
+            tipo_activo, config = await get_config()
+            
+            global STAKE, PAYOUT, DURACION_SEGUNDOS, COOLDOWN_TICKS
+            global EMA_GAP_MIN, ADX_MIN, RSI_MIN, RSI_MAX, BB_MIN, BB_MAX
+            STAKE = config.stake
+            PAYOUT = config.payout
+            DURACION_SEGUNDOS = config.duracion_segundos
+            COOLDOWN_TICKS = config.cooldown_ticks
+            EMA_GAP_MIN = config.ema_gap_min
+            ADX_MIN = config.adx_min
+            RSI_MIN = config.rsi_min
+            RSI_MAX = config.rsi_max
+            BB_MIN = config.bb_min
+            BB_MAX = config.bb_max
+            print(f"[CONFIG] Recargada ({tipo_activo}): EMA>={EMA_GAP_MIN}%, ADX>={ADX_MIN}, RSI={RSI_MIN}-{RSI_MAX}, CD={COOLDOWN_TICKS}", flush=True)
+        except Exception as e:
+            print(f"[CONFIG] Error recargando: {e}", flush=True)
+        finally:
+            _reload_lock = False
 
 
 # ============================================================
@@ -187,79 +218,42 @@ def evaluar_senal(estado, precio):
         estado.cooldown -= 1
         return ("NEUTRAL", f"cd{estado.cooldown}", "media")
     
-    if len(estado.precios) < 60:
+    if len(estado.precios) < 50:
         return ("NEUTRAL", "warmup", "baja")
     
-    estado.ema_rapida = calcular_ema(precio, estado.ema_rapida, 9)
+    # EMA crossover simple (estrategia más robusta para timeframe 120s)
+    estado.ema_rapida = calcular_ema(precio, estado.ema_rapida, 8)
     estado.ema_media = calcular_ema(precio, estado.ema_media, 21)
-    estado.ema_lenta = calcular_ema(precio, estado.ema_lenta, 50)
-    estado.rsi = calcular_rsi(estado.precios, 14)
-    estado.adx = calcular_adx(estado.precios, 14)
+    estado.ema_lenta = calcular_ema(precio, estado.ema_lenta, 55)
     
-    ema_gap = abs(estado.ema_media - estado.ema_lenta) / precio * 100
-    tendencia_alcista = estado.ema_media > estado.ema_lenta
-    tendencia_bajista = estado.ema_media < estado.ema_lenta
+    # Calcular RSI
+    if len(estado.precios) >= 14:
+        rsi = calcular_rsi(estado.precios[-14:])
+    else:
+        rsi = 50.0
     
-    momentum = 0.0
-    if len(estado.precios) >= 15:
-        momentum = (precio - estado.precios[-15]) / estado.precios[-15] * 100
+    # EMA crossover
+    ema_rapida_above_media = estado.ema_rapida > estado.ema_media
+    ema_media_above_lenta = estado.ema_media > estado.ema_lenta
+    tendencia_alcista = ema_rapida_above_media and ema_media_above_lenta
     
-    banda_sup, media_bb, banda_inf = calcular_bollinger(estado.precios, 20, 2.0)
-    precio_vs_bb = 0.5
-    if (banda_sup - banda_inf) > 0:
-        precio_vs_bb = (precio - banda_inf) / (banda_sup - banda_inf)
+    ema_rapida_below_media = estado.ema_rapida < estado.ema_media
+    ema_media_below_lenta = estado.ema_media < estado.ema_lenta
+    tendencia_bajista = ema_rapida_below_media and ema_media_below_lenta
     
-    triple_alcista = estado.ema_rapida > estado.ema_media > estado.ema_lenta
-    triple_bajista = estado.ema_rapida < estado.ema_media < estado.ema_lenta
+    # CALL: Cruce alcista (EMA rápida cruza por encima de EMA media) + RSI < 65
+    if ema_rapida_above_media and rsi < 65:
+        if estado.cooldown > 0:
+            return ("NEUTRAL", f"cd{estado.cooldown}", "baja")
+        estado.cooldown = 15
+        return ("CALL", "ema_crossover_up", "alta")
     
-    if DEBUG and estado.tick_count % 50 == 0:
-        razones_falla = []
-        if ema_gap < 0.2:
-            razones_falla.append(f"gap bajo({ema_gap:.3f}%)")
-        if estado.adx < 20:
-            razones_falla.append(f"adx bajo({estado.adx:.0f})")
-        if estado.rsi < 30 or estado.rsi > 70:
-            razones_falla.append(f"rsi {estado.rsi:.0f}")
-        if not (triple_alcista or triple_bajista):
-            razones_falla.append("no triple EMA")
-        if precio_vs_bb < 0.2 or precio_vs_bb > 0.8:
-            razones_falla.append(f"bb extremo({precio_vs_bb:.2f})")
-        
-        razones_falla = []
-        if ema_gap < EMA_GAP_MIN:
-            razones_falla.append(f"gap bajo({ema_gap:.3f}%)")
-        if estado.adx < ADX_MIN:
-            razones_falla.append(f"adx bajo({estado.adx:.0f})")
-        if estado.rsi < RSI_MIN or estado.rsi > RSI_MAX:
-            razones_falla.append(f"rsi {estado.rsi:.0f}")
-        if not (triple_alcista or triple_bajista):
-            razones_falla.append("no triple EMA")
-        if precio_vs_bb < BB_MIN or precio_vs_bb > BB_MAX:
-            razones_falla.append(f"bb extremo({precio_vs_bb:.2f})")
-        
-        if DEBUG and razones_falla:
-            print(f"[{estado.simbolo}] NO ENTRA: {', '.join(razones_falla)}", flush=True)
-        elif DEBUG:
-            print(f"[{estado.simbolo}] CONDICIONES OK - evaluando entrada...", flush=True)
-    
-    if ema_gap < EMA_GAP_MIN:
-        return ("NEUTRAL", "gap_bajo", "baja")
-    if estado.adx < ADX_MIN:
-        return ("NEUTRAL", "adx_bajo", "baja")
-    if estado.rsi < RSI_MIN or estado.rsi > RSI_MAX:
-        return ("NEUTRAL", "rsi_extremo", "baja")
-    if not (triple_alcista or triple_bajista):
-        return ("NEUTRAL", "no_triple", "baja")
-    if precio_vs_bb < BB_MIN or precio_vs_bb > BB_MAX:
-        return ("NEUTRAL", "bb_extremo", "baja")
-    
-    if triple_alcista and tendencia_alcista and momentum > 0:
-        estado.cooldown = COOLDOWN_TICKS
-        return ("CALL", "alineado_alc", "alta")
-    
-    if triple_bajista and tendencia_bajista and momentum < 0:
-        estado.cooldown = COOLDOWN_TICKS
-        return ("PUT", "alineado_baj", "alta")
+    # PUT: Cruce bajista (EMA rápida cruza por debajo de EMA media) + RSI > 35
+    if ema_rapida_below_media and rsi > 35:
+        if estado.cooldown > 0:
+            return ("NEUTRAL", f"cd{estado.cooldown}", "baja")
+        estado.cooldown = 15
+        return ("PUT", "ema_crossover_dn", "alta")
     
     return ("NEUTRAL", "sin_señal", "baja")
 
@@ -386,7 +380,7 @@ async def conectar_binance(simbolos):
                 verificar_pendientes(estado, precio, hora)
                 
                 # Recargar config cada 30 segundos
-                reload_config_if_needed()
+                await reload_config_if_needed()
                 
                 # Nueva señal
                 if estado.operacion_pendiente is None:
@@ -417,10 +411,11 @@ async def main():
     global _config_cargada
     _config_cargada = True
     
-    simbolos = ["BTC", "ETH", "SOL", "XRP"]
+    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
     
     while True:
         try:
+            await reload_config_if_needed()
             print("[CONECTANDO] Binance...", flush=True)
             await conectar_binance(simbolos)
         except websockets.exceptions.ConnectionClosedError as e:

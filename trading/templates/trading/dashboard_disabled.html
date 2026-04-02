@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Forex Desactivado{% endblock %}
+
+{% block content %}
+<div class="trading-container">
+  <div class="card" style="text-align: center; padding: 60px 20px;">
+    <h1 style="color: var(--text-2); margin-bottom: 20px;">Sistema Forex Desactivado</h1>
+    <p style="color: var(--text-4); font-size: 16px;">
+      El trading de Forex ha sido desactivado. 
+      El sistema ahora se enfoca exclusivamente en Binance.
+    </p>
+    <a href="{% url 'gestion_riesgo:dashboard_binance' %}" class="btn-primary" style="display: inline-block; margin-top: 30px; padding: 12px 30px;">
+      Ir al Dashboard de Binance
+    </a>
+  </div>
+</div>
+{% endblock %}

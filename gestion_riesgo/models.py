@@ -702,7 +702,14 @@ class ConfiguracionEstrategia(models.Model):
     Configuración de la estrategia de trading.
     Se guarda en la base de datos para poder modificarla desde el dashboard.
     """
+    TIPO_CHOICES = [
+        ('estricta', 'Estricta'),
+        ('media', 'Media'),
+        ('flexible', 'Flexible'),
+    ]
+    
     nombre = models.CharField(max_length=50, default="binance")
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='estricta')
     
     # Condiciones de entrada
     ema_gap_min = models.FloatField(default=0.2, help_text="Gap mínimo entre EMA21 y EMA50 (%)")
@@ -732,19 +739,39 @@ class ConfiguracionEstrategia(models.Model):
         return f"Configuración {self.nombre} - EMA:{self.ema_gap_min}% ADX:{self.adx_min} RSI:{self.rsi_min}-{self.rsi_max}"
     
     @classmethod
-    def get_activa(cls):
-        """Retorna la configuración activa o la默认值"""
-        config = cls.objects.filter(activa=True).first()
+    def get_tipo_activo(cls, mercado='binance'):
+        """Retorna el tipo de estrategia activa actualmente"""
+        config = cls.objects.filter(nombre=mercado, activa=True).first()
+        return config.tipo if config else 'estricta'
+    
+    @classmethod
+    def get_activa(cls, tipo='estricta', mercado='binance'):
+        """Retorna la configuración activa para el tipo y mercado dados"""
+        config = cls.objects.filter(nombre=mercado, tipo=tipo, activa=True).first()
         if not config:
+            if tipo == 'estricta':
+                ema_gap_min, adx_min, rsi_min, rsi_max = 0.1, 20.0, 30.0, 70.0
+                bb_min, bb_max = 0.15, 0.85
+                cooldown_ticks = 100
+            elif tipo == 'media':
+                ema_gap_min, adx_min, rsi_min, rsi_max = 0.05, 15.0, 25.0, 75.0
+                bb_min, bb_max = 0.1, 0.9
+                cooldown_ticks = 50
+            else:  # flexible
+                ema_gap_min, adx_min, rsi_min, rsi_max = 0.02, 10.0, 20.0, 80.0
+                bb_min, bb_max = 0.05, 0.95
+                cooldown_ticks = 20
+            
             config = cls.objects.create(
-                nombre="binance",
-                ema_gap_min=0.2,
-                adx_min=20.0,
-                rsi_min=30.0,
-                rsi_max=70.0,
-                bb_min=0.2,
-                bb_max=0.8,
-                cooldown_ticks=150,
+                nombre=mercado,
+                tipo=tipo,
+                ema_gap_min=ema_gap_min,
+                adx_min=adx_min,
+                rsi_min=rsi_min,
+                rsi_max=rsi_max,
+                bb_min=bb_min,
+                bb_max=bb_max,
+                cooldown_ticks=cooldown_ticks,
                 stake=1.0,
                 duracion_segundos=60,
                 payout=0.95,
@@ -753,14 +780,31 @@ class ConfiguracionEstrategia(models.Model):
         return config
     
     def reset_to_default(self):
-        """Restablece todos los valores a los defaults"""
-        self.ema_gap_min = 0.2
-        self.adx_min = 20.0
-        self.rsi_min = 30.0
-        self.rsi_max = 70.0
-        self.bb_min = 0.2
-        self.bb_max = 0.8
-        self.cooldown_ticks = 150
+        """Restablece todos los valores a los defaults según el tipo"""
+        if self.tipo == 'estricta':
+            self.ema_gap_min = 0.1
+            self.adx_min = 20.0
+            self.rsi_min = 30.0
+            self.rsi_max = 70.0
+            self.bb_min = 0.15
+            self.bb_max = 0.85
+            self.cooldown_ticks = 100
+        elif self.tipo == 'media':
+            self.ema_gap_min = 0.05
+            self.adx_min = 15.0
+            self.rsi_min = 25.0
+            self.rsi_max = 75.0
+            self.bb_min = 0.1
+            self.bb_max = 0.9
+            self.cooldown_ticks = 50
+        else:  # flexible
+            self.ema_gap_min = 0.02
+            self.adx_min = 10.0
+            self.rsi_min = 20.0
+            self.rsi_max = 80.0
+            self.bb_min = 0.05
+            self.bb_max = 0.95
+            self.cooldown_ticks = 20
         self.stake = 1.0
         self.duracion_segundos = 60
         self.payout = 0.95
