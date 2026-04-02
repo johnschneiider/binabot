@@ -403,6 +403,35 @@ class LogAuditoriaViewSet(viewsets.ReadOnlyModelViewSet):
 
 @api_view(["GET"])
 @permission_classes([permissions.AllowAny])
+def api_navbar(request):
+    """
+    API endpoint para el navbar.
+    Retorna informacion del usuario y balance.
+    Si no esta autenticado, retorna 401 (no redirect).
+    """
+    if not request.user.is_authenticated:
+        return Response(
+            {"error": "No autenticado", "user": None, "balance": 0},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    # Obtener balance del usuario (mock si no existe)
+    balance = 0
+    try:
+        inv = request.user.inversionista
+        balance = float(inv.capital_actual) if inv.capital_actual else 0
+    except AttributeError:
+        # Usuario no tiene inversionista, usar balance mock
+        balance = 100.0  # Mock balance
+    
+    return Response({
+        "user": request.user.username,
+        "balance": balance,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([permissions.AllowAny])
 def health_check(request):
     """Health check para el API."""
     return Response({

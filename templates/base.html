@@ -670,23 +670,26 @@
       }
 
       function loadNavbarBalance() {
-        fetch('/portal/api/navbar/', {credentials:'same-origin'})
-          .then(r => r.ok ? r.json() : null)
+        fetch('/api/navbar/', {credentials:'same-origin'})
+          .then(r => {
+            if (r.status === 401) {
+              // No autenticado - mostrar botones de login
+              return null;
+            }
+            return r.ok ? r.json() : null;
+          })
           .then(data => {
-            if (!data || !data.capital) return;
+            if (!data || !data.balance) return;
             var balanceEl = document.getElementById('navBalance');
             if (balanceEl) {
-              var cap = data.capital;
+              var cap = data.balance;
               var formatted = cap >= 1000000 ? '$' + (cap/1000000).toFixed(2) + 'M' : '$' + Math.round(cap).toLocaleString('es-CO');
               balanceEl.textContent = formatted;
               balanceEl.style.display = 'inline';
             }
-            var pctEl = document.getElementById('navRend');
-            if (pctEl && data.rendimiento_pct !== undefined) {
-              var sign = data.rendimiento_pct >= 0 ? '+' : '';
-              pctEl.textContent = sign + data.rendimiento_pct.toFixed(2) + '%';
-              pctEl.style.display = 'inline';
-              pctEl.style.color = data.rendimiento_pct >= 0 ? '#34d399' : '#f87171';
+            // Ocultar botones de login si esta autenticado
+            var loginBtns = document.querySelectorAll('.navbar-actions .btn-nav.login-btn');
+            loginBtns.forEach(btn => btn.style.display = 'none');
             }
           })
           .catch(function() {});
@@ -1008,17 +1011,17 @@
 
         window.updateNavbarBalance = function() {
           if (!ratesLoaded) return;
-          fetch('/portal/api/navbar/', {credentials:'same-origin'})
-            .then(function(r) { return r.ok ? r.json() : null; })
+          fetch('/api/navbar/', {credentials:'same-origin'})
+            .then(function(r) {
+              if (r.status === 401) return null;
+              return r.ok ? r.json() : null;
+            })
             .then(function(data) {
               if (!data) return;
               var capEl = document.getElementById('navBalance');
-              var pctEl = document.getElementById('navRend');
               if (capEl) {
-                capEl.textContent = fmtCurrency(data.capital, currentCurrency);
+                capEl.textContent = fmtCurrency(data.balance, currentCurrency);
               }
-              if (pctEl) {
-                var pct = data.rendimiento_pct || 0;
                 var sign = pct >= 0 ? '+' : '';
                 pctEl.textContent = sign + pct.toFixed(2) + '%';
                 pctEl.style.color = pct >= 0 ? '#34d399' : '#f87171';

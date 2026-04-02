@@ -23,6 +23,9 @@ urlpatterns = [
     path("auth/me/", views.ProfileView.as_view(), name="me"),
     path("auth/cambiar-password/", views.CambioPasswordView.as_view(), name="cambiar-password"),
     
+    # Navbar API
+    path("navbar/", views.api_navbar, name="navbar"),
+    
     # Health check
     path("health/", views.health_check, name="health-check"),
 ]
