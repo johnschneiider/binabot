@@ -16,7 +16,12 @@ load_dotenv(dotenv_path=BASE_DIR / ".env", override=True)
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "INSEGURO-PARA-DESARROLLO")
 DEBUG = (os.getenv("DJANGO_DEBUG", "False").strip().lower() in {"1", "true", "yes", "y"})
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
+ALLOWED_HOSTS = [
+    "www.vitalmix.com.co",
+    "vitalmix.com.co",
+    "127.0.0.1",
+    "localhost",
+]
 
 # ===== BASE DE DATOS =====
 # Soporta PostgreSQL (producción) y SQLite (desarrollo)

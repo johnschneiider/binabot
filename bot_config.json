@@ -1,0 +1,12 @@
+{
+  "ADX_MIN": 25.0,
+  "EMA_GAP_PCT": 0.15,
+  "RSI_CALL_MAX": 60.0,
+  "RSI_PUT_MIN": 40.0,
+  "MOMENTUM_MIN_PCT": 0.045,
+  "DURACION_SEG": 120,
+  "STAKE": 1.0,
+  "PAYOUT": 0.95,
+  "MAX_OPS_DIA": 50,
+  "COOLDOWN_BASE": 40
+}

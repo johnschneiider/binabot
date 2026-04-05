@@ -1853,8 +1853,13 @@ def dashboard_binance(request):
     balance_global = BalanceGlobal.get_balance_float()
     capital_inicial = float(BalanceGlobal.get_balance().capital_inicial)
     
-    # Win rate global
-    wr_global = (total_wins / total_ops * 100) if total_ops > 0 else 0
+    # Win rate global (últimas 100)
+    ultimas_100_ops = list(OperacionBinance.objects.order_by('-created_at')[:100])
+    wr_ult100_wins = sum(1 for op in ultimas_100_ops if op.es_win)
+    wr_ult100_total = len(ultimas_100_ops)
+    wr_global = (wr_ult100_wins / wr_ult100_total * 100) if wr_ult100_total > 0 else 0
+    total_ops_100 = wr_ult100_total
+    total_wins_100 = wr_ult100_wins
     
     # Últimas 50 operaciones para historial
     historial_ops = OperacionBinance.objects.all().order_by("-created_at")[:50]
@@ -1878,9 +1883,9 @@ def dashboard_binance(request):
     
     return render(request, "gestion_riesgo/dashboard_binance.html", {
         "stats": stats,
-        "total_ops": total_ops,
-        "total_wins": total_wins,
-        "wr_global": wr_global,
+        "total_ops": total_ops_100,
+        "total_wins": total_wins_100,
+        "wr_global": round(wr_global, 1),
         "total_profit": total_profit,
         "balance_ficticio": balance_global,
         "capital_inicial": capital_inicial,
@@ -2109,13 +2114,30 @@ def sse_binance_stream(request):
                 # Cerrar conexión vieja para evitar problemas
                 connection.close()
                 
+                # Leer estado de diagnóstico del bot
+                bot_status = "Escaneando mercado..."
+                try:
+                    with open("/tmp/bot_binance_status.json", "r") as f:
+                        status_data = json.load(f)
+                        if time.time() - status_data.get("timestamp", 0) < 30:
+                            bot_status = status_data.get("status", "Escaneando...")
+                except:
+                    pass
+
                 # SIEMPRE enviar datos (cada 2 segundos) para gráficos en tiempo real
                 stats = EstadisticasBinance.objects.all()
                 total_ops = sum(s.total_ops for s in stats)
                 total_wins = sum(s.wins for s in stats)
-                wr_global = (total_wins / total_ops * 100) if total_ops > 0 else 0
                 total_profit = sum(float(s.profit_total) for s in stats)
                 balance_ficticio = sum(float(s.balance_ficticio) for s in stats)
+                
+                # Win Rate de los últimos 100 trades
+                ultimas_100_ops = list(OperacionBinance.objects.order_by('-created_at')[:100])
+                wr_ult100_wins = sum(1 for op in ultimas_100_ops if op.es_win)
+                wr_ult100_total = len(ultimas_100_ops)
+                wr_global = (wr_ult100_wins / wr_ult100_total * 100) if wr_ult100_total > 0 else 0
+                total_wins_display = wr_ult100_wins
+                total_ops_display = wr_ult100_total
                 
                 # Datos para gráfico de balance por operación
                 todas_ops = OperacionBinance.objects.all().order_by('created_at')
@@ -2226,8 +2248,9 @@ def sse_binance_stream(request):
                 data = json.dumps({
                     "type": "update",
                     "timestamp": time.time(),
-                    "total_ops": total_ops,
-                    "total_wins": total_wins,
+                    "bot_status": bot_status,
+                    "total_ops": total_ops_display,
+                    "total_wins": total_wins_display,
                     "wr_global": round(wr_global, 1),
                     "total_profit": round(total_profit, 2),
                     "balance_ficticio": round(balance_ficticio, 2),

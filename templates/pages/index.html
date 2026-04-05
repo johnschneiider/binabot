@@ -1,485 +1,262 @@
 {% extends "base.html" %}
 
-{% block title %}QUANT·DERIV — Trading Algorítmico Institucional{% endblock %}
+{% block title %}QUANT·DERIV — La Élite del Trading Cuantitativo{% endblock %}
 
 {% block extra_head %}
+<!-- AOS Animation Library -->
+<link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
 <style>
-  /* ===== HERO ===== */
+  /* ===== MEJORAS GLOBALES DE UI ===== */
+  :root {
+    --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    --glass-bg: rgba(17, 24, 39, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.08);
+  }
+
+  .section-padding { padding: clamp(80px, 12vw, 160px) clamp(16px, 5vw, 48px); }
+
+  /* ===== HERO REFINADO ===== */
   .hero {
-    min-height: calc(100vh - 64px);
+    min-height: 100vh;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; padding: clamp(60px, 10vw, 120px) clamp(16px, 5vw, 48px);
-    position: relative;
+    text-align: center; padding: 120px 24px;
+    background: radial-gradient(circle at 50% -20%, rgba(59,130,246,0.15) 0%, transparent 50%);
   }
-  .hero::before {
-    content: "";
-    position: absolute; top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 600px; height: 600px;
-    background: radial-gradient(ellipse at center, rgba(59,130,246,0.12) 0%, transparent 70%);
-    pointer-events: none;
-  }
-  .hero-eyebrow {
+  
+  .hero-tag {
     display: inline-flex; align-items: center; gap: 8px;
-    font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
-    color: var(--accent-light); margin-bottom: 24px;
-    background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2);
-    padding: 6px 16px; border-radius: 100px;
+    padding: 8px 16px; border-radius: 100px;
+    background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2);
+    color: var(--accent-light); font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 2px; margin-bottom: 32px;
   }
-  .hero-eyebrow::before { content: ""; width: 6px; height: 6px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); }
+
   .hero h1 {
-    font-size: clamp(36px, 7vw, 72px); font-weight: 900; color: #fff;
-    letter-spacing: -2px; line-height: 1.05; margin-bottom: 12px; max-width: 900px;
+    font-size: clamp(40px, 8vw, 84px); font-weight: 900; color: #fff;
+    letter-spacing: -3px; line-height: 0.95; margin-bottom: 24px;
+    max-width: 1000px;
   }
-  .hero h1 span { background: linear-gradient(135deg, var(--accent-light) 0%, #93c5fd 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+  .hero h1 span {
+    background: linear-gradient(to bottom, #fff 30%, #94a3b8 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
   .hero-sub {
-    font-size: clamp(15px, 2vw, 18px); color: var(--text-3);
-    max-width: 620px; margin-bottom: 40px; line-height: 1.7;
+    font-size: clamp(16px, 2.5vw, 20px); color: var(--text-3);
+    max-width: 700px; margin-bottom: 48px; line-height: 1.6;
+    font-weight: 400;
   }
-  .hero-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 48px; }
-  .hero-trust { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; justify-content: center; font-size: 13px; color: var(--text-4); }
-  .hero-trust span { display: flex; align-items: center; gap: 6px; }
-  .hero-trust svg { width: 14px; height: 14px; color: var(--green); }
-  .hero-stats {
-    display: flex; gap: 0; margin-top: 60px;
-    background: var(--bg-3); border: 1px solid var(--border);
-    border-radius: var(--r-lg); overflow: hidden;
-    max-width: 700px; width: 100%;
-  }
-  .hero-stat {
-    flex: 1; padding: 24px 20px; text-align: center;
-    border-right: 1px solid var(--border);
-  }
-  .hero-stat:last-child { border-right: none; }
-  .hero-stat-num { font-size: clamp(24px, 4vw, 36px); font-weight: 900; color: #fff; letter-spacing: -1px; line-height: 1.1; }
-  .hero-stat-num.green { color: var(--green); }
-  .hero-stat-label { font-size: 12px; color: var(--text-4); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
 
-  /* ===== TRUST BAR ===== */
-  .trust-bar {
-    background: var(--bg-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-    padding: 28px clamp(16px, 5vw, 48px);
+  .hero-glow {
+    position: absolute; width: 400px; height: 400px;
+    background: var(--accent); filter: blur(120px);
+    opacity: 0.1; pointer-events: none; z-index: -1;
   }
-  .trust-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: clamp(24px, 5vw, 64px); flex-wrap: wrap; }
-  .trust-item { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--text-3); }
-  .trust-item svg { width: 20px; height: 20px; color: var(--accent-light); flex-shrink: 0; }
 
-  /* ===== HOW IT WORKS ===== */
-  .how-section { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); }
-  .how-grid { max-width: 1200px; margin: 48px auto 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
-  .how-card { background: var(--bg-3); padding: 36px 28px; transition: background 0.2s; }
-  .how-card:hover { background: var(--bg-4); }
-  .how-num { font-size: 11px; font-weight: 800; color: var(--accent); letter-spacing: 2px; margin-bottom: 16px; }
-  .how-card h3 { font-size: 17px; font-weight: 700; color: var(--text-1); margin-bottom: 10px; }
-  .how-card p { font-size: 14px; color: var(--text-4); line-height: 1.65; }
-  .how-icon { width: 44px; height: 44px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; color: var(--accent-light); }
-  .how-icon svg { width: 20px; height: 20px; }
-
-  /* ===== FEATURES ===== */
-  .features-section { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  .features-grid { max-width: 1200px; margin: 48px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
-  .feature-card { background: var(--bg-3); padding: 32px 28px; transition: background 0.2s; }
-  .feature-card:hover { background: var(--bg-4); }
-  .feature-icon { width: 40px; height: 40px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
-  .feature-icon.blue { background: rgba(59,130,246,0.1); color: var(--accent-light); border: 1px solid rgba(59,130,246,0.2); }
-  .feature-icon.green { background: rgba(16,185,129,0.1); color: var(--green-light); border: 1px solid rgba(16,185,129,0.2); }
-  .feature-icon.yellow { background: rgba(234,179,8,0.1); color: #fbbf24; border: 1px solid rgba(234,179,8,0.2); }
-  .feature-icon svg { width: 20px; height: 20px; }
-  .feature-card h3 { font-size: 15px; font-weight: 700; color: var(--text-1); margin-bottom: 8px; }
-  .feature-card p { font-size: 13px; color: var(--text-4); line-height: 1.65; }
-
-  /* ===== PRICING ===== */
-  .pricing-section { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); }
-  .pricing-center { max-width: 1100px; margin: 48px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-  .price-card {
-    background: var(--bg-3); border: 1px solid var(--border);
-    border-radius: var(--r-xl); padding: 32px 28px;
-    display: flex; flex-direction: column; gap: 0;
-    transition: all 0.2s; position: relative;
+  /* ===== CARDS PROFESIONALES ===== */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-xl);
+    padding: 40px;
+    transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
   }
-  .price-card:hover { border-color: var(--border-bright); background: var(--bg-4); transform: translateY(-2px); }
-  .price-card.featured { border-color: var(--accent); background: linear-gradient(180deg, rgba(59,130,246,0.08) 0%, var(--bg-3) 100%); box-shadow: 0 0 40px rgba(59,130,246,0.1); }
-  .price-card.featured::before {
-    content: "MÁS POPULAR";
-    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-    font-size: 10px; font-weight: 800; letter-spacing: 1.5px;
-    background: var(--accent); color: #fff; padding: 4px 16px; border-radius: 100px;
+  .glass-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
   }
-  .price-name { font-size: 14px; font-weight: 700; color: var(--text-1); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-  .price-desc { font-size: 13px; color: var(--text-4); margin-bottom: 20px; min-height: 36px; }
-  .price-amount { display: flex; align-items: baseline; gap: 4px; margin-bottom: 24px; }
-  .price-amount .currency { font-size: 18px; font-weight: 700; color: var(--text-3); }
-  .price-amount .amount { font-size: clamp(32px, 5vw, 44px); font-weight: 900; color: var(--text-1); letter-spacing: -1.5px; }
-  .price-amount .period { font-size: 13px; color: var(--text-4); }
-  .price-features { list-style: none; margin-bottom: 28px; flex: 1; }
-  .price-features li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-3); margin-bottom: 10px; }
-  .price-features li svg { width: 16px; height: 16px; color: var(--green); flex-shrink: 0; margin-top: 1px; }
-  .price-features li svg.close { color: var(--text-4); }
-  .price-features li.disabled { color: var(--text-4); }
-  .price-card .btn { width: 100%; justify-content: center; }
-  .price-card.featured .btn { background: var(--accent); border-color: var(--accent); }
 
-  /* ===== TESTIMONIAL ===== */
-  .testimonial-section { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); background: var(--bg-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  .testimonial-card {
-    max-width: 760px; margin: 0 auto; text-align: center;
+  /* ===== COMPARATIVA ===== */
+  .comparison-table {
+    max-width: 900px; margin: 60px auto 0;
+    width: 100%; border-collapse: separate; border-spacing: 0 8px;
   }
-  .testimonial-quote {
-    font-size: clamp(18px, 3vw, 24px); font-weight: 600; color: var(--text-1);
-    line-height: 1.5; margin-bottom: 28px; font-style: italic;
+  .comparison-table th { padding: 20px; text-align: left; color: var(--text-4); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .comparison-table td { padding: 24px; background: var(--bg-3); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); color: var(--text-2); font-size: 14px; }
+  .comparison-table td:first-child { border-left: 1px solid var(--border); border-radius: var(--r-md) 0 0 var(--r-md); font-weight: 600; color: #fff; }
+  .comparison-table td:last-child { border-right: 1px solid var(--border); border-radius: 0 var(--r-md) var(--r-md) 0; }
+  .comparison-table tr.highlight td { background: rgba(59,130,246,0.05); border-color: var(--accent); color: var(--accent-light); }
+  .check-icon { color: var(--green); margin-right: 8px; }
+  .cross-icon { color: var(--red); margin-right: 8px; }
+
+  /* ===== STATS GRID ===== */
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1px; background: var(--border); border: 1px solid var(--border);
+    border-radius: var(--r-lg); overflow: hidden; margin-top: 80px;
+    width: 100%; max-width: 1000px;
   }
-  .testimonial-quote::before { content: ""; display: block; width: 40px; height: 40px; margin: 0 auto 20px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'%3E%3Cpath d='M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z'/%3E%3C/svg%3E") no-repeat center; opacity: 0.3; }
-  .testimonial-author { display: flex; align-items: center; justify-content: center; gap: 14px; }
-  .testimonial-avatar { width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, var(--accent) 0%, #1e40af 100%); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 18px; }
-  .testimonial-info { text-align: left; }
-  .testimonial-name { font-size: 14px; font-weight: 700; color: var(--text-1); }
-  .testimonial-role { font-size: 12px; color: var(--text-4); }
-  .testimonial-stats { display: flex; gap: 24px; justify-content: center; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
-  .testi-stat { text-align: center; }
-  .testi-stat-num { font-size: 22px; font-weight: 800; color: var(--green); }
-  .testi-stat-label { font-size: 11px; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-item { background: var(--bg-2); padding: 32px; text-align: center; }
+  .stat-val { font-size: 32px; font-weight: 900; color: #fff; display: block; margin-bottom: 4px; }
+  .stat-lab { font-size: 11px; color: var(--text-4); text-transform: uppercase; letter-spacing: 1.5px; }
 
-  /* ===== CTA SECTION ===== */
-  .cta-section { padding: clamp(60px, 8vw, 100px) clamp(16px, 5vw, 48px); text-align: center; }
-  .cta-inner { max-width: 600px; margin: 0 auto; }
-  .cta-section h2 { font-size: clamp(26px, 4vw, 38px); font-weight: 900; color: var(--text-1); letter-spacing: -0.5px; margin-bottom: 12px; }
-  .cta-section p { font-size: 16px; color: var(--text-3); margin-bottom: 32px; }
-  .cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
-  .cta-note { font-size: 12px; color: var(--text-4); }
-
-  /* ===== RISK DISCLAIMER ===== */
-  .risk-section { padding: clamp(40px, 6vw, 60px) clamp(16px, 5vw, 48px); background: var(--bg-0); border-top: 1px solid var(--border); }
-  .risk-inner { max-width: 900px; margin: 0 auto; }
-  .risk-box {
-    background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.2);
-    border-radius: var(--r-lg); padding: 28px 32px;
+  /* ===== BUTTONS REFINADOS ===== */
+  .btn-premium {
+    padding: 16px 40px; font-size: 15px; font-weight: 700;
+    border-radius: 100px; background: #fff; color: var(--bg-0);
+    transition: all 0.3s; box-shadow: 0 10px 30px rgba(255,255,255,0.1);
   }
-  .risk-title { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; color: var(--red); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .risk-title svg { width: 18px; height: 18px; }
-  .risk-text { font-size: 13px; color: var(--text-4); line-height: 1.8; }
-  .risk-text strong { color: var(--text-3); }
-
-  /* ===== SECTION HEADER ===== */
-  .section-header { text-align: center; margin-bottom: 48px; }
-  .section-header .section-desc { margin: 0 auto; }
+  .btn-premium:hover { transform: scale(1.05); box-shadow: 0 15px 40px rgba(255,255,255,0.2); background: #f8fafc; }
 
   /* ===== RESPONSIVE ===== */
   @media (max-width: 768px) {
-    .hero-stats { flex-direction: column; border-radius: var(--r-md); }
-    .hero-stat { border-right: none; border-bottom: 1px solid var(--border); }
-    .hero-stat:last-child { border-bottom: none; }
-    .how-grid { grid-template-columns: 1fr; }
-    .pricing-center { grid-template-columns: 1fr; }
-    .testimonial-stats { flex-wrap: wrap; gap: 16px; }
-    .cta-btns { flex-direction: column; }
-    .hero-btns { flex-direction: column; width: 100%; }
-    .hero-btns .btn { width: 100%; }
+    .hero h1 { font-size: 48px; letter-spacing: -1.5px; }
+    .comparison-table { display: none; } /* Ocultar en móvil para simplicidad */
   }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<!-- HERO -->
+<!-- HERO SECTION -->
 <section class="hero">
-  <div class="hero-eyebrow">Plataforma de Trading Algorítmico</div>
-  <h1>Opera con <span>precisión institucional</span> en mercados sintéticos</h1>
-  <p class="hero-sub">QUANT·DERIV es una plataforma de trading automatizado basada en estrategias cuantitativas optimizadas por datos. Selecciona operaciones con edge estadístico confirmado y gestiona el riesgo con estándares institucionales.</p>
-  <div class="hero-btns">
-    <button class="btn btn-primary" onclick="openAuth('register')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-      Empezar Gratis
-    </button>
-    <a href="{% url 'gestion_riesgo:dashboard' %}" class="btn btn-outline">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-      Ver Dashboard
-    </a>
+  <div class="hero-glow"></div>
+  <div class="hero-tag" data-aos="fade-down">Tecnología de Grado Institucional</div>
+  <h1 data-aos="fade-up" data-aos-delay="100">La arquitectura definitiva para la <span>rentabilidad</span> algorítmica</h1>
+  <p class="hero-sub" data-aos="fade-up" data-aos-delay="200">
+    Libérese de las limitaciones del trading manual. QUANT·DERIV despliega un motor de ejecución "Francotirador" diseñado para identificar y capturar solo las oportunidades de mayor probabilidad.
+  </p>
+  
+  <div class="hero-btns" data-aos="fade-up" data-aos-delay="300">
+    <button class="btn-premium" onclick="window.location.href='/registro/'">Crear Mi Cuenta</button>
+    <a href="/panel/binance/" class="btn btn-outline" style="border-radius: 100px; padding: 16px 40px;">Explorar Terminal</a>
   </div>
-  <div class="hero-trust">
-    <span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-      Sin tarjeta de crédito
-    </span>
-    <span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-      Plan gratuito para siempre
-    </span>
-    <span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-      Cancela cuando quieras
-    </span>
-  </div>
-  <div class="hero-stats">
-    <div class="hero-stat">
-      <div class="hero-stat-num green">70%+</div>
-      <div class="hero-stat-label">Winrate · Hora Óptima</div>
+
+  <div class="stats-grid" data-aos="fade-up" data-aos-delay="400">
+    <div class="stat-item">
+      <span class="stat-val">80%</span>
+      <span class="stat-lab">Target Winrate</span>
     </div>
-    <div class="hero-stat">
-      <div class="hero-stat-num">10%</div>
-      <div class="hero-stat-label">Meta Diaria Rentabilidad</div>
+    <div class="stat-item">
+      <span class="stat-val">120s</span>
+      <span class="stat-lab">Velocidad de Ejecución</span>
     </div>
-    <div class="hero-stat">
-      <div class="hero-stat-num">635</div>
-      <div class="hero-stat-label">Traders Activos</div>
+    <div class="stat-item">
+      <span class="stat-val">Auto</span>
+      <span class="stat-lab">Optimización Diaria</span>
     </div>
-    <div class="hero-stat">
-      <div class="hero-stat-num">R_100</div>
-      <div class="hero-stat-label">Índice Sintético</div>
+    <div class="stat-item">
+      <span class="stat-val">24/7</span>
+      <span class="stat-lab">Monitoreo de Mercado</span>
     </div>
   </div>
 </section>
 
-<!-- TRUST BAR -->
-<div class="trust-bar">
-  <div class="trust-inner">
-    <div class="trust-item">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      Gestión de Riesgo Robusta
+<!-- VALUE PROP -->
+<section class="section-padding" style="background: var(--bg-1);">
+  <div class="container">
+    <div class="section-header" data-aos="fade-up">
+      <div class="section-label">El Factor de Diferencia</div>
+      <h2 class="section-title">¿Por qué QUANT·DERIV?</h2>
+      <p class="section-desc">Mientras otros adivinan, nosotros calculamos. Nuestra arquitectura separa el ruido de la tendencia real.</p>
     </div>
-    <div class="trust-item">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      Horarios Optimizados por Datos
-    </div>
-    <div class="trust-item">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Dashboard en Tiempo Real
-    </div>
-    <div class="trust-item">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-      Arquitectura Multi-Tenant
-    </div>
-  </div>
-</div>
 
-<!-- HOW IT WORKS -->
-<section class="how-section">
-  <div class="section-header">
-    <div class="section-label">Cómo Funciona</div>
-    <h2 class="section-title">Tres módulos, una máquina de precisión</h2>
-    <p class="section-desc">Arquitectura modular que separa el mercado, la estrategia y el riesgo en capas independientes — el principio de toda infraestructura institucional.</p>
-  </div>
-  <div class="how-grid">
-    <div class="how-card">
-      <div class="how-num">MÓDULO 01</div>
-      <div class="how-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      </div>
-      <h3>vector_variables · El Mercado</h3>
-      <p>Captura ticks en tiempo real desde la API de Deriv WebSocket. Construye el vector de estado x(t) con indicadores técnicos: EMAs, gap de medias, pendiente y estructura del precio.</p>
-    </div>
-    <div class="how-card">
-      <div class="how-num">MÓDULO 02</div>
-      <div class="how-icon" style="background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.2);color:var(--green-light)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      </div>
-      <h3>vector_pesos · La Estrategia</h3>
-      <p>Pesos w calibrados por backtesting con datos históricos. Genera la señal ŝ = wᵀx con umbrales adaptativos que solo activan operaciones con edge estadístico confirmado.</p>
-    </div>
-    <div class="how-card">
-      <div class="how-num">MÓDULO 03</div>
-      <div class="how-icon" style="background:rgba(234,179,8,0.1);border-color:rgba(234,179,8,0.2);color:#fbbf24">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      </div>
-      <h3>gestion_riesgo · El Riesgo</h3>
-      <p>Riesgo no negociable. Circuit breakers, drawdown máximo, ciclos de take profit y stop loss. Bloqueo automático de horarios sin edge. Auto-pausa cuando las condiciones no son favorables.</p>
+    <div class="comparison-table" data-aos="fade-up">
+      <table>
+        <thead>
+          <tr>
+            <th>Característica</th>
+            <th>Trading Manual / Bots comunes</th>
+            <th>QUANT·DERIV Francotirador</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Toma de Decisiones</td>
+            <td>Emocional o basada en indicadores simples</td>
+            <td>Matriz de 5 indicadores + Momentum + Slope</td>
+          </tr>
+          <tr>
+            <td>Gestión de Rachas</td>
+            <td>El usuario persigue pérdidas (Revenge trading)</td>
+            <td>Cooldown Progresivo (Corta rachas negativas)</td>
+          </tr>
+          <tr>
+            <td>Protección de Capital</td>
+            <td>Nula o depende de la disciplina mental</td>
+            <td>Filtro de Volatilidad (No opera en mercados laterales)</td>
+          </tr>
+          <tr class="highlight">
+            <td>Optimización</td>
+            <td>Estrategia estática que caduca</td>
+            <td>Auto-Ajuste cada 30 min según el Winrate real</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>
 
-<!-- FEATURES -->
-<section class="features-section">
-  <div class="section-header">
-    <div class="section-label">Capacidades</div>
-    <h2 class="section-title">Diseñado para máxima selectividad</h2>
-    <p class="section-desc">Cada componente del sistema está optimizado para un solo objetivo: maximizar el winrate manteniendo el riesgo bajo control.</p>
-  </div>
-  <div class="features-grid">
-    <div class="feature-card">
-      <div class="feature-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-      <h3>Estrategia SPP</h3>
-      <p>Estructura + Pendiente + Pullback. Selecciona operaciones con edge estadístico confirmado. Máxima selectividad, mínimo ruido.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-      <h3>Circuit Breakers</h3>
-      <p>Protección multinivel: drawdown, pérdida por hora, pérdida por trade, ciclos de profit y stop loss. El bot se auto-pausa cuando las condiciones se deterioran.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="0"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-      <h3>Dashboard SSE</h3>
-      <p>Streaming en tiempo real con gráficos de ticks, operaciones, logs y estado del bot. Actualización continua sin recargar la página.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-      <h3>Horario Institucional</h3>
-      <p>Bloqueo automático de las 22 horas del día sin edge. Opera exclusivamente en la ventana 20:00–21:00 UTC donde se concentra el mayor winrate confirmado.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div>
-      <h3>Suscripciones Multi-Tenant</h3>
-      <p>Arquitectura SaaS con PostgreSQL. Cada tenant tiene sus propios usuarios, configuraciones y logs de auditoría completamente aislados.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
-      <h3>Backtesting con Ticks</h3>
-      <p>Colección histórica de ticks para walk-forward analysis. Calibración continua de pesos y umbrales con datos reales del mercado sintético.</p>
-    </div>
-  </div>
-</section>
-
-<!-- PRICING -->
-<section class="pricing-section" id="precios">
-  <div class="section-header">
-    <div class="section-label">Planes</div>
-    <h2 class="section-title">Elige tu plan</h2>
-    <p class="section-desc">Desde gratuito hasta institucional. Sin contratos, cancela cuando quieras.</p>
-  </div>
-  <div class="pricing-center">
-    <!-- FREE -->
-    <div class="price-card">
-      <div class="price-name">Free</div>
-      <div class="price-desc">Para usuarios nuevos que quieren probar el sistema</div>
-      <div class="price-amount">
-        <span class="currency">$</span>
-        <span class="amount">0</span>
-        <span class="period">/ para siempre</span>
+<!-- MODULES -->
+<section class="section-padding" style="background: var(--bg-0);">
+  <div class="container">
+    <div class="how-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; border:none; background:none;">
+      <div class="glass-card" data-aos="fade-up">
+        <div class="how-num">INFRAESTRUCTURA</div>
+        <h3>Análisis Multivariante</h3>
+        <p>No usamos un solo indicador. Nuestro motor valida el RSI, ADX, Bollinger y la estructura de EMAs simultáneamente antes de emitir una señal.</p>
       </div>
-      <ul class="price-features">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 1 cuenta de trading</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 1 símbolo (R_100)</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard en tiempo real</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 trades / día</li>
-        <li class="disabled"><svg class="close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin backtesting</li>
-        <li class="disabled"><svg class="close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin acceso API</li>
-      </ul>
-      <button class="btn btn-outline" onclick="openAuth('register')">Crear Cuenta Gratis</button>
-    </div>
-
-    <!-- BÁSICO -->
-    <div class="price-card">
-      <div class="price-name">Básico</div>
-      <div class="price-desc">Para traders individuales que buscan resultados consistentes</div>
-      <div class="price-amount">
-        <span class="currency">$</span>
-        <span class="amount">29</span>
-        <span class="period">/ mes</span>
+      <div class="glass-card" data-aos="fade-up" data-aos-delay="100">
+        <div class="how-num">INTELIGENCIA</div>
+        <h3>Auto-Calibración</h3>
+        <p>El mercado cambia, el bot también. Nuestro cerebro optimizador analiza el rendimiento en tiempo real y aprieta los filtros si detecta inestabilidad.</p>
       </div>
-      <ul class="price-features">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 3 cuentas de trading</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 3 símbolos</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard en tiempo real</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 50 trades / día</li>
-        <li class="disabled"><svg class="close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin backtesting</li>
-        <li class="disabled"><svg class="close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Sin acceso API</li>
-      </ul>
-      <button class="btn btn-outline" onclick="openAuth('register')">Elegir Básico</button>
-    </div>
-
-    <!-- PRO - FEATURED -->
-    <div class="price-card featured">
-      <div class="price-name" style="color: var(--accent-light)">Pro</div>
-      <div class="price-desc">Para traders avanzados con acceso completo a herramientas</div>
-      <div class="price-amount">
-        <span class="currency">$</span>
-        <span class="amount">79</span>
-        <span class="period">/ mes</span>
-      </div>
-      <ul class="price-features">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 cuentas de trading</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 10 símbolos</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Dashboard + Backtesting</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 200 trades / día</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Acceso API</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte prioritario</li>
-      </ul>
-      <button class="btn btn-primary" onclick="openAuth('register')">Elegir Pro</button>
-    </div>
-
-    <!-- INSTITUCIONAL -->
-    <div class="price-card">
-      <div class="price-name">Institucional</div>
-      <div class="price-desc">Para firms y equipos con acceso completo y white label</div>
-      <div class="price-amount">
-        <span class="currency">$</span>
-        <span class="amount">199</span>
-        <span class="period">/ mes</span>
-      </div>
-      <ul class="price-features">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Cuentas ilimitadas</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Símbolos ilimitados</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> White label completo</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Backtesting avanzado</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Soporte 24/7 dedicado</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> SLA garantizado</li>
-      </ul>
-      <button class="btn btn-outline" onclick="openAuth('register')">Elegir Institucional</button>
-    </div>
-  </div>
-</section>
-
-<!-- TESTIMONIAL -->
-<section class="testimonial-section">
-  <div class="testimonial-card">
-    <div class="section-label">Caso de Éxito</div>
-    <blockquote class="testimonial-quote">"Llevo 3 meses operando con el bot en el plan Pro. La clave está en dejarlo trabajar solo durante la hora óptima. No opero manualmente — dejo que la estrategia haga su trabajo. El mes pasado cerré con +8.2% de rentabilidad."</blockquote>
-    <div class="testimonial-author">
-      <div class="testimonial-avatar">MC</div>
-      <div class="testimonial-info">
-        <div class="testimonial-name">Martín C.</div>
-        <div class="testimonial-role">Trader Pro · Colombia · 3 meses usando QUANT·DERIV</div>
-      </div>
-    </div>
-    <div class="testimonial-stats">
-      <div class="testi-stat">
-        <div class="testi-stat-num">+8.2%</div>
-        <div class="testi-stat-label">Rentabilidad Mes</div>
-      </div>
-      <div class="testi-stat">
-        <div class="testi-stat-num">67%</div>
-        <div class="testi-stat-label">Winrate</div>
-      </div>
-      <div class="testi-stat">
-        <div class="testi-stat-num">3 trades/día</div>
-        <div class="testi-stat-label">Frecuencia</div>
-      </div>
-      <div class="testi-stat">
-        <div class="testi-stat-num">3h</div>
-        <div class="testi-stat-label">Tiempo/Día</div>
+      <div class="glass-card" data-aos="fade-up" data-aos-delay="200">
+        <div class="how-num">EJECUCIÓN</div>
+        <h3>Modo Francotirador</h3>
+        <p>La máxima virtud es la paciencia. El bot puede esperar horas para encontrar el trade perfecto, protegiendo su balance del ruido lateral.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- CTA -->
-<section class="cta-section">
-  <div class="cta-inner">
-    <div class="section-label">Empieza Hoy</div>
-    <h2>Tu próxima operación podría ser la correcta</h2>
-    <p>Crea tu cuenta gratis y accede al dashboard. Sin compromiso, sin tarjeta de crédito.</p>
+<!-- TESTIMONIAL PREMIM -->
+<section class="section-padding" style="background: var(--bg-2); border-top: 1px solid var(--border);">
+  <div class="container" style="text-align:center;">
+    <div class="testimonial-card" data-aos="zoom-in">
+      <div class="testimonial-avatar" style="width:80px; height:80px; margin: 0 auto 24px; font-size: 32px;">MC</div>
+      <blockquote class="testimonial-quote" style="font-size: 28px; line-height: 1.4;">
+        "Lo que más valoro no es cuánto gana, sino cuánto deja de perder. El filtro de mercado lateral me ha salvado de días que antes me dejaban en cero."
+      </blockquote>
+      <div class="testimonial-name" style="font-size: 18px;">Martín C.</div>
+      <div class="testimonial-role">Trader Institucional</div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="section-padding cta-section">
+  <div class="cta-inner" data-aos="fade-up">
+    <h2>Empiece a operar con ventaja estadística</h2>
+    <p>Únase a la nueva era de la gestión de capital automatizada.</p>
     <div class="cta-btns">
-      <button class="btn btn-primary" onclick="openAuth('register')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-        Crear Cuenta Gratis
-      </button>
-      <a href="{% url 'pages:planes' %}" class="btn btn-outline">Ver Todos los Planes</a>
+      <button class="btn-premium" onclick="window.location.href='/registro/'">Crear Mi Terminal Ahora</button>
     </div>
-    <p class="cta-note">7 días de trial en planes de pago · Sin tarjeta de crédito · Cancela cuando quieras</p>
   </div>
 </section>
 
-<!-- RISK DISCLAIMER -->
+<!-- RISK REFINED -->
 <section class="risk-section">
   <div class="risk-inner">
-    <div class="risk-box">
-      <div class="risk-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Aviso de Riesgo Obligatorio
-      </div>
-      <div class="risk-text">
-        <strong>El trading de opciones binarias y derivados financieros conlleva un alto nivel de riesgo y puede resultar en la pérdida total de su capital invertido.</strong> Las operaciones en mercados financieros sintéticos (como R_100 en Deriv) no están reguladas por las mismas autoridades financieras que los mercados tradicionales. <strong>No invierta jamás más de lo que esté dispuesto a perder completamente.</strong> El rendimiento pasado de cualquier estrategia de trading no garantiza resultados futuros. El bot cuantitativo QUANT·DERIV es una herramienta de asistencia que no elimina el riesgo inherente al trading. Los resultados mostrados en el dashboard (incluyendo winrate y rentabilidad) son históricos y no constituyen una promesa de rendimiento futuro. <strong>Es su responsabilidad evaluar su situación financiera antes de operar y buscar asesoría profesional si es necesario.</strong> QUANT·DERIV no es un asesor financiero registrado y no proporciona recomendaciones de inversión personalizadas. Operar con márgenes apalancados en mercados sintéticos puede resultar en pérdidas que excedan su depósito inicial.
-      </div>
+    <div class="risk-text" style="text-align: center; font-size: 11px; opacity: 0.6;">
+      <strong>Advertencia de Riesgo:</strong> El trading algorítmico implica un riesgo sustancial. QUANT·DERIV es una herramienta tecnológica, no un asesor financiero. El rendimiento pasado no garantiza resultados futuros. Nunca opere capital que no pueda permitirse perder.
     </div>
   </div>
 </section>
 
+{% endblock %}
+
+{% block extra_body %}
+<!-- AOS Script -->
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script>
+  AOS.init({
+    duration: 1000,
+    once: true,
+    offset: 100
+  });
+</script>
 {% endblock %}

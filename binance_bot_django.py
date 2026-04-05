@@ -3,6 +3,23 @@ BOT BINANCE - OPERACIONES DE 120 SEGUNDOS
 Versión corregida con logs visibles
 """
 
+import requests
+
+def obtener_balance():
+    global _config_cargada
+    if not _config_cargada:
+        raise Exception("Configuración no cargada.")
+    global _config_cargada
+    if not _config_cargada:
+        raise Exception("Configuración no cargada.")
+    url = "https://api.binance.com/api/v3/account"
+    headers = {
+        'X-MBX-APIKEY': os.getenv('BINANCE_API_KEY')
+    }
+    response = requests.get(url, headers=headers)
+    return response.json()  # Proporciona el balance en formato JSON
+
+
 import asyncio
 import json
 import time
@@ -18,8 +35,9 @@ import urllib.request
 #  CONFIGURACION
 # ============================================================
 
-DJANGO_API_URL = "http://127.0.0.1:8000/api/binance/guardar/"
-DJANGO_TICK_URL = "http://127.0.0.1:8000/api/binance/tick/"
+DJANGO_API_URL = "https://vitalmix.com.co/api/binance/guardar/"
+DJANGO_TICK_URL = "https://vitalmix.com.co/api/binance/tick/"
+
 
 # Defaults (se sobrescriben desde la base de datos)
 STAKE = 1.0
@@ -408,6 +426,98 @@ async def conectar_binance(simbolos):
 # ============================================================
 
 async def main():
+    await reload_config_if_needed()
+    global _config_cargada
+    _config_cargada = True
+    await reload_config_if_needed()
+    global _config_cargada
+    global _config_cargada
+    await reload_config_if_needed()
+    _config_cargada = True
+    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
+
+    while True:
+        try:
+            print("[CONECTANDO] Binance...")
+            await conectar_binance(simbolos)
+            balance = obtener_balance()
+            print(f"Balance: {balance}", flush=True)
+    global _config_cargada
+    await reload_config_if_needed()
+    _config_cargada = True
+    simbolos = ["BTC", "ETH", "SOL", "XRP"]
+
+    while True:
+        try:
+            await reload_config_if_needed()
+            print("[CONECTANDO] Binance...")
+            await conectar_binance(simbolos)
+            balance = obtener_balance()
+            print(f"Balance: {balance}", flush=True)
+        except websockets.exceptions.ConnectionClosedError as e:
+            print(f"[DESCONECTADO] {e}", flush=True)
+            await asyncio.sleep(5)
+        except Exception as e:
+            print(f"[ERROR] {e}", flush=True)
+            await asyncio.sleep(10)
+    global _config_cargada
+    await reload_config_if_needed()
+    _config_cargada = True
+    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
+
+    while True:
+        try:
+            print("[CONECTANDO] Binance...")
+            await conectar_binance(simbolos)
+            balance = obtener_balance()
+            print(f"Balance: {balance}", flush=True)
+    await reload_config_if_needed()
+    global _config_cargada
+    _config_cargada = True
+    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
+    while True:
+        try:
+            print("[CONECTANDO] Binance...")
+            await conectar_binance(simbolos)
+    await reload_config_if_needed()
+    global _config_cargada
+    _config_cargada = True
+
+    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
+
+    while True:
+        try:
+            print("[CONECTANDO] Binance...")
+            await conectar_binance(simbolos)
+    global _config_cargada
+    _config_cargada = False
+    await reload_config_if_needed()
+    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
+    while True:
+        try:
+            print("[CONECTANDO] Binance...")
+            await conectar_binance(simbolos)
+            balance = obtener_balance()
+            print(f"Balance: {balance}", flush=True)
+    try:
+            await reload_config_if_needed()
+    await reload_config_if_needed()
+    global _config_cargada
+    _config_cargada = True
+
+    try:
+    try:
+            await reload_config_if_needed()
+        global _config_cargada
+    await reload_config_if_needed()
+    global _config_cargada
+    await reload_config_if_needed()
+    global _config_cargada
+    await reload_config_if_needed()
+    await reload_config_if_needed()
+    global _config_cargada
+    await reload_config_if_needed()
+    await reload_config_if_needed()
     global _config_cargada
     _config_cargada = True
     
@@ -415,9 +525,17 @@ async def main():
     
     while True:
         try:
-            await reload_config_if_needed()
+                    await reload_config_if_needed()
             print("[CONECTANDO] Binance...", flush=True)
-            await conectar_binance(simbolos)
+            try:
+                                        await conectar_binance(simbolos)
+        
+    balance = obtener_balance()
+    print(f"Balance: {balance}", flush=True)
+            balance = obtener_balance()
+            print(f"Balance: {balance}", flush=True)
+        balance = obtener_balance()
+        print(f"Balance: {balance}", flush=True)
         except websockets.exceptions.ConnectionClosedError as e:
             print(f"[DESCONECTADO] {e}", flush=True)
             await asyncio.sleep(5)
