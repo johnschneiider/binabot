@@ -64,8 +64,8 @@ import urllib.request
 #  CONFIGURACION
 # ============================================================
 
-DJANGO_API_URL = "http://127.0.0.1:8000/gestion_riesgo/api/binance/guardar/"
-DJANGO_TICK_URL = "http://127.0.0.1:8000/gestion_riesgo/api/binance/tick/"
+DJANGO_API_URL = "http://127.0.0.1:8000/api/binance/guardar/"
+DJANGO_TICK_URL = "http://127.0.0.1:8000/api/binance/tick/"
 
 
 # Defaults (se sobrescriben desde la base de datos)
@@ -300,20 +300,24 @@ def evaluar_senal(estado, precio):
     ema_media_below_lenta = estado.ema_media < estado.ema_lenta
     tendencia_bajista = ema_rapida_below_media and ema_media_below_lenta
     
-    # CALL: EMA8 > EMA21 > EMA55 + gap > 0.15% + RSI > 60 (claro momentum alcista)
+    # CALL: EMA8 > EMA21 > EMA55 + gap MUY fuerte + RSI sobrecompra extrema (>70)
+    # Estrategia muy conservadora para proteger capital
     if ema_rapida_above_media and ema_media_above_lenta:
         gap_pct = abs(estado.ema_rapida - estado.ema_media) / estado.ema_media * 100
-        if gap_pct >= 0.15 and rsi > 60:  # Solo en sobrecompra clara
-            print(f"[SEÑAL] {estado.simbolo}: CALL gap={gap_pct:.3f}% rsi={rsi:.1f}", flush=True)
-            estado.cooldown = 50
+        trend_gap = abs(estado.ema_media - estado.ema_lenta) / estado.ema_lenta * 100
+        # Requiere gap muy fuerte (0.40%) +趋势 clara + RSI muy alto (>70)
+        if gap_pct >= 0.40 and trend_gap >= 0.20 and rsi > 70:
+            print(f"[SEÑAL] {estado.simbolo}: CALL CONSERVADORA gap={gap_pct:.3f}% trend={trend_gap:.3f}% rsi={rsi:.1f}", flush=True)
+            estado.cooldown = 80
             return ("CALL", "ema_crossover_up", "alta")
     
-    # PUT: EMA8 < EMA21 < EMA55 + gap > 0.15% + RSI < 40 (claro momentum bajista)
+    # PUT: EMA8 < EMA21 < EMA55 + gap MUY fuerte + RSI sobreventa extrema (<30)
     if ema_rapida_below_media and ema_media_below_lenta:
         gap_pct = abs(estado.ema_rapida - estado.ema_media) / estado.ema_media * 100
-        if gap_pct >= 0.15 and rsi < 40:  # Solo en sobreventa clara
-            print(f"[SEÑAL] {estado.simbolo}: PUT gap={gap_pct:.3f}% rsi={rsi:.1f}", flush=True)
-            estado.cooldown = 50
+        trend_gap = abs(estado.ema_media - estado.ema_lenta) / estado.ema_lenta * 100
+        if gap_pct >= 0.40 and trend_gap >= 0.20 and rsi < 30:
+            print(f"[SEÑAL] {estado.simbolo}: PUT CONSERVADORA gap={gap_pct:.3f}% trend={trend_gap:.3f}% rsi={rsi:.1f}", flush=True)
+            estado.cooldown = 80
             return ("PUT", "ema_crossover_dn", "alta")
     
     return ("NEUTRAL", "sin_señal", "baja")
