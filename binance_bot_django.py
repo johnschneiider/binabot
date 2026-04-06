@@ -1,23 +1,51 @@
 """
-BOT BINANCE - OPERACIONES DE 120 SEGUNDOS
-Versión corregida con logs visibles
+BINANCE FUTURES BOT - OPERACIONES DE 60 SEGUNDOS
+Versión para Binance Futures (CFD-like)
 """
 
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
 import requests
+import hmac
+import hashlib
+import time
+import os
+
+FUTURES_API_URL = "https://fapi.binance.com"
+FUTURES_WS_URL = "wss://fstream.binance.com:9443/ws/"
 
 def obtener_balance():
     global _config_cargada
     if not _config_cargada:
         raise Exception("Configuración no cargada.")
-    global _config_cargada
-    if not _config_cargada:
-        raise Exception("Configuración no cargada.")
-    url = "https://api.binance.com/api/v3/account"
+    
+    api_key = os.getenv('BINANCE_API_KEY')
+    api_secret = os.getenv('BINANCE_API_SECRET')
+    
+    if not api_key or not api_secret:
+        raise Exception("BINANCE_API_KEY o BINANCE_API_SECRET no configurados.")
+    
+    timestamp = int(time.time() * 1000)
+    query_string = f"timestamp={timestamp}"
+    
+    signature = hmac.new(
+        api_secret.encode('utf-8'),
+        query_string.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    
+    url = f"{FUTURES_API_URL}/fapi/v2/account?{query_string}&signature={signature}"
     headers = {
-        'X-MBX-APIKEY': os.getenv('BINANCE_API_KEY')
+        'X-MBX-APIKEY': api_key
     }
     response = requests.get(url, headers=headers)
-    return response.json()  # Proporciona el balance en formato JSON
+    
+    if response.status_code != 200:
+        raise Exception(f"Error API Binance Futures: {response.status_code} - {response.text}")
+    
+    return response.json()
 
 
 import asyncio
@@ -28,6 +56,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 import websockets
+from websockets.exceptions import ConnectionClosedError
 import statistics
 import urllib.request
 
@@ -35,8 +64,8 @@ import urllib.request
 #  CONFIGURACION
 # ============================================================
 
-DJANGO_API_URL = "https://vitalmix.com.co/api/binance/guardar/"
-DJANGO_TICK_URL = "https://vitalmix.com.co/api/binance/tick/"
+DJANGO_API_URL = "http://127.0.0.1:8000/gestion_riesgo/api/binance/guardar/"
+DJANGO_TICK_URL = "http://127.0.0.1:8000/gestion_riesgo/api/binance/tick/"
 
 
 # Defaults (se sobrescriben desde la base de datos)
@@ -354,71 +383,74 @@ def verificar_pendientes(estado, precio_actual, hora):
 
 
 # ============================================================
-#  WEBSOCKET
+#  WEBSOCKET / POLLING
 # ============================================================
 
 async def conectar_binance(simbolos):
-    streams = [f"{sym.lower()}usdt@trade" for sym in simbolos]
-    url = f"wss://stream.binance.com:9443/stream?streams={'/'.join(streams)}"
-    
+    """
+    Binance Futures - alterna entre WebSocket y HTTP polling
+    """
     estados = {sym: EstadoActivo(simbolo=sym) for sym in simbolos}
     num_global = 0
     
     print("="*50, flush=True)
-    print("  BINANCE BOT - 60 SEGUNDOS", flush=True)
+    print("  BINANCE FUTURES BOT - 60 SEGUNDOS", flush=True)
     print(f"  Activos: {', '.join(simbolos)}", flush=True)
     print(f"  Stake: ${STAKE} | Duración: {DURACION_SEGUNDOS}s", flush=True)
     print("="*50, flush=True)
     
-    async with websockets.connect(url, ping_interval=30, ping_timeout=30) as ws:
-        print("[OK] Conectado a Binance", flush=True)
-        
-        async for msg in ws:
-            try:
-                data = json.loads(msg)
-                if 'data' not in data:
-                    continue
-                
-                trade = data['data']
-                simbolo = trade['s'].replace('USDT', '')
-                precio = float(trade['p'])
-                hora = datetime.fromtimestamp(trade['T']/1000, tz=timezone.utc).strftime('%H:%M:%S')
-                
-                if simbolo not in estados:
-                    continue
-                
-                estado = estados[simbolo]
-                estado.tick_count += 1
-                
-                # Guardar tick cada 10
-                if estado.tick_count % 10 == 0:
-                    guardar_tick(simbolo, precio)
-                
-                # Verificar pendientes
-                verificar_pendientes(estado, precio, hora)
-                
-                # Recargar config cada 30 segundos
-                await reload_config_if_needed()
-                
-                # Nueva señal
-                if estado.operacion_pendiente is None:
-                    decision, razon, confianza = evaluar_senal(estado, precio)
-                    
-                    if decision != "NEUTRAL":
-                        num_global += 1
-                        estado.operacion_pendiente = OperacionPendiente(
-                            simbolo=simbolo,
-                            direccion=decision,
-                            precio_entrada=precio,
-                            tiempo_entrada=time.time(),
-                            razon=razon,
-                            confianza=confianza,
-                            num_operacion=num_global
-                        )
-                        print(f"[{hora}] {simbolo}: ENTRADA {decision} @ ${precio:.2f} | {razon}", flush=True)
-                
-            except Exception as e:
-                print(f"ERROR: {e}", flush=True)
+    # USAR HTTP POLLING (más confiable)
+    ultimo_precio = {sym: 0.0 for sym in simbolos}
+    
+    while True:
+        try:
+            print("[OK] Obteniendo precios via API...", flush=True)
+            
+            # Obtener precios actuales
+            for sym in simbolos:
+                try:
+                    url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={sym}USDT"
+                    resp = requests.get(url, timeout=5)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        precio = float(data['price'])
+                        hora = datetime.now(timezone.utc).strftime('%H:%M:%S')
+                        
+                        ultimo_precio[sym] = precio
+                        estado = estados[sym]
+                        estado.tick_count += 1
+                        
+                        if estado.tick_count % 10 == 0:
+                            guardar_tick(sym, precio)
+                        
+                        verificar_pendientes(estado, precio, hora)
+                        
+                        if estado.operacion_pendiente is None:
+                            decision, razon, confianza = evaluar_senal(estado, precio)
+                            
+                            if decision != "NEUTRAL":
+                                num_global += 1
+                                estado.operacion_pendiente = OperacionPendiente(
+                                    simbolo=sym,
+                                    direccion=decision,
+                                    precio_entrada=precio,
+                                    tiempo_entrada=time.time(),
+                                    razon=razon,
+                                    confianza=confianza,
+                                    num_operacion=num_global
+                                )
+                                print(f"[{hora}] {sym}: ENTRADA {decision} @ ${precio:.2f} | {razon}", flush=True)
+                except Exception as e:
+                    print(f"Error precio {sym}: {e}", flush=True)
+            
+            await asyncio.sleep(1)  # Poll cada segundo
+            
+        except Exception as e:
+            print(f"[POLL ERROR] {e}", flush=True)
+            await asyncio.sleep(5)
+        except Exception as e:
+            print(f"[WS ERROR] {e}", flush=True)
+            await asyncio.sleep(5)
 
 
 # ============================================================
@@ -429,122 +461,24 @@ async def main():
     await reload_config_if_needed()
     global _config_cargada
     _config_cargada = True
-    await reload_config_if_needed()
-    global _config_cargada
-    global _config_cargada
-    await reload_config_if_needed()
-    _config_cargada = True
-    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
-
-    while True:
-        try:
-            print("[CONECTANDO] Binance...")
-            await conectar_binance(simbolos)
-            balance = obtener_balance()
-            print(f"Balance: {balance}", flush=True)
-    global _config_cargada
-    await reload_config_if_needed()
-    _config_cargada = True
     simbolos = ["BTC", "ETH", "SOL", "XRP"]
-
-    while True:
-        try:
-            await reload_config_if_needed()
-            print("[CONECTANDO] Binance...")
-            await conectar_binance(simbolos)
-            balance = obtener_balance()
-            print(f"Balance: {balance}", flush=True)
-        except websockets.exceptions.ConnectionClosedError as e:
-            print(f"[DESCONECTADO] {e}", flush=True)
-            await asyncio.sleep(5)
-        except Exception as e:
-            print(f"[ERROR] {e}", flush=True)
-            await asyncio.sleep(10)
-    global _config_cargada
-    await reload_config_if_needed()
-    _config_cargada = True
-    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
-
-    while True:
-        try:
-            print("[CONECTANDO] Binance...")
-            await conectar_binance(simbolos)
-            balance = obtener_balance()
-            print(f"Balance: {balance}", flush=True)
-    await reload_config_if_needed()
-    global _config_cargada
-    _config_cargada = True
-    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
-    while True:
-        try:
-            print("[CONECTANDO] Binance...")
-            await conectar_binance(simbolos)
-    await reload_config_if_needed()
-    global _config_cargada
-    _config_cargada = True
-
-    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
-
-    while True:
-        try:
-            print("[CONECTANDO] Binance...")
-            await conectar_binance(simbolos)
-    global _config_cargada
-    _config_cargada = False
-    await reload_config_if_needed()
-    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
-    while True:
-        try:
-            print("[CONECTANDO] Binance...")
-            await conectar_binance(simbolos)
-            balance = obtener_balance()
-            print(f"Balance: {balance}", flush=True)
-    try:
-            await reload_config_if_needed()
-    await reload_config_if_needed()
-    global _config_cargada
-    _config_cargada = True
-
-    try:
-    try:
-            await reload_config_if_needed()
-        global _config_cargada
-    await reload_config_if_needed()
-    global _config_cargada
-    await reload_config_if_needed()
-    global _config_cargada
-    await reload_config_if_needed()
-    await reload_config_if_needed()
-    global _config_cargada
-    await reload_config_if_needed()
-    await reload_config_if_needed()
-    global _config_cargada
-    _config_cargada = True
-    
-    simbolos = ["BTC", "ETH", "SOL", "XRP"]  # Múltiples activos
     
     while True:
         try:
-                    await reload_config_if_needed()
-            print("[CONECTANDO] Binance...", flush=True)
-            try:
-                                        await conectar_binance(simbolos)
-        
-    balance = obtener_balance()
-    print(f"Balance: {balance}", flush=True)
-            balance = obtener_balance()
-            print(f"Balance: {balance}", flush=True)
-        balance = obtener_balance()
-        print(f"Balance: {balance}", flush=True)
-        except websockets.exceptions.ConnectionClosedError as e:
-            print(f"[DESCONECTADO] {e}", flush=True)
-            await asyncio.sleep(5)
+            await reload_config_if_needed()
+            print("[OBTENIENDO BALANCE...]", flush=True)
+            balance_data = obtener_balance()
+            balance_usdt = float(balance_data.get('availableBalance', 0))
+            print(f"BALANCE USDT: ${balance_usdt:.2f}", flush=True)
+            print("[INICIANDO] Binance Futures...", flush=True)
+            await conectar_binance(simbolos)
         except Exception as e:
+            import traceback
             print(f"[ERROR] {e}", flush=True)
+            print(f"[ERROR DETAIL] {traceback.format_exc()}", flush=True)
             await asyncio.sleep(10)
 
 
 if __name__ == "__main__":
-    # Cargar config ANTES de iniciar el loop async
     cargar_configuracion()
     asyncio.run(main())

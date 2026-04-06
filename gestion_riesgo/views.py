@@ -1834,12 +1834,46 @@ def retirar_view(request):
 @login_required
 def dashboard_binance(request):
     """
-    Dashboard para mostrar operaciones ficticias de Binance.
+    Dashboard para Binance - Balance REAL desde API Coin-M Futures
     """
-    from django.utils import timezone
-    from datetime import datetime, timezone as dt_tz
-    from decimal import Decimal
-    from trading.models import BalanceGlobal
+    from dotenv import load_dotenv
+    import os
+    import hmac
+    import hashlib
+    import time
+    import requests as req
+    
+    load_dotenv()
+    
+    # Obtener balance REAL de Binance Coin-M Futures
+    balance_real = 0.0
+    try:
+        api_key = os.getenv('BINANCE_API_KEY')
+        api_secret = os.getenv('BINANCE_API_SECRET')
+        
+        if api_key and api_secret:
+            timestamp = int(time.time() * 1000)
+            query_string = f"timestamp={timestamp}"
+            signature = hmac.new(
+                api_secret.encode('utf-8'),
+                query_string.encode('utf-8'),
+                hashlib.sha256
+            ).hexdigest()
+            
+            # Coin-M Futures (dapi)
+            url = f"https://dapi.binance.com/dapi/v1/balance?{query_string}&signature={signature}"
+            headers = {'X-MBX-APIKEY': api_key}
+            response = req.get(url, headers=headers, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                # Buscar balance en USDT
+                for asset in data:
+                    if asset.get('asset') == 'USDT':
+                        balance_real = float(asset.get('availableBalance', 0))
+                        break
+    except Exception as e:
+        print(f"Error obteniendo balance Binance: {e}")
     
     # Obtener estadísticas por activo
     stats = EstadisticasBinance.objects.all().order_by("-profit_total")
@@ -1849,33 +1883,19 @@ def dashboard_binance(request):
     total_wins = sum(s.wins for s in stats)
     total_profit = sum(float(s.profit_total) for s in stats)
     
-    # Obtener balance global unificado
-    balance_global = BalanceGlobal.get_balance_float()
-    capital_inicial = float(BalanceGlobal.get_balance().capital_inicial)
+    # Balance global unificado (ya no se usa, ahora es REAL)
+    capital_inicial = 1000.0  # Referencia inicial
     
     # Win rate global (últimas 100)
     ultimas_100_ops = list(OperacionBinance.objects.order_by('-created_at')[:100])
     wr_ult100_wins = sum(1 for op in ultimas_100_ops if op.es_win)
     wr_ult100_total = len(ultimas_100_ops)
     wr_global = (wr_ult100_wins / wr_ult100_total * 100) if wr_ult100_total > 0 else 0
-    total_ops_100 = wr_ult100_total
-    total_wins_100 = wr_ult100_wins
     
     # Últimas 50 operaciones para historial
     historial_ops = OperacionBinance.objects.all().order_by("-created_at")[:50]
     
-    # Datos para gráfico de balance usando balance global
-    todas_ops = OperacionBinance.objects.all().order_by("created_at")
-    chart_labels = []
-    chart_balance = []
-    balance_acumulado = capital_inicial
-    
-    for op in todas_ops:
-        balance_acumulado += float(op.profit)
-        chart_labels.append(op.created_at.strftime("%H:%M:%S"))
-        chart_balance.append(round(balance_acumulado, 2))
-    
-    # Verificar si bot está activo (por defecto True por ahora)
+    # Verificar si bot está activo
     bot_activo = True
     
     # Hora actual
@@ -1883,18 +1903,19 @@ def dashboard_binance(request):
     
     return render(request, "gestion_riesgo/dashboard_binance.html", {
         "stats": stats,
-        "total_ops": total_ops_100,
-        "total_wins": total_wins_100,
+        "total_ops": total_ops,
+        "total_wins": total_wins,
         "wr_global": round(wr_global, 1),
         "total_profit": total_profit,
-        "balance_ficticio": balance_global,
+        "balance_real": balance_real,
+        "balance_ficticio": balance_real,  # Usar real como principal
         "capital_inicial": capital_inicial,
         "historial_ops": historial_ops,
         "ultimas_ops": historial_ops[:20],
         "bot_activo": bot_activo,
         "ahora": ahora,
-        "chart_labels": json.dumps(chart_labels),
-        "chart_balance": json.dumps(chart_balance),
+        "chart_labels": json.dumps([]),
+        "chart_balance": json.dumps([]),
     })
 
 
@@ -2129,7 +2150,40 @@ def sse_binance_stream(request):
                 total_ops = sum(s.total_ops for s in stats)
                 total_wins = sum(s.wins for s in stats)
                 total_profit = sum(float(s.profit_total) for s in stats)
-                balance_ficticio = sum(float(s.balance_ficticio) for s in stats)
+                
+                # OBTENER BALANCE REAL DESDE API BINANCE FUTURES
+                balance_real = 0.0
+                try:
+                    from dotenv import load_dotenv
+                    import os
+                    import hmac
+                    import hashlib
+                    import requests as req
+                    load_dotenv()
+                    
+                    api_key = os.getenv('BINANCE_API_KEY')
+                    api_secret = os.getenv('BINANCE_API_SECRET')
+                    
+                    if api_key and api_secret:
+                        timestamp = int(time.time() * 1000)
+                        query_string = f"timestamp={timestamp}"
+                        signature = hmac.new(
+                            api_secret.encode('utf-8'),
+                            query_string.encode('utf-8'),
+                            hashlib.sha256
+                        ).hexdigest()
+                        
+                        url = f"https://fapi.binance.com/fapi/v2/account?{query_string}&signature={signature}"
+                        headers = {'X-MBX-APIKEY': api_key}
+                        response = req.get(url, headers=headers, timeout=3)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            balance_real = float(data.get('availableBalance', 0))
+                except Exception as e:
+                    print(f"SSE Error balance: {e}")
+                
+                balance_ficticio = balance_real
                 
                 # Win Rate de los últimos 100 trades
                 ultimas_100_ops = list(OperacionBinance.objects.order_by('-created_at')[:100])

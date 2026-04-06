@@ -77,9 +77,9 @@
 
   <div class="stats-row">
     <div class="stat-card">
-      <div class="stat-label">Balance Cartera</div>
-      <div class="stat-value" id="balanceDisplay" style="color: var(--green-light)">$0.00</div>
-      <div class="stat-sub">Margen inicial: $1000</div>
+      <div class="stat-label">Balance REAL (Futures)</div>
+      <div class="stat-value" id="balanceDisplay" style="color: var(--green-light)">${{ balance_real|floatformat:2 }}</div>
+      <div class="stat-sub">API Binance</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Win Rate (100t)</div>
