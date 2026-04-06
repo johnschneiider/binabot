@@ -652,7 +652,7 @@
             if (!data || !data.capital) return;
             var balanceEl = document.getElementById('navBalance');
             if (balanceEl) {
-              var cap = data.capital;
+              var cap = data.balance_binance || data.capital;
               var formatted = cap >= 1000000 ? '$' + (cap/1000000).toFixed(2) + 'M' : '$' + Math.round(cap).toLocaleString('es-CO');
               balanceEl.textContent = formatted;
               balanceEl.style.display = 'inline';

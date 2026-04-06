@@ -1,0 +1,113 @@
+Actúa como un ingeniero senior de Django + DevOps.
+
+Contexto del proyecto:
+
+* Proyecto Django ya existente con frontend integrado.
+* Dominio en producción: https://vitalmix.com.co
+* Hay un bot de trading que consume endpoints tipo `/api/...`.
+* Actualmente el frontend intenta consumir `/portal/api/navbar/` pero:
+
+  * `/api/navbar/` NO existe (404)
+  * `/portal/api/navbar/` requiere autenticación (302 redirect a login)
+* La arquitectura correcta debe separar:
+
+  * `/portal/` → vistas HTML
+  * `/api/` → endpoints JSON
+
+Objetivo:
+Corregir el sistema de forma limpia, profesional y deployable.
+
+Tareas a realizar en LOCAL:
+
+1. BACKEND (Django)
+
+* Crear un endpoint REST en:
+  `/api/navbar/`
+* Debe devolver JSON con:
+
+  * username
+  * balance (mock si no existe)
+* Manejar correctamente autenticación:
+
+  * Si no está autenticado → devolver 401 JSON (NO redirect)
+
+Ejemplo esperado:
+
+```json
+{
+  "user": "admin",
+  "balance": 100
+}
+```
+
+2. URLs
+
+* Asegurar que el endpoint esté registrado en `urls.py`
+* NO usar `/portal/api/...`
+* Mantener `/api/...` limpio y desacoplado
+
+3. FRONTEND
+
+* Reemplazar TODAS las llamadas:
+  ❌ `/portal/api/navbar/`
+  ✅ `/api/navbar/`
+* Asegurar que fetch incluya credenciales si se usa sesión:
+
+```js
+fetch('/api/navbar/', { credentials: 'include' })
+```
+
+4. SEGURIDAD
+
+* No usar `@login_required` que redirige
+* Usar lógica tipo:
+
+```python
+if not request.user.is_authenticated:
+    return JsonResponse(..., status=401)
+```
+
+5. TEST LOCAL
+
+* Probar:
+
+```bash
+curl http://127.0.0.1:8000/api/navbar/
+```
+
+* Verificar:
+
+  * 200 si autenticado
+  * 401 si no
+
+6. CONTROL DE VERSIONES
+
+* Crear commit claro:
+
+```
+fix(api): add /api/navbar endpoint and remove /portal/api usage
+```
+
+7. GIT
+
+* Subir cambios a GitHub en rama:
+  `fix/navbar-api`
+
+8. NO TOCAR:
+
+* Configuración del bot
+* WebSockets
+* Lógica de trading
+
+Resultado esperado:
+
+* Frontend funcional sin errores 404
+* API consistente
+* Código limpio y listo para producción
+
+Importante:
+No improvisar soluciones tipo redirecciones en nginx.
+No duplicar rutas.
+No usar hacks.
+
+Priorizar arquitectura correcta sobre soluciones rápidas.

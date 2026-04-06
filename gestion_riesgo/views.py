@@ -1474,13 +1474,40 @@ def api_navbar_balance(request):
 
     cuenta = Cuenta.objects.first()
     balance_fondo = float(cuenta.balance_deriv) if cuenta and cuenta.balance_deriv else 0.0
-
+    
+    # Obtener balance REAL de Binance Futures
+    balance_binance = 0.0
+    try:
+        from dotenv import load_dotenv
+        import os
+        import hmac
+        import hashlib
+        import time
+        import requests as req
+        
+        load_dotenv()
+        api_key = os.getenv('BINANCE_API_KEY')
+        api_secret = os.getenv('BINANCE_API_SECRET')
+        
+        if api_key and api_secret:
+            timestamp = int(time.time() * 1000)
+            query_string = f"timestamp={timestamp}"
+            signature = hmac.new(api_secret.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+            url = f"https://fapi.binance.com/fapi/v2/account?{query_string}&signature={signature}"
+            response = req.get(url, headers={'X-MBX-APIKEY': api_key}, timeout=3)
+            if response.status_code == 200:
+                data = response.json()
+                balance_binance = float(data.get('availableBalance', 0))
+    except:
+        pass
+    
     return JsonResponse({
         "capital": float(inv.capital_actual),
         "capital_inicial": float(inv.capital_inicial),
         "ganancia_acumulada": float(inv.ganancia_acumulada),
         "rendimiento_pct": round(inv.rendimiento_pct, 2),
         "balance_fondo": balance_fondo,
+        "balance_binance": balance_binance,
     })
 
 
