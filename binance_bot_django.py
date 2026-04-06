@@ -1,6 +1,6 @@
 """
 BINANCE FUTURES BOT - OPERACIONES DE 60 SEGUNDOS
-Versión para Binance Futures (CFD-like)
+Versión con trading real en Binance Futures
 """
 
 from dotenv import load_dotenv
@@ -12,6 +12,67 @@ import hmac
 import hashlib
 import time
 import os
+
+FUTURES_API_URL = "https://fapi.binance.com"
+
+def ejecutar_orden(simbolo, direccion, cantidad=1):
+    """
+    Ejecuta una orden real en Binance Futures
+    direccion: 'LONG' (CALL) o 'SHORT' (PUT)
+    """
+    api_key = os.getenv('BINANCE_API_KEY')
+    api_secret = os.getenv('BINANCE_API_SECRET')
+    
+    if not api_key or not api_secret:
+        print("[ERROR] API key no configurada", flush=True)
+        return None
+    
+    try:
+        timestamp = int(time.time() * 1000)
+        
+        # Para Binance Futures: LONG = BUY, SHORT = SELL
+        if direccion == "CALL":
+            side = "BUY"
+        else:
+            side = "SELL"
+        
+        # Parameters para orden market
+        params = {
+            "symbol": f"{simbolo}USDT",
+            "side": side,
+            "positionSide": "LONG" if direccion == "CALL" else "SHORT",
+            "type": "MARKET",
+            "quantity": cantidad,
+            "timestamp": timestamp
+        }
+        
+        # Crear signature
+        query_string = "&".join([f"{k}={v}" for k, v in sorted(params.items())])
+        signature = hmac.new(
+            api_secret.encode('utf-8'),
+            query_string.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        
+        params["signature"] = signature
+        
+        # Enviar orden
+        url = f"{FUTURES_API_URL}/fapi/v1/order"
+        headers = {'X-MBX-APIKEY': api_key}
+        
+        response = requests.post(url, params=params, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"[REAL TRADE] {simbolo} {direccion} @ mercado | OrderID: {data.get('orderId')}", flush=True)
+            return data
+        else:
+            print(f"[ERROR ORDEN] {response.status_code}: {response.text}", flush=True)
+            return None
+            
+    except Exception as e:
+        print(f"[ERROR EJECUTANDO] {e}", flush=True)
+        return None
 
 FUTURES_API_URL = "https://fapi.binance.com"
 FUTURES_WS_URL = "wss://fstream.binance.com:9443/ws/"
@@ -168,6 +229,7 @@ class OperacionPendiente:
     razon: str
     confianza: str
     num_operacion: int
+    orden_real: bool = False
 
 
 # ============================================================
@@ -452,6 +514,9 @@ async def conectar_binance(simbolos):
                             
                             if decision != "NEUTRAL":
                                 num_global += 1
+                                # EJECUTAR ORDEN REAL EN BINANCE
+                                resultado_trade = ejecutar_orden(sym, decision, cantidad=1)
+                                
                                 estado.operacion_pendiente = OperacionPendiente(
                                     simbolo=sym,
                                     direccion=decision,
@@ -459,9 +524,10 @@ async def conectar_binance(simbolos):
                                     tiempo_entrada=time.time(),
                                     razon=razon,
                                     confianza=confianza,
-                                    num_operacion=num_global
+                                    num_operacion=num_global,
+                                    orden_real=resultado_trade is not None
                                 )
-                                print(f"[{hora}] {sym}: ENTRADA {decision} @ ${precio:.2f} | {razon}", flush=True)
+                                print(f"[{hora}] {sym}: ENTRADA {decision} @ ${precio:.2f} | {razon} | {'REAL' if resultado_trade else 'SIMULADO'}", flush=True)
                 except Exception as e:
                     print(f"Error precio {sym}: {e}", flush=True)
             
