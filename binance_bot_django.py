@@ -71,8 +71,10 @@ DJANGO_TICK_URL = "http://127.0.0.1:8000/gestion_riesgo/api/binance/tick/"
 # Defaults (se sobrescriben desde la base de datos)
 STAKE = 1.0
 PAYOUT = 0.95
-DURACION_SEGUNDOS = 120
-COOLDOWN_TICKS = 10
+DURACION_SEGUNDOS = 60
+COOLDOWN_TICKS = 45  # Balance entre protección y oportunidad
+# Filtros para buscar >80% winrate
+EMA_GAP_MIN = 0.20  # 0.20% entre EMA8 y EMA21
 EMA_GAP_MIN = 0.2
 ADX_MIN = 20.0
 RSI_MIN = 30.0
@@ -261,11 +263,16 @@ def evaluar_senal(estado, precio):
     if len(estado.precios) > 300:
         estado.precios = estado.precios[-300:]
     
+    # Debug
+    debug_sym = 'BTC'
+    if estado.simbolo == debug_sym and len(estado.precios) % 5 == 0:
+        print(f"[DEBUG] {debug_sym}: prices={len(estado.precios)}, cd={estado.cooldown}, rsi={estado.rsi:.1f}", flush=True)
+    
     if estado.cooldown > 0:
         estado.cooldown -= 1
         return ("NEUTRAL", f"cd{estado.cooldown}", "media")
     
-    if len(estado.precios) < 50:
+    if len(estado.precios) < 20:
         return ("NEUTRAL", "warmup", "baja")
     
     # EMA crossover simple (estrategia más robusta para timeframe 120s)
@@ -278,6 +285,11 @@ def evaluar_senal(estado, precio):
         rsi = calcular_rsi(estado.precios[-14:])
     else:
         rsi = 50.0
+    estado.rsi = rsi
+    
+    # Debug signals
+    if estado.simbolo == debug_sym and len(estado.precios) % 5 == 0:
+        print(f"[DEBUG] {debug_sym}: ema8={estado.ema_rapida:.2f}, ema21={estado.ema_media:.2f}, ema55={estado.ema_lenta:.2f}, above={estado.ema_rapida > estado.ema_media}, above55={estado.ema_media > estado.ema_lenta}", flush=True)
     
     # EMA crossover
     ema_rapida_above_media = estado.ema_rapida > estado.ema_media
@@ -288,19 +300,21 @@ def evaluar_senal(estado, precio):
     ema_media_below_lenta = estado.ema_media < estado.ema_lenta
     tendencia_bajista = ema_rapida_below_media and ema_media_below_lenta
     
-    # CALL: Cruce alcista (EMA rápida cruza por encima de EMA media) + RSI < 65
-    if ema_rapida_above_media and rsi < 65:
-        if estado.cooldown > 0:
-            return ("NEUTRAL", f"cd{estado.cooldown}", "baja")
-        estado.cooldown = 15
-        return ("CALL", "ema_crossover_up", "alta")
+    # CALL: EMA8 > EMA21 > EMA55 + gap > 0.15% + RSI > 60 (claro momentum alcista)
+    if ema_rapida_above_media and ema_media_above_lenta:
+        gap_pct = abs(estado.ema_rapida - estado.ema_media) / estado.ema_media * 100
+        if gap_pct >= 0.15 and rsi > 60:  # Solo en sobrecompra clara
+            print(f"[SEÑAL] {estado.simbolo}: CALL gap={gap_pct:.3f}% rsi={rsi:.1f}", flush=True)
+            estado.cooldown = 50
+            return ("CALL", "ema_crossover_up", "alta")
     
-    # PUT: Cruce bajista (EMA rápida cruza por debajo de EMA media) + RSI > 35
-    if ema_rapida_below_media and rsi > 35:
-        if estado.cooldown > 0:
-            return ("NEUTRAL", f"cd{estado.cooldown}", "baja")
-        estado.cooldown = 15
-        return ("PUT", "ema_crossover_dn", "alta")
+    # PUT: EMA8 < EMA21 < EMA55 + gap > 0.15% + RSI < 40 (claro momentum bajista)
+    if ema_rapida_below_media and ema_media_below_lenta:
+        gap_pct = abs(estado.ema_rapida - estado.ema_media) / estado.ema_media * 100
+        if gap_pct >= 0.15 and rsi < 40:  # Solo en sobreventa clara
+            print(f"[SEÑAL] {estado.simbolo}: PUT gap={gap_pct:.3f}% rsi={rsi:.1f}", flush=True)
+            estado.cooldown = 50
+            return ("PUT", "ema_crossover_dn", "alta")
     
     return ("NEUTRAL", "sin_señal", "baja")
 
@@ -427,6 +441,10 @@ async def conectar_binance(simbolos):
                         
                         if estado.operacion_pendiente is None:
                             decision, razon, confianza = evaluar_senal(estado, precio)
+                            
+                            # Debug: ver estado de precios
+                            if sym == 'BTC' and len(estado.precios) % 10 == 0:
+                                print(f"[DEBUG] BTC: precios={len(estado.precios)}, ema8={estado.ema_rapida}, ema21={estado.ema_media}, rsi={estado.rsi}", flush=True)
                             
                             if decision != "NEUTRAL":
                                 num_global += 1
