@@ -21,6 +21,8 @@ ALLOWED_HOSTS = [
     "vitalmix.com.co",
     "127.0.0.1",
     "localhost",
+    "unlifelike-greenly-tegan.ngrok-free.dev",
+    "*.ngrok-free.dev",
 ]
 
 # ===== BASE DE DATOS =====
@@ -85,6 +87,30 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# ===== SEGURIDAD =====
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# Cookies seguras
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+
+# Rate limiting por defecto
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/min',
+        'user': '200/min'
+    }
+}
 
 ROOT_URLCONF = "quant_deriv_bot.urls"
 

@@ -33,7 +33,9 @@ import queue
 from .models import BalanceDerivSnapshot, Cuenta, OperacionDeriv, Operacion, TickDerivSnapshot, TickDerivHistorico
 from django.contrib.auth import login
 from django.contrib.auth.hashers import make_password
-from subscriptions.models import Usuario
+from django.contrib.auth.models import User
+from subscriptions.models import Usuario, LogAuditoria
+from subscriptions.views import get_client_ip
 import subprocess
 
 # cola para SSE
@@ -2562,4 +2564,98 @@ def api_chat_respuesta(request):
     ChatMessage.objects.create(mensaje=mensaje, emisor="opencode")
     
     return JsonResponse({"ok": True})
+
+
+# ============================================================
+# ADMIN: CREAR CUENTAS (Solo superadmin)
+# ============================================================
+
+@require_http_methods(["GET", "POST"])
+def crear_cuenta_admin(request):
+    """
+    Página para crear cuentas de usuario (solo superadmin).
+    """
+    if not request.user.is_superuser:
+        return HttpResponseForbidden("Acceso denegado")
+    
+    if request.method == "POST":
+        username = request.POST.get("username", "").strip()
+        email = request.POST.get("email", "").strip()
+        password = request.POST.get("password", "")
+        es_superuser = request.POST.get("es_superuser") == "on"
+        
+        if not username or not email or not password:
+            return JsonResponse({"error": "Todos los campos son requeridos"}, status=400)
+        
+        if User.objects.filter(username=username).exists():
+            return JsonResponse({"error": "El usuario ya existe"}, status=400)
+        
+        # Crear usuario
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            is_staff=es_superuser,
+            is_superuser=es_superuser
+        )
+        
+        # Log de auditoría
+        LogAuditoria.objects.create(
+            usuario=request.user,
+            accion="CREAR_CUENTA_ADMIN",
+            descripcion=f"Creada cuenta: {username} (superuser={es_superuser})",
+            ip_address=get_client_ip(request),
+        )
+        
+        return JsonResponse({"ok": True, "message": f"Cuenta {username} creada exitosamente"})
+    
+    return render(request, "gestion_riesgo/crear_cuenta_admin.html")
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_crear_cuenta_admin(request):
+    """
+    API para crear cuentas (solo superadmin).
+    """
+    if not request.user.is_superuser:
+        return JsonResponse({"error": "Acceso denegado"}, status=403)
+    
+    try:
+        data = json.loads(request.body)
+    except:
+        data = request.POST
+    
+    username = data.get("username", "").strip()
+    email = data.get("email", "").strip()
+    password = data.get("password", "")
+    es_superuser = data.get("es_superuser", False)
+    
+    if not username or not email or not password:
+        return JsonResponse({"error": "Todos los campos son requeridos"}, status=400)
+    
+    if len(password) < 8:
+        return JsonResponse({"error": "La contraseña debe tener al menos 8 caracteres"}, status=400)
+    
+    if User.objects.filter(username=username).exists():
+        return JsonResponse({"error": "El usuario ya existe"}, status=400)
+    
+    # Crear usuario seguro
+    user = User.objects.create_user(
+        username=username,
+        email=email,
+        password=password,
+        is_staff=es_superuser,
+        is_superuser=es_superuser
+    )
+    
+    # Log de auditoría
+    LogAuditoria.objects.create(
+        usuario=request.user,
+        accion="CREAR_CUENTA_ADMIN",
+        descripcion=f"Creada cuenta: {username} (superuser={es_superuser})",
+        ip_address=get_client_ip(request),
+    )
+    
+    return JsonResponse({"ok": True, "message": f"Cuenta {username} creada exitosamente"})
 

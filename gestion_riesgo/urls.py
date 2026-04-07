@@ -24,8 +24,11 @@ urlpatterns = [
     path("api/bot/toggle/", views.api_bot_toggle, name="api_bot_toggle"),
     path("api/sse/", views.sse_stream, name="sse_stream"),
 
-    # Registro KYC
-    path("registro/", views.registro_inversionista, name="registro"),
+    # Solo superadmin puede crear cuentas desde el panel
+    path("admin/crear-cuenta/", views.crear_cuenta_admin, name="crear_cuenta_admin"),
+    path("admin/api/crear-cuenta/", views.api_crear_cuenta_admin, name="api_crear_cuenta_admin"),
+    
+    # Portal solo para usuarios autenticados
     path("portal/", views.portal_inversionista, name="portal_inversionista"),
     path("portal/api/fondo/", views.api_fondo_stats, name="api_fondo_stats"),
     path("portal/api/mis-rendimientos/", views.api_mis_rendimientos, name="api_mis_rendimientos"),
@@ -39,6 +42,10 @@ urlpatterns = [
     path("inversionista/api/rendimiento/", views.api_rendimiento_inversionista, name="api_rendimiento_inversionista"),
     path("inversionista/liquidar/<int:inv_id>/", views.liquidar_inversionista, name="liquidar_inversionista"),
     path("admin/inversionistas/", views.admin_inversionistas, name="admin_inversionistas"),
+    
+    # Chat con opencode
+    path("api/chat/", views.api_chat, name="api_chat"),
+    path("api/chat/respuesta/", views.api_chat_respuesta, name="api_chat_respuesta"),
 ]
 
 

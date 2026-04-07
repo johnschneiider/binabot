@@ -1,9 +1,13 @@
 import requests
 import json
+import os
 
-# Claves de API
-API_KEY = 'Dbchp0j5NEZ1WI3q1onLnvEiblKkdJ1TbvdhKe8GMlqxESdUf16XL25x47Un4hxI'
-API_SECRET = 'Te6BgIeyAQMFpEsVWgckQBEUIk8vKfcWjzbzoUyOK3pEPBCpP9WBtPuUkIdtMA6a'
+# Claves de API (usar variables de entorno)
+API_KEY = os.getenv('BINANCE_API_KEY')
+API_SECRET = os.getenv('BINANCE_API_SECRET')
+
+if not API_KEY or not API_SECRET:
+    raise ValueError("Configura BINANCE_API_KEY y BINANCE_API_SECRET como variables de entorno")
 
 # URL de la nueva API
 BASE_URL = 'https://api.binance.com/api/v3/'

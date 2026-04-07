@@ -65,6 +65,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
     
     tenant_nombre = serializers.CharField(source="tenant.nombre", read_only=True)
     can_trade = serializers.BooleanField(read_only=True)
+    is_superuser = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = Usuario
@@ -73,10 +74,10 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "tenant", "tenant_nombre", "tipo",
             "puede_operar", "puede_configurar", "puede_ver_reportes",
             "timezone", "tema", "last_login",
-            "can_trade", "is_active"
+            "can_trade", "is_active", "is_superuser"
         ]
         read_only_fields = [
-            "id", "last_login", "can_trade", "is_active"
+            "id", "last_login", "can_trade", "is_active", "is_superuser"
         ]
 
 
