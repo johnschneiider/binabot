@@ -215,13 +215,13 @@ DJANGO_TICK_URL = "http://127.0.0.1:8000/api/binance/tick/"
 STAKE = 1.0
 PAYOUT = 0.95
 DURACION_SEGUNDOS = 60
-COOLDOWN_TICKS = 25  # Cooldown para estrategia estricta
+COOLDOWN_TICKS = 50  # Cooldown más largo para estrategia conservadora (buscar 80% WR)
 # Filtros para buscar >80% winrate
-EMA_GAP_MIN = 0.03  # Reducido para mayor number de señales
-ADX_MIN = 20.0
-RSI_MIN = 35.0  # Relaxed para mas señales PUT
-RSI_MAX = 65.0  # Relaxed para mas señales CALL
-BB_MIN = 0.2
+EMA_GAP_MIN = 0.15  # Gap más amplio para señales más fuertes
+ADX_MIN = 25.0  # ADX más alto para tendencia fuerte
+RSI_MIN = 30.0  # RSI más estricto
+RSI_MAX = 70.0  # RSI más estricto
+BB_MIN = 0.15
 BB_MAX = 0.8
 
 def cargar_configuracion():
