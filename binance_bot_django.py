@@ -15,10 +15,89 @@ import os
 
 FUTURES_API_URL = "https://fapi.binance.com"
 
-def ejecutar_orden(simbolo, direccion, cantidad=1):
+def test_connection():
+    """Test Binance API connection"""
+    api_key = os.getenv('BINANCE_API_KEY')
+    api_secret = os.getenv('BINANCE_API_SECRET')
+    
+    if not api_key or not api_secret:
+        print("[TEST] API key/secret NOT loaded!", flush=True)
+        return False
+    
+    print(f"[TEST] API Key: {api_key[:8]}...", flush=True)
+    print(f"[TEST] API Secret: {api_secret[:8]}...", flush=True)
+    
+    try:
+        timestamp = int(time.time() * 1000)
+        query = f'timestamp={timestamp}'
+        sig = hmac.new(api_secret.encode(), query.encode(), hashlib.sha256).hexdigest()
+        url = f'{FUTURES_API_URL}/fapi/v2/account?{query}&signature={sig}'
+        headers = {'X-MBX-APIKEY': api_key}
+        
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            print(f"[TEST] Connection OK! Balance: {data.get('availableBalance')} USDT", flush=True)
+            return True
+        else:
+            print(f"[TEST] API Error: {r.status_code} - {r.text[:100]}", flush=True)
+            return False
+    except Exception as e:
+        print(f"[TEST] Exception: {e}", flush=True)
+        return False
+
+TEST_CONNECTION = test_connection()
+
+MIN_NOTIONALS = {
+    'BTC': 5.0, 'ETH': 5.0, 'BNB': 5.0, 'SOL': 5.0, 'XRP': 5.0,
+    'ADA': 5.0, 'DOGE': 5.0, 'AVAX': 5.0, 'DOT': 5.0, 'MATIC': 5.0,
+    'LINK': 5.0, 'LTC': 5.0, 'UNI': 5.0, 'ATOM': 5.0, 'XLM': 5.0,
+    'ETC': 5.0, 'XMR': 5.0, 'TRX': 5.0, 'FIL': 5.0, 'APE': 5.0,
+    'NEAR': 5.0, 'ALGO': 5.0, 'VET': 5.0, 'ICP': 5.0, 'HBAR': 5.0,
+    'SAND': 5.0, 'MANA': 5.0, 'AXS': 5.0, 'FTM': 5.0, 'AAVE': 5.0,
+}
+
+def obtener_cantidad(simbolo):
+    """Calcula cantidad basada en min notional de cada symbol"""
+    min_notional = MIN_NOTIONALS.get(simbolo.upper(), 5.0)
+    return int(min_notional)
+
+def configurar_leverage_y_margin(simbolo, api_key, api_secret):
+    """Configura leverage y margin type para el simbolo"""
+    try:
+        timestamp = int(time.time() * 1000)
+        symbol = f"{simbolo}USDT"
+        
+        # Set leverage to 20x
+        params_leverage = {
+            "symbol": symbol,
+            "leverage": 20,
+            "timestamp": timestamp
+        }
+        query_leverage = "&".join([f"{k}={v}" for k, v in sorted(params_leverage.items())])
+        sig_leverage = hmac.new(api_secret.encode(), query_leverage.encode(), hashlib.sha256).hexdigest()
+        url_leverage = f"{FUTURES_API_URL}/fapi/v1/leverage?{query_leverage}&signature={sig_leverage}"
+        headers = {'X-MBX-APIKEY': api_key}
+        requests.post(url_leverage, headers=headers, timeout=10)
+        
+        # Set margin type to CROSSED (1)
+        params_margin = {
+            "symbol": symbol,
+            "marginType": 1,  # 1 = CROSSED, 2 = ISOLATED
+            "timestamp": timestamp
+        }
+        query_margin = "&".join([f"{k}={v}" for k, v in sorted(params_margin.items())])
+        sig_margin = hmac.new(api_secret.encode(), query_margin.encode(), hashlib.sha256).hexdigest()
+        url_margin = f"{FUTURES_API_URL}/fapi/v1/marginType?{query_margin}&signature={sig_margin}"
+        requests.post(url_margin, headers=headers, timeout=10)
+        
+    except Exception as e:
+        pass  # Silently continue if config fails
+
+def ejecutar_orden(simbolo, direccion, cantidad=None):
     """
     Ejecuta una orden real en Binance Futures
-    direccion: 'LONG' (CALL) o 'SHORT' (PUT)
+    direccion: 'CALL' (LONG/BUY) o 'PUT' (SHORT/SELL)
     """
     api_key = os.getenv('BINANCE_API_KEY')
     api_secret = os.getenv('BINANCE_API_SECRET')
@@ -27,26 +106,30 @@ def ejecutar_orden(simbolo, direccion, cantidad=1):
         print("[ERROR] API key no configurada", flush=True)
         return None
     
+    # Auto-configurar leverage y margin type antes de operar
+    configurar_leverage_y_margin(simbolo, api_key, api_secret)
+    
+    print(f"[TRADE] Intentando orden REAL para {simbolo} {direccion}...", flush=True)
+    
     try:
         timestamp = int(time.time() * 1000)
         
-        # Para Binance Futures: LONG = BUY, SHORT = SELL
+        # Para Binance Futures: CALL = BUY (LONG), PUT = SELL (SHORT)
         if direccion == "CALL":
             side = "BUY"
         else:
             side = "SELL"
         
-        # Parameters para orden market
+        # Parameters para orden market - sin positionSide para evitar error
         params = {
             "symbol": f"{simbolo}USDT",
             "side": side,
-            "positionSide": "LONG" if direccion == "CALL" else "SHORT",
             "type": "MARKET",
             "quantity": cantidad,
             "timestamp": timestamp
         }
         
-        # Crear signature
+        # Crear signature - para POST, incluir en query string
         query_string = "&".join([f"{k}={v}" for k, v in sorted(params.items())])
         signature = hmac.new(
             api_secret.encode('utf-8'),
@@ -54,24 +137,23 @@ def ejecutar_orden(simbolo, direccion, cantidad=1):
             hashlib.sha256
         ).hexdigest()
         
-        params["signature"] = signature
-        
-        # Enviar orden
-        url = f"{FUTURES_API_URL}/fapi/v1/order"
+        # Incluir signature en URL query string
+        url = f"{FUTURES_API_URL}/fapi/v1/order?{query_string}&signature={signature}"
         headers = {'X-MBX-APIKEY': api_key}
         
-        response = requests.post(url, params=params, headers=headers, timeout=10)
+        print(f"[TRADE] Enviando orden...", flush=True)
+        response = requests.post(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
-            print(f"[REAL TRADE] {simbolo} {direccion} @ mercado | OrderID: {data.get('orderId')}", flush=True)
+            print(f"[TRADE] SUCCESS: orden REAL ejecutada para {simbolo} {direccion} | OrderID: {data.get('orderId')}", flush=True)
             return data
         else:
-            print(f"[ERROR ORDEN] {response.status_code}: {response.text}", flush=True)
+            print(f"[TRADE] ERROR Orden: {response.status_code}: {response.text}", flush=True)
             return None
             
     except Exception as e:
-        print(f"[ERROR EJECUTANDO] {e}", flush=True)
+        print(f"[TRADE] ERROR EJECUTANDO: {e}", flush=True)
         return None
 
 FUTURES_API_URL = "https://fapi.binance.com"
@@ -133,13 +215,12 @@ DJANGO_TICK_URL = "http://127.0.0.1:8000/api/binance/tick/"
 STAKE = 1.0
 PAYOUT = 0.95
 DURACION_SEGUNDOS = 60
-COOLDOWN_TICKS = 45  # Balance entre protección y oportunidad
+COOLDOWN_TICKS = 25  # Cooldown para estrategia estricta
 # Filtros para buscar >80% winrate
-EMA_GAP_MIN = 0.20  # 0.20% entre EMA8 y EMA21
-EMA_GAP_MIN = 0.2
+EMA_GAP_MIN = 0.03  # Reducido para mayor number de señales
 ADX_MIN = 20.0
-RSI_MIN = 30.0
-RSI_MAX = 70.0
+RSI_MIN = 35.0  # Relaxed para mas señales PUT
+RSI_MAX = 65.0  # Relaxed para mas señales CALL
 BB_MIN = 0.2
 BB_MAX = 0.8
 
@@ -247,8 +328,8 @@ def calcular_rsi(precios, periodo=14):
     if len(precios) < periodo + 1:
         return 50.0
     cambios = []
-    for i in range(-periodo, 0):
-        cambios.append(precios[i] - precios[i-1])
+    for i in range(1, periodo + 1):
+        cambios.append(precios[-i] - precios[-i-1])
     ganancias = [max(c, 0) for c in cambios]
     perdidas = [max(-c, 0) for c in cambios]
     avg_g = sum(ganancias) / periodo
@@ -341,11 +422,37 @@ def evaluar_senal(estado, precio):
     estado.ema_rapida = calcular_ema(precio, estado.ema_rapida, 8)
     estado.ema_media = calcular_ema(precio, estado.ema_media, 21)
     estado.ema_lenta = calcular_ema(precio, estado.ema_lenta, 55)
-    
-    # Calcular RSI
-    if len(estado.precios) >= 14:
-        rsi = calcular_rsi(estado.precios[-14:])
-    else:
+    # Calcular RSI y EMA siempre desde API para mayor precision
+    try:
+        url = f"https://api.binance.com/api/v3/klines?symbol={estado.simbolo}USDT&interval=1m&limit=60"
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            closes = [float(c[4]) for c in resp.json()]
+            
+            # RSI
+            if len(closes) >= 15:
+                rsi = calcular_rsi(closes[-15:])
+            else:
+                rsi = 50.0
+            
+            # EMA desde API
+            ema8 = ema21 = ema55 = None
+            for p in closes:
+                k8 = 2 / 9
+                k21 = 2 / 22
+                k55 = 2 / 56
+                ema8 = p * k8 + ema8 * (1 - k8) if ema8 else p
+                ema21 = p * k21 + ema21 * (1 - k21) if ema21 else p
+                ema55 = p * k55 + ema55 * (1 - k55) if ema55 else p
+            
+            # Override local EMA values
+            estado.ema_rapida = ema8
+            estado.ema_media = ema21
+            estado.ema_lenta = ema55
+            
+        else:
+            rsi = 50.0
+    except Exception as e:
         rsi = 50.0
     estado.rsi = rsi
     
@@ -362,24 +469,22 @@ def evaluar_senal(estado, precio):
     ema_media_below_lenta = estado.ema_media < estado.ema_lenta
     tendencia_bajista = ema_rapida_below_media and ema_media_below_lenta
     
-    # CALL: EMA8 > EMA21 > EMA55 + gap MUY fuerte + RSI sobrecompra extrema (>70)
-    # Estrategia muy conservadora para proteger capital
+    # CALL: EMA8 > EMA21 > EMA55 + gap + trend + RSI sobrecompra (>70)
     if ema_rapida_above_media and ema_media_above_lenta:
         gap_pct = abs(estado.ema_rapida - estado.ema_media) / estado.ema_media * 100
         trend_gap = abs(estado.ema_media - estado.ema_lenta) / estado.ema_lenta * 100
-        # Requiere gap muy fuerte (0.40%) +趋势 clara + RSI muy alto (>70)
-        if gap_pct >= 0.40 and trend_gap >= 0.20 and rsi > 70:
-            print(f"[SEÑAL] {estado.simbolo}: CALL CONSERVADORA gap={gap_pct:.3f}% trend={trend_gap:.3f}% rsi={rsi:.1f}", flush=True)
-            estado.cooldown = 80
+        if gap_pct >= EMA_GAP_MIN and trend_gap >= EMA_GAP_MIN and rsi > RSI_MAX:
+            print(f"[SEÑAL] {estado.simbolo}: CALL gap={gap_pct:.3f}% trend={trend_gap:.3f}% rsi={rsi:.1f}", flush=True)
+            estado.cooldown = COOLDOWN_TICKS
             return ("CALL", "ema_crossover_up", "alta")
     
-    # PUT: EMA8 < EMA21 < EMA55 + gap MUY fuerte + RSI sobreventa extrema (<30)
+    # PUT: EMA8 < EMA21 < EMA55 + gap + trend + RSI sobreventa (<30)
     if ema_rapida_below_media and ema_media_below_lenta:
         gap_pct = abs(estado.ema_rapida - estado.ema_media) / estado.ema_media * 100
         trend_gap = abs(estado.ema_media - estado.ema_lenta) / estado.ema_lenta * 100
-        if gap_pct >= 0.40 and trend_gap >= 0.20 and rsi < 30:
-            print(f"[SEÑAL] {estado.simbolo}: PUT CONSERVADORA gap={gap_pct:.3f}% trend={trend_gap:.3f}% rsi={rsi:.1f}", flush=True)
-            estado.cooldown = 80
+        if gap_pct >= EMA_GAP_MIN and trend_gap >= EMA_GAP_MIN and rsi < RSI_MIN:
+            print(f"[SEÑAL] {estado.simbolo}: PUT gap={gap_pct:.3f}% trend={trend_gap:.3f}% rsi={rsi:.1f}", flush=True)
+            estado.cooldown = COOLDOWN_TICKS
             return ("PUT", "ema_crossover_dn", "alta")
     
     return ("NEUTRAL", "sin_señal", "baja")
@@ -389,7 +494,7 @@ def evaluar_senal(estado, precio):
 #  GUARDAR EN DJANGO
 # ============================================================
 
-def guardar_operacion(simbolo, direccion, precio_entrada, precio_salida, razon, confianza, es_win, profit, num):
+def guardar_operacion(simbolo, direccion, precio_entrada, precio_salida, razon, confianza, es_win, profit, num, orden_real=False):
     data = {
         "simbolo": simbolo,
         "direccion": direccion,
@@ -398,6 +503,7 @@ def guardar_operacion(simbolo, direccion, precio_entrada, precio_salida, razon, 
         "confianza": confianza,
         "es_win": es_win,
         "profit": profit,
+        "orden_real": orden_real,
     }
     try:
         req = urllib.request.Request(
@@ -454,11 +560,24 @@ def verificar_pendientes(estado, precio_actual, hora):
             estado.loss_streak += 1
             estado.win_streak = 0
         
-        guardar_operacion(op.simbolo, op.direccion, op.precio_entrada, precio_actual, op.razon, op.confianza, es_win, profit, op.num_operacion)
+        # Cerrar posicion real en Binance si estaba abierta
+        if getattr(op, 'orden_real', False):
+            try:
+                cantidad = obtener_cantidad(op.simbolo)
+                direccion_opuesta = "PUT" if op.direccion == "CALL" else "CALL"
+                resultado_cierre = ejecutar_orden(op.simbolo, direccion_opuesta, cantidad)
+                if resultado_cierre:
+                    print(f"[TRADE] Posicion cerrada para {op.simbolo}", flush=True)
+            except Exception as e:
+                print(f"[TRADE] Error cerrando posicion: {e}", flush=True)
+        
+        # Pasar el flag orden_real desde la operacion pendiente
+        guardar_operacion(op.simbolo, op.direccion, op.precio_entrada, precio_actual, op.razon, op.confianza, es_win, profit, op.num_operacion, getattr(op, 'orden_real', False))
         
         wr = (estado.wins / estado.total_ops * 100) if estado.total_ops > 0 else 0
         resultado = "WIN" if es_win else "LOSS"
-        print(f"[{hora}] {op.simbolo}: {op.direccion} | ${op.precio_entrada:.2f} -> ${precio_actual:.2f} | {resultado} ({profit:+.2f}) | WR:{wr:.1f}%", flush=True)
+        tipo = "REAL" if getattr(op, 'orden_real', False) else "SIMULADO"
+        print(f"[{hora}] {op.simbolo}: {op.direccion} | ${op.precio_entrada:.2f} -> ${precio_actual:.2f} | {resultado} ({profit:+.2f}) | WR:{wr:.1f}% | {tipo}", flush=True)
         estado.operacion_pendiente = None
 
 
@@ -509,13 +628,16 @@ async def conectar_binance(simbolos):
                             decision, razon, confianza = evaluar_senal(estado, precio)
                             
                             # Debug: ver estado de precios
-                            if sym == 'BTC' and len(estado.precios) % 10 == 0:
-                                print(f"[DEBUG] BTC: precios={len(estado.precios)}, ema8={estado.ema_rapida}, ema21={estado.ema_media}, rsi={estado.rsi}", flush=True)
+                            if estado.tick_count % 10 == 0:
+                                gap_pct = abs(estado.ema_rapida - estado.ema_media) / estado.ema_media * 100 if estado.ema_media else 0
+                                trend_gap = abs(estado.ema_media - estado.ema_lenta) / estado.ema_lenta * 100 if estado.ema_lenta else 0
+                                print(f"[DEBUG] {sym}: cd={estado.cooldown}, gap={gap_pct:.2f}%, trend={trend_gap:.2f}%, rsi={estado.rsi:.0f}, decision={decision}", flush=True)
                             
                             if decision != "NEUTRAL":
                                 num_global += 1
                                 # EJECUTAR ORDEN REAL EN BINANCE
-                                resultado_trade = ejecutar_orden(sym, decision, cantidad=1)
+                                cantidad_ajustada = obtener_cantidad(sym)
+                                resultado_trade = ejecutar_orden(sym, decision, cantidad=cantidad_ajustada)
                                 
                                 estado.operacion_pendiente = OperacionPendiente(
                                     simbolo=sym,
@@ -534,13 +656,14 @@ async def conectar_binance(simbolos):
             await asyncio.sleep(1)  # Poll cada segundo
             
         except Exception as e:
+            import traceback
             print(f"[POLL ERROR] {e}", flush=True)
-            await asyncio.sleep(5)
-        except Exception as e:
-            print(f"[WS ERROR] {e}", flush=True)
+            print(f"[ERROR DETAIL] {traceback.format_exc()}", flush=True)
             await asyncio.sleep(5)
 
 
+# ============================================================
+#  MAIN
 # ============================================================
 #  MAIN
 # ============================================================

@@ -238,12 +238,17 @@ function updateDashboard(data) {
     }
   }
 
-  document.getElementById('balanceDisplay').textContent = '$' + (data.balance_ficticio || 0).toFixed(2);
+  // Usar balance real de Binance API
+  var balanceMostrar = data.balance_real !== undefined && data.balance_real > 0 ? data.balance_real : data.balance_real_ops;
+  document.getElementById('balanceDisplay').textContent = '$' + (balanceMostrar || 0).toFixed(2);
   document.getElementById('wrDisplay').textContent = (data.wr_global || 0).toFixed(1) + '%';
   document.getElementById('profitDisplay').textContent = '$' + (data.total_profit || 0).toFixed(2);
   document.getElementById('totalOpsDisplay').textContent = data.total_ops || 0;
   document.getElementById('winsDisplay').textContent = data.total_wins || 0;
   document.getElementById('opsDisplay').textContent = (data.total_ops - data.total_wins) || 0;
+  
+  // Mostrar info de operaciones reales
+  console.log('Ops reales:', data.ops_reales, 'Profit real:', data.profit_real);
   
   if (data.balance_points && data.balance_points.length > 0) {
     balanceChart.data.labels = data.balance_points.map(p => p.x);

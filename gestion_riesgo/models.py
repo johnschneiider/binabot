@@ -4,6 +4,42 @@ from django.db import models
 from django.conf import settings
 
 
+class ChatMessage(models.Model):
+    """Chat en tiempo real entre usuario y opencode"""
+    mensaje = models.TextField()
+    emisor = models.CharField(max_length=20)  # 'usuario' o 'opencode'
+    leido = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"[{self.emisor}]: {self.mensaje[:50]}..."
+
+
+class OperacionBinance(models.Model):
+    """Operaciones en Binance Futures"""
+    simbolo = models.CharField(max_length=10)
+    direccion = models.CharField(max_length=10)  # CALL/PUT
+    precio_entrada = models.DecimalField(max_digits=20, decimal_places=8)
+    razon = models.CharField(max_length=100)
+    confianza = models.CharField(max_length=10, default="media")
+    es_win = models.BooleanField(default=False)
+    profit = models.DecimalField(max_digits=20, decimal_places=8, default=0)
+    win_rate_momento = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    profit_total = models.DecimalField(max_digits=20, decimal_places=8, default=0)
+    num_operacion = models.IntegerField(default=0)
+    orden_real = models.BooleanField(default=False)  # NEW: indica si fue trade real
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.simbolo} {self.direccion} {'WIN' if self.es_win else 'LOSS'} ${self.profit}"
+
+
 class Inversionista(models.Model):
     """
     Representa a un cliente/inversionista que deposita capital
@@ -638,6 +674,7 @@ class OperacionBinance(models.Model):
     num_operacion = models.IntegerField(default=0)
     
     # Metadata
+    orden_real = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

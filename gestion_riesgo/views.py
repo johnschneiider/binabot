@@ -24,6 +24,7 @@ from .models import (
     Deposito, Retiro, RendimientoFondo,
     OperacionBinance, EstadisticasBinance,
     ConfiguracionEstrategia,
+    ChatMessage,
 )
 import json
 import time
@@ -1964,9 +1965,12 @@ def api_guardar_operacion_binance(request):
     confianza = data.get("confianza", "media")
     es_win = bool(data.get("es_win", False))
     profit = float(data.get("profit", 0))
+    orden_real = bool(data.get("orden_real", False))  # NEW
     
     if not simbolo:
         return JsonResponse({"error": "simbolo requerido"}, status=400)
+    
+    print(f"[API] Guardando operación: {simbolo} {direccion} | win={es_win} | profit={profit} | REAL={orden_real}")
     
     # Obtener o crear estadísticas del activo
     from decimal import Decimal
@@ -2014,6 +2018,7 @@ def api_guardar_operacion_binance(request):
         win_rate_momento=stats.win_rate,
         profit_total=stats.profit_total,
         num_operacion=stats.total_ops,
+        orden_real=orden_real,  # NEW
     )
     
     return JsonResponse({
@@ -2077,7 +2082,27 @@ def api_estado_binance(request):
     total_wins = sum(s.wins for s in stats)
     wr_global = (total_wins / total_ops * 100) if total_ops > 0 else 0
     total_profit = sum(float(s.profit_total) for s in stats)
-    balance_ficticio = sum(float(s.balance_ficticio) for s in stats)
+    
+    # Usar balance real de Binance API
+    balance_real = 0.0
+    try:
+        api_key = os.getenv('BINANCE_API_KEY')
+        api_secret = os.getenv('BINANCE_API_SECRET')
+        if api_key and api_secret:
+            ts = int(time.time() * 1000)
+            sig = hmac.new(api_secret.encode(), f'timestamp={ts}'.encode(), hashlib.sha256).hexdigest()
+            r = requests.get(f'https://fapi.binance.com/fapi/v2/account?timestamp={ts}&signature={sig}', 
+                           headers={'X-MBX-APIKEY': api_key}, timeout=5)
+            if r.status_code == 200:
+                balance_real = float(r.json().get('availableBalance', 0))
+    except:
+        pass
+    
+    # Calcular balance real basado en operaciones REALES solo
+    # Usar todas las operaciones para el cálculo de profit
+    todas_ops = OperacionBinance.objects.all()
+    profit_real = sum(float(op.profit) for op in todas_ops)
+    balance_real_ops = 10.67 + profit_real  # Balance inicial + profit real
     
     return JsonResponse({
         "bot_activo": True,
@@ -2085,7 +2110,10 @@ def api_estado_binance(request):
         "total_wins": total_wins,
         "win_rate": wr_global,
         "total_profit": total_profit,
-        "balance_ficticio": balance_ficticio,
+        "balance_real": balance_real,
+        "balance_real_ops": balance_real_ops,
+        "ops_reales": ops_reales.count(),
+        "profit_real": profit_real,
         "activos": [
             {
                 "simbolo": s.simbolo,
@@ -2174,9 +2202,11 @@ def sse_binance_stream(request):
 
                 # SIEMPRE enviar datos (cada 2 segundos) para gráficos en tiempo real
                 stats = EstadisticasBinance.objects.all()
-                total_ops = sum(s.total_ops for s in stats)
-                total_wins = sum(s.wins for s in stats)
-                total_profit = sum(float(s.profit_total) for s in stats)
+                # Solo usar operaciones REALES para métricas
+                ops_reales_query = OperacionBinance.objects.filter(orden_real=True)
+                total_ops = ops_reales_query.count()
+                total_wins = ops_reales_query.filter(es_win=True).count()
+                total_profit = sum(float(op.profit) for op in ops_reales_query)
                 
                 # OBTENER BALANCE REAL DESDE API BINANCE FUTURES
                 balance_real = 0.0
@@ -2212,24 +2242,43 @@ def sse_binance_stream(request):
                 
                 balance_ficticio = balance_real
                 
-                # Win Rate de los últimos 100 trades
-                ultimas_100_ops = list(OperacionBinance.objects.order_by('-created_at')[:100])
+                # Win Rate de los últimos 100 trades (solo operaciones reales)
+                ultimas_100_ops = list(OperacionBinance.objects.filter(orden_real=True).order_by('-created_at')[:100])
                 wr_ult100_wins = sum(1 for op in ultimas_100_ops if op.es_win)
                 wr_ult100_total = len(ultimas_100_ops)
                 wr_global = (wr_ult100_wins / wr_ult100_total * 100) if wr_ult100_total > 0 else 0
                 total_wins_display = wr_ult100_wins
                 total_ops_display = wr_ult100_total
                 
-                # Datos para gráfico de balance por operación
-                todas_ops = OperacionBinance.objects.all().order_by('created_at')
+                # Obtener solo operaciones REALES para calcular profit y balance
+                ops_reales = OperacionBinance.objects.filter(orden_real=True)
+                profit_real = sum(float(op.profit) for op in ops_reales)
+                
+                # Balance basado en operaciones reales
+                balance_inicial = 10.67
+                balance_calculado = balance_inicial + profit_real
+                
+                # Si no hay ops reales, mostrar balance de Binance API
+                if ops_reales.count() == 0:
+                    balance_calculado = balance_real
+                
+                # Datos para gráfico de balance por operación (solo reales)
                 balance_points = []
-                bal = 1000
-                for op in todas_ops:
-                    bal += float(op.profit)
+                ops_reales_ordered = ops_reales.order_by('created_at')
+                bal = balance_inicial
+                if ops_reales_ordered.count() == 0:
+                    # Si no hay ops reales, mostrar el balance actual de Binance
                     balance_points.append({
-                        "x": f"#{op.num_operacion}",
-                        "y": round(bal, 2)
+                        "x": "Actual",
+                        "y": round(balance_real, 2)
                     })
+                else:
+                    for op in ops_reales_ordered:
+                        bal += float(op.profit)
+                        balance_points.append({
+                            "x": f"#{op.num_operacion}",
+                            "y": round(bal, 2)
+                        })
                 
                 # Datos para gráfico de barras por activo
                 activos_data = []
@@ -2241,8 +2290,8 @@ def sse_binance_stream(request):
                         "wr": s.win_rate
                     })
                 
-                # Última operación
-                ultima_op = OperacionBinance.objects.order_by('-created_at').first()
+                # Última operación (solo reales)
+                ultima_op = OperacionBinance.objects.filter(orden_real=True).order_by('-created_at').first()
                 op_data = None
                 if ultima_op:
                     # Convertir a hora Colombia (UTC-5)
@@ -2261,9 +2310,9 @@ def sse_binance_stream(request):
                         "hora": hora_colombia.strftime("%d-%m-%Y %H:%M:%S")
                     }
                 
-                # Enviar historial completo (últimas 50 operaciones)
+                # Enviar historial completo (últimas 50 operaciones REALES)
                 historial_data = []
-                ultimas_ops = OperacionBinance.objects.order_by('-created_at')[:50]
+                ultimas_ops = OperacionBinance.objects.filter(orden_real=True).order_by('-created_at')[:50]
                 for op in ultimas_ops:
                     hora_col = op.created_at - timedelta(hours=5)
                     historial_data.append({
@@ -2334,7 +2383,10 @@ def sse_binance_stream(request):
                     "total_wins": total_wins_display,
                     "wr_global": round(wr_global, 1),
                     "total_profit": round(total_profit, 2),
+                    "balance_real": round(balance_real, 2),
                     "balance_ficticio": round(balance_ficticio, 2),
+                    "profit_real": round(profit_real, 2),
+                    "ops_reales": ops_reales.count(),
                     "activos": activos_data,
                     "balance_points": balance_points[-100:],
                     "ultima_operacion": op_data,
@@ -2449,4 +2501,65 @@ def api_configuracion_estrategia(request):
             "payout": config.payout,
         }
     })
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def api_chat(request):
+    """
+    API para chatear con opencode.
+    GET: obtener mensajes
+    POST: enviar mensaje
+    """
+    if request.method == "GET":
+        # Obtener mensajes no leidos o ultimos 50
+        mensajes = ChatMessage.objects.all().order_by("-created_at")[:50]
+        return JsonResponse({
+            "mensajes": [
+                {
+                    "id": m.id,
+                    "mensaje": m.mensaje,
+                    "emisor": m.emisor,
+                    "leido": m.leido,
+                    "created_at": m.created_at.isoformat()
+                }
+                for m in reversed(mensajes)
+            ]
+        })
+    
+    # POST - recibir mensaje del usuario
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        data = request.POST
+    
+    mensaje = data.get("mensaje", "").strip()
+    if not mensaje:
+        return JsonResponse({"error": "mensaje vacio"}, status=400)
+    
+    # Guardar mensaje del usuario
+    ChatMessage.objects.create(mensaje=mensaje, emisor="usuario")
+    
+    return JsonResponse({"ok": True})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_chat_respuesta(request):
+    """
+    API para que opencode guarde su respuesta.
+    """
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        data = request.POST
+    
+    mensaje = data.get("mensaje", "").strip()
+    if not mensaje:
+        return JsonResponse({"error": "mensaje vacio"}, status=400)
+    
+    # Guardar respuesta de opencode
+    ChatMessage.objects.create(mensaje=mensaje, emisor="opencode")
+    
+    return JsonResponse({"ok": True})
 
