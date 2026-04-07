@@ -763,17 +763,21 @@
       function logoutUser(e) {
         e.preventDefault();
         fetch('/api/auth/logout/', {method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}, credentials:'same-origin'})
-          .then(() => {
+          .then(response => {
+            // Limpiar todo
             localStorage.removeItem('qd_token');
             localStorage.removeItem('qd_user');
+            sessionStorage.clear();
             window.APP_AUTH = { isAuthenticated: false };
-            // Recargar la página para asegurar limpieza completa
+            
+            // Forzar recarga limpia
             window.location.href = '/';
           })
           .catch(() => {
             // Forzar logout incluso si hay error
             localStorage.removeItem('qd_token');
             localStorage.removeItem('qd_user');
+            sessionStorage.clear();
             window.APP_AUTH = { isAuthenticated: false };
             window.location.href = '/';
           });

@@ -172,19 +172,23 @@ class LoginView(APIView):
 
 class LogoutView(APIView):
     """Cierre de sesion."""
+    permission_classes = []  # Allow any user to call logout
     
     def post(self, request):
         if request.user.is_authenticated:
             LogAuditoria.objects.create(
                 usuario=request.user,
-                tenant=request.user.tenant,
+                tenant=request.user.tenant if hasattr(request.user, 'tenant') else None,
                 accion=LogAuditoria.Accion.LOGOUT,
                 descripcion="Cierre de sesion",
                 ip_address=get_client_ip(request),
             )
             logout(request)
         
-        return Response({"message": "Logout exitoso."})
+        # Return response that clears session
+        response = Response({"message": "Logout exitoso.", "success": True})
+        response.delete_cookie('sessionid')
+        return response
 
 
 class ProfileView(APIView):
