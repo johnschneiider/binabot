@@ -610,8 +610,9 @@
             email: lsUser.email || '',
             displayName: lsUser.displayName || lsUser.first_name || lsUser.username || '',
             initials: lsUser.initials || (lsUser.username || 'U').slice(0,2).toUpperCase(),
-            capital: lsUser.capital || 0,
-            rendimientoPct: lsUser.rendimientoPct || 0,
+            is_superuser: lsUser.is_superuser || false,
+            capital: 0,
+            rendimientoPct: 0,
           };
           renderNavbar(window.APP_AUTH, container);
           loadNavbarBalance();
@@ -765,6 +766,15 @@
           .then(() => {
             localStorage.removeItem('qd_token');
             localStorage.removeItem('qd_user');
+            window.APP_AUTH = { isAuthenticated: false };
+            // Recargar la página para asegurar limpieza completa
+            window.location.href = '/';
+          })
+          .catch(() => {
+            // Forzar logout incluso si hay error
+            localStorage.removeItem('qd_token');
+            localStorage.removeItem('qd_user');
+            window.APP_AUTH = { isAuthenticated: false };
             window.location.href = '/';
           });
       }
