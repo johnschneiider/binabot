@@ -30,7 +30,7 @@ class OperacionBinance(models.Model):
     win_rate_momento = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     profit_total = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     num_operacion = models.IntegerField(default=0)
-    orden_real = models.BooleanField(default=False)  # NEW: indica si fue trade real
+    orden_real = models.BooleanField(default=True)  # True = operación real de la API
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

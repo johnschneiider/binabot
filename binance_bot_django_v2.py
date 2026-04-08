@@ -268,119 +268,147 @@ class EstadoActivo:
 #  ESTRATEGIA AVANZADA
 # ============================================================
 
+# Contador global de ticks para resúmenes periódicos por símbolo
+_log_counters = {}
+
 def evaluar_senal_v2(estado, precio):
     """Estrategia mejorada con múltiples filtros"""
     estado.precios.append(precio)
     estado.ultimo_precio = precio
-    
+
     if len(estado.precios) > 300:
         estado.precios = estado.precios[-300:]
-    
+
     if estado.cooldown > 0:
         estado.cooldown -= 1
         return ("NEUTRAL", f"cooldown_{estado.cooldown}", "baja")
-    
+
     if len(estado.precios) < 55:
-        return ("NEUTRAL", "warmup", "baja")
-    
+        restantes = 55 - len(estado.precios)
+        return ("NEUTRAL", f"warmup_{restantes}ticks", "baja")
+
     # Actualizar todos los indicadores
-    estado.ema_rapida = calcular_ema(precio, estado.ema_rapida, 5)   # Más rápido
-    estado.ema_media = calcular_ema(precio, estado.ema_media, 13)   # Fibonacci
-    estado.ema_lenta = calcular_ema(precio, estado.ema_lenta, 34)   # Fibonacci
-    
-    estado.rsi = calcular_rsi(estado.precios, 14)
-    estado.adx = calcular_adx(estado.precios, 14)
+    estado.ema_rapida = calcular_ema(precio, estado.ema_rapida, 5)
+    estado.ema_media  = calcular_ema(precio, estado.ema_media, 13)
+    estado.ema_lenta  = calcular_ema(precio, estado.ema_lenta, 34)
+
+    estado.rsi  = calcular_rsi(estado.precios, 14)
+    estado.adx  = calcular_adx(estado.precios, 14)
     estado.stoch = calcular_stoch(estado.precios, 14)
-    
+
     macd_line, signal_line, histogram = calcular_macd(estado.precios)
-    estado.macd = macd_line
+    estado.macd        = macd_line
     estado.macd_signal = signal_line
-    
+
     banda_sup, banda_med, banda_inf, bb_pos = calcular_bollinger(estado.precios, 20, 2.0)
     estado.bb_posicion = bb_pos
-    
-    # Mantener histórico
+
     estado.rsi_history.append(estado.rsi)
     estado.adx_history.append(estado.adx)
-    if len(estado.rsi_history) > 10:
-        estado.rsi_history = estado.rsi_history[-10:]
-    if len(estado.adx_history) > 10:
-        estado.adx_history = estado.adx_history[-10:]
-    
-    # ============================================================
-    #  FILTROS DE CALIDAD - DEBE PASAR TODOS
-    # ============================================================
-    
-    # 1. Filtro ADX - Tendencia fuerte
+    if len(estado.rsi_history) > 10: estado.rsi_history = estado.rsi_history[-10:]
+    if len(estado.adx_history) > 10: estado.adx_history = estado.adx_history[-10:]
+
+    # ── Resumen periódico de indicadores (cada 50 ticks por símbolo) ──
+    sym = estado.simbolo
+    _log_counters[sym] = _log_counters.get(sym, 0) + 1
+    if _log_counters[sym] % 50 == 0:
+        ema_dir = "EMA↑" if estado.ema_rapida > estado.ema_lenta else "EMA↓"
+        macd_dir = "MACD+" if macd_line > signal_line else "MACD-"
+        hora_now = datetime.now(tz=timezone.utc).strftime("%H:%M:%S")
+        print(
+            f"[{hora_now}] [{sym}] INDICADORES | P:{precio:.2f} | "
+            f"RSI:{estado.rsi:.1f} ADX:{estado.adx:.1f} STOCH:{estado.stoch:.1f} "
+            f"BB:{estado.bb_posicion:.2f} {ema_dir} {macd_dir} | "
+            f"ops:{estado.total_ops} W:{estado.wins} L:{estado.losses}",
+            flush=True
+        )
+
+    # ── FILTROS DE CALIDAD ──────────────────────────────────────────
+
+    # 1. ADX
     if estado.adx < ADX_MIN:
-        return ("NEUTRAL", f"adx_bajo_{estado.adx:.1f}", "baja")
-    
-    # 2. Filtro volatilidad - Evitar mercados muy volátiles
+        return ("NEUTRAL", f"adx_bajo_{estado.adx:.1f}<{ADX_MIN}", "baja")
+
+    # 2. Volatilidad
     if len(estado.precios) >= 20:
         volatilidad = statistics.stdev(estado.precios[-20:]) / estado.precios[-1] * 100
-        if volatilidad > 2.0:  # Más del 2% de volatilidad
-            return ("NEUTRAL", f"volatilidad_alta_{volatilidad:.2f}", "baja")
-    
-    # 3. Filtro de momentum - MACD debe confirmar
+        if volatilidad > 2.0:
+            return ("NEUTRAL", f"volatilidad_alta_{volatilidad:.2f}%", "baja")
+
+    # 3. MACD momentum
     macd_momentum_ok = False
-    if estado.macd > estado.macd_signal and histogram > 0:
+    if macd_line > signal_line and histogram > 0:
         macd_momentum_ok = "bullish"
-    elif estado.macd < estado.macd_signal and histogram < 0:
+    elif macd_line < signal_line and histogram < 0:
         macd_momentum_ok = "bearish"
-    
+
     if not macd_momentum_ok:
-        return ("NEUTRAL", "macd_sin_momentum", "baja")
-    
-    # ============================================================
-    #  SEÑALES DE ENTRADA - MUY ESTRICTAS
-    # ============================================================
-    
-    # Condición CALL - Todo debe alinearse alcista
-    ema_tendencia_alcista = (estado.ema_rapida > estado.ema_media > estado.ema_lenta)
-    rsi_no_sobrecomprado = (RSI_MIN < estado.rsi < 65)  # No muy alto
-    bb_no_sobrecomprado = (estado.bb_posicion < 0.8)   # No en banda superior
-    stoch_ok_call = (estado.stoch < 80)  # Estocástico no sobrecomprado
-    macd_alcista = (macd_momentum_ok == "bullish")
-    
-    # Gap entre EMAs suficiente (evita señales en rangos)
+        return ("NEUTRAL", f"macd_sin_momentum(hist:{histogram:.4f})", "baja")
+
+    # ── SEÑALES DE ENTRADA ──────────────────────────────────────────
+
     ema_gap = abs(estado.ema_rapida - estado.ema_lenta) / estado.ema_lenta * 100
     gap_suficiente = ema_gap > EMA_GAP_MIN
-    
-    if (ema_tendencia_alcista and rsi_no_sobrecomprado and bb_no_sobrecomprado 
-        and stoch_ok_call and macd_alcista and gap_suficiente):
-        
-        # FILTRO ML ADICIONAL
+
+    # CALL
+    ema_tendencia_alcista = (estado.ema_rapida > estado.ema_media > estado.ema_lenta)
+    rsi_ok_call  = (RSI_MIN < estado.rsi < 65)
+    bb_ok_call   = (estado.bb_posicion < 0.8)
+    stoch_ok_call = (estado.stoch < 80)
+    macd_alcista  = (macd_momentum_ok == "bullish")
+
+    if ema_tendencia_alcista and rsi_ok_call and bb_ok_call and stoch_ok_call and macd_alcista and gap_suficiente:
         if ML_ENABLED:
-            ml_aprobado, ml_razon = aplicar_filtros_ml(estado.simbolo, "CALL", 
-                                                      f"multi_alcista_adx{estado.adx:.0f}", precio)
+            ml_aprobado, ml_razon = aplicar_filtros_ml(estado.simbolo, "CALL",
+                                                       f"multi_alcista_adx{estado.adx:.0f}", precio)
             if not ml_aprobado:
+                hora_now = datetime.now(tz=timezone.utc).strftime("%H:%M:%S")
+                print(f"[{hora_now}] [{sym}] CALL bloqueada por ML → {ml_razon}", flush=True)
                 return ("NEUTRAL", f"ml_rechazo_{ml_razon}", "baja")
-            
         estado.cooldown = COOLDOWN_TICKS
         confianza = "muy_alta" if estado.adx > 30 and ema_gap > 0.3 else "alta"
         return ("CALL", f"multi_alcista_adx{estado.adx:.0f}_gap{ema_gap:.2f}", confianza)
-    
-    # Condición PUT - Todo debe alinearse bajista  
+    elif ema_tendencia_alcista:
+        # ADX pasó pero CALL no se completó — mostrar qué faltó
+        motivos = []
+        if not rsi_ok_call:   motivos.append(f"RSI:{estado.rsi:.1f}")
+        if not bb_ok_call:    motivos.append(f"BB:{estado.bb_posicion:.2f}>=0.8")
+        if not stoch_ok_call: motivos.append(f"STOCH:{estado.stoch:.1f}>=80")
+        if not macd_alcista:  motivos.append("MACD-bajista")
+        if not gap_suficiente: motivos.append(f"gap:{ema_gap:.3f}<{EMA_GAP_MIN}")
+        if motivos:
+            hora_now = datetime.now(tz=timezone.utc).strftime("%H:%M:%S")
+            print(f"[{hora_now}] [{sym}] EMA alcista pero sin CALL: {', '.join(motivos)}", flush=True)
+
+    # PUT
     ema_tendencia_bajista = (estado.ema_rapida < estado.ema_media < estado.ema_lenta)
-    rsi_no_sobrevendido = (35 < estado.rsi < RSI_MAX)  # No muy bajo
-    bb_no_sobrevendido = (estado.bb_posicion > 0.2)    # No en banda inferior
-    stoch_ok_put = (estado.stoch > 20)  # Estocástico no sobrevendido
-    macd_bajista = (macd_momentum_ok == "bearish")
-    
-    if (ema_tendencia_bajista and rsi_no_sobrevendido and bb_no_sobrevendido 
-        and stoch_ok_put and macd_bajista and gap_suficiente):
-        
-        # FILTRO ML ADICIONAL
+    rsi_ok_put   = (35 < estado.rsi < RSI_MAX)
+    bb_ok_put    = (estado.bb_posicion > 0.2)
+    stoch_ok_put = (estado.stoch > 20)
+    macd_bajista  = (macd_momentum_ok == "bearish")
+
+    if ema_tendencia_bajista and rsi_ok_put and bb_ok_put and stoch_ok_put and macd_bajista and gap_suficiente:
         if ML_ENABLED:
-            ml_aprobado, ml_razon = aplicar_filtros_ml(estado.simbolo, "PUT", 
-                                                      f"multi_bajista_adx{estado.adx:.0f}", precio)
+            ml_aprobado, ml_razon = aplicar_filtros_ml(estado.simbolo, "PUT",
+                                                       f"multi_bajista_adx{estado.adx:.0f}", precio)
             if not ml_aprobado:
+                hora_now = datetime.now(tz=timezone.utc).strftime("%H:%M:%S")
+                print(f"[{hora_now}] [{sym}] PUT bloqueada por ML → {ml_razon}", flush=True)
                 return ("NEUTRAL", f"ml_rechazo_{ml_razon}", "baja")
-            
         estado.cooldown = COOLDOWN_TICKS
         confianza = "muy_alta" if estado.adx > 30 and ema_gap > 0.3 else "alta"
         return ("PUT", f"multi_bajista_adx{estado.adx:.0f}_gap{ema_gap:.2f}", confianza)
-    
+    elif ema_tendencia_bajista:
+        motivos = []
+        if not rsi_ok_put:   motivos.append(f"RSI:{estado.rsi:.1f}")
+        if not bb_ok_put:    motivos.append(f"BB:{estado.bb_posicion:.2f}<=0.2")
+        if not stoch_ok_put: motivos.append(f"STOCH:{estado.stoch:.1f}<=20")
+        if not macd_bajista: motivos.append("MACD-alcista")
+        if not gap_suficiente: motivos.append(f"gap:{ema_gap:.3f}<{EMA_GAP_MIN}")
+        if motivos:
+            hora_now = datetime.now(tz=timezone.utc).strftime("%H:%M:%S")
+            print(f"[{hora_now}] [{sym}] EMA bajista pero sin PUT: {', '.join(motivos)}", flush=True)
+
     return ("NEUTRAL", "condiciones_insuficientes", "baja")
 
 # ============================================================
@@ -396,6 +424,7 @@ def guardar_operacion(simbolo, direccion, precio_entrada, precio_salida, razon, 
         "confianza": confianza,
         "es_win": es_win,
         "profit": profit,
+        "orden_real": True,  # operación real ejecutada con API Binance
     }
     try:
         req = urllib.request.Request(
@@ -430,56 +459,84 @@ def guardar_tick(simbolo, precio):
 def verificar_pendientes_v2(estado, precio_actual, hora):
     if estado.operacion_pendiente is None:
         return
-    
+
     op = estado.operacion_pendiente
     tiempo_transcurrido = time.time() - op.tiempo_entrada
-    
+    segundos_restantes  = max(0, DURACION_SEGUNDOS - tiempo_transcurrido)
+
+    # Calcular P&L flotante de la op abierta
+    if op.direccion == "CALL":
+        pnl_flotante = (precio_actual - op.precio_entrada) / op.precio_entrada * 100
+    else:
+        pnl_flotante = (op.precio_entrada - precio_actual) / op.precio_entrada * 100
+    ganando = pnl_flotante > 0
+
+    # Log de progreso cada ~30 segundos (cada vez que el tiempo transcurrido cruza un múltiplo de 30)
+    seg_int = int(tiempo_transcurrido)
+    if seg_int > 0 and seg_int % 30 == 0 and not hasattr(op, f'_log_{seg_int}'):
+        setattr(op, f'_log_{seg_int}', True)
+        estado_str = "GANANDO" if ganando else "PERDIENDO"
+        print(
+            f"[{hora}] [{op.simbolo}] OP#{op.num_operacion} {op.direccion} EN CURSO | "
+            f"entrada:${op.precio_entrada:.2f} actual:${precio_actual:.2f} "
+            f"({pnl_flotante:+.3f}%) {estado_str} | {segundos_restantes:.0f}s restantes",
+            flush=True
+        )
+
     # Stop Loss dinámico al 50% del tiempo
+    razon_salida = None
     if tiempo_transcurrido >= DURACION_SEGUNDOS * 0.5:
-        # Revisar si la operación va muy mal
         if op.direccion == "CALL":
             perdida_actual = (precio_actual - op.precio_entrada) / op.precio_entrada
-            if perdida_actual < -0.005:  # -0.5% stop loss
-                es_win = False
-                razon_salida = f"{op.razon}_stoploss"
-                print(f"[{hora}] {op.simbolo}: STOP LOSS {op.direccion} @ {precio_actual:.2f} ({perdida_actual*100:.2f}%)", flush=True)
-        else:  # PUT
+        else:
             perdida_actual = (op.precio_entrada - precio_actual) / op.precio_entrada
-            if perdida_actual < -0.005:  # -0.5% stop loss
-                es_win = False
-                razon_salida = f"{op.razon}_stoploss"
-                print(f"[{hora}] {op.simbolo}: STOP LOSS {op.direccion} @ {precio_actual:.2f} ({perdida_actual*100:.2f}%)", flush=True)
-    
+
+        if perdida_actual < -0.005:
+            razon_salida = f"{op.razon}_stoploss"
+            print(
+                f"[{hora}] [{op.simbolo}] STOP LOSS activado en OP#{op.num_operacion} "
+                f"{op.direccion} | entrada:${op.precio_entrada:.2f} actual:${precio_actual:.2f} "
+                f"({perdida_actual*100:.3f}%) | tiempo:{tiempo_transcurrido:.0f}s",
+                flush=True
+            )
+
     # Cierre normal al tiempo completo
     if tiempo_transcurrido >= DURACION_SEGUNDOS:
         if op.direccion == "CALL":
             es_win = precio_actual > op.precio_entrada
         else:
             es_win = precio_actual < op.precio_entrada
-        
+
         profit = (STAKE * PAYOUT) if es_win else -STAKE
         estado.total_ops += 1
-        estado.profit += profit
-        
+        estado.profit    += profit
+
         if es_win:
-            estado.wins += 1
-            estado.win_streak += 1
-            estado.loss_streak = 0
+            estado.wins        += 1
+            estado.win_streak  += 1
+            estado.loss_streak  = 0
         else:
-            estado.losses += 1
+            estado.losses      += 1
             estado.loss_streak += 1
-            estado.win_streak = 0
-        
-        # Guardar con razón V2
-        razon_completa = op.razon if 'stoploss' not in locals() else razon_salida
-        guardar_operacion(op.simbolo, op.direccion, op.precio_entrada, precio_actual, 
+            estado.win_streak   = 0
+
+        razon_completa = razon_salida if razon_salida else op.razon
+        guardar_operacion(op.simbolo, op.direccion, op.precio_entrada, precio_actual,
                          razon_completa, op.confianza, es_win, profit, op.num_operacion)
-        
-        wr = (estado.wins / estado.total_ops * 100) if estado.total_ops > 0 else 0
-        resultado = "WIN" if es_win else "LOSS"
+
+        wr     = (estado.wins / estado.total_ops * 100) if estado.total_ops > 0 else 0
         cambio = ((precio_actual - op.precio_entrada) / op.precio_entrada) * 100
-        
-        print(f"[{hora}] {op.simbolo}: V2 {op.direccion} | ${op.precio_entrada:.2f}→${precio_actual:.2f} | {resultado} ({profit:+.2f}) | {cambio:+.3f}% | WR:{wr:.1f}%", flush=True)
+        tipo_cierre = "STOPLOSS" if razon_salida else "EXPIRADA"
+        resultado   = "WIN" if es_win else "LOSS"
+        racha_str   = f"racha_win:{estado.win_streak}" if es_win else f"racha_loss:{estado.loss_streak}"
+
+        print(
+            f"[{hora}] [{op.simbolo}] CIERRE {tipo_cierre} OP#{op.num_operacion} | "
+            f"{op.direccion} ${op.precio_entrada:.2f}→${precio_actual:.2f} ({cambio:+.3f}%) | "
+            f"{resultado} P&L:{profit:+.4f} | WR:{wr:.1f}% ({estado.wins}W/{estado.losses}L) | "
+            f"{racha_str} | profit_acum:{estado.profit:+.4f}",
+            flush=True
+        )
         estado.operacion_pendiente = None
 
 # ============================================================
@@ -538,7 +595,7 @@ async def conectar_binance_v2(simbolos):
                 # Nueva señal solo si no hay operación pendiente
                 if estado.operacion_pendiente is None:
                     decision, razon, confianza = evaluar_senal_v2(estado, precio)
-                    
+
                     if decision != "NEUTRAL":
                         num_global += 1
                         estado.operacion_pendiente = OperacionPendiente(
@@ -557,7 +614,15 @@ async def conectar_binance_v2(simbolos):
                                 'macd': estado.macd
                             }
                         )
-                        print(f"[{hora}] {simbolo}: V2 {decision} @ ${precio:.2f} | {razon} | RSI:{estado.rsi:.0f} ADX:{estado.adx:.0f} BB:{estado.bb_posicion:.2f}", flush=True)
+                        print(
+                            f"[{hora}] *** NUEVA OP #{num_global} *** "
+                            f"{simbolo} {decision} @ ${precio:.2f} | "
+                            f"RSI:{estado.rsi:.1f} ADX:{estado.adx:.1f} "
+                            f"STOCH:{estado.stoch:.1f} BB:{estado.bb_posicion:.2f} "
+                            f"MACD:{estado.macd:.4f} | confianza:{confianza} | "
+                            f"duración:{DURACION_SEGUNDOS}s stake:${STAKE}",
+                            flush=True
+                        )
                 
             except Exception as e:
                 print(f"ERROR V2: {e}", flush=True)

@@ -16,14 +16,17 @@ load_dotenv(dotenv_path=BASE_DIR / ".env", override=True)
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "INSEGURO-PARA-DESARROLLO")
 DEBUG = (os.getenv("DJANGO_DEBUG", "False").strip().lower() in {"1", "true", "yes", "y"})
-ALLOWED_HOSTS = [
-    "www.vitalmix.com.co",
-    "vitalmix.com.co",
-    "127.0.0.1",
-    "localhost",
-    "unlifelike-greenly-tegan.ngrok-free.dev",
-    "*.ngrok-free.dev",
-]
+_allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS", "")
+ALLOWED_HOSTS = (
+    [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
+    if _allowed_hosts_env
+    else [
+        "www.vitalmix.com.co",
+        "vitalmix.com.co",
+        "127.0.0.1",
+        "localhost",
+    ]
+)
 
 # ===== BASE DE DATOS =====
 # Soporta PostgreSQL (producción) y SQLite (desarrollo)
@@ -146,9 +149,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ===== AUTENTICACION =====
 # Modelo de usuario custom para multi-tenant
 AUTH_USER_MODEL = "subscriptions.Usuario"
-LOGIN_URL = "/"
-LOGIN_REDIRECT_URL = "/"
-LOGOUT_REDIRECT_URL = "/"
+LOGIN_URL = "/admin-panel/login/"
+LOGIN_REDIRECT_URL = "/panel/binance/"
+LOGOUT_REDIRECT_URL = "/admin-panel/login/"
 
 # ===== DERIV =====
 DERIV_APP_ID = os.getenv("DERIV_APP_ID", "1089").strip()

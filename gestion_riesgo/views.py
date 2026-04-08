@@ -12,7 +12,7 @@ from django.http import JsonResponse, FileResponse, HttpResponseNotFound, Stream
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import F
 from django.db.utils import OperationalError
 from django.db.models import Value
@@ -1861,7 +1861,7 @@ def retirar_view(request):
 #  DASHBOARD BINANCE - OPERACIONES FICTICIAS
 # ============================================================
 
-@login_required
+@user_passes_test(lambda u: u.is_staff, login_url="/admin-panel/login/")
 def dashboard_binance(request):
     """
     Dashboard para Binance - Balance REAL desde API Coin-M Futures
@@ -1905,41 +1905,39 @@ def dashboard_binance(request):
     except Exception as e:
         print(f"Error obteniendo balance Binance: {e}")
     
-    # Obtener estadísticas por activo
+    # Estadísticas (solo operaciones reales)
     stats = EstadisticasBinance.objects.all().order_by("-profit_total")
-    
-    # Calcular totales
-    total_ops = sum(s.total_ops for s in stats)
-    total_wins = sum(s.wins for s in stats)
-    total_profit = sum(float(s.profit_total) for s in stats)
-    
-    # Balance global unificado (ya no se usa, ahora es REAL)
-    capital_inicial = 1000.0  # Referencia inicial
-    
-    # Win rate global (últimas 100)
-    ultimas_100_ops = list(OperacionBinance.objects.order_by('-created_at')[:100])
+
+    # Totales desde operaciones reales directamente (no de EstadisticasBinance que puede tener datos viejos)
+    ops_reales_qs = OperacionBinance.objects.filter(orden_real=True)
+    total_ops_real = ops_reales_qs.count()
+    total_wins_real = ops_reales_qs.filter(es_win=True).count()
+
+    # P&L neto real
+    profit_real = sum(float(op.profit) for op in ops_reales_qs)
+
+    # Win rate sobre últimas 100 operaciones reales
+    ultimas_100_ops = list(ops_reales_qs.order_by('-created_at')[:100])
     wr_ult100_wins = sum(1 for op in ultimas_100_ops if op.es_win)
     wr_ult100_total = len(ultimas_100_ops)
     wr_global = (wr_ult100_wins / wr_ult100_total * 100) if wr_ult100_total > 0 else 0
-    
-    # Últimas 50 operaciones para historial
-    historial_ops = OperacionBinance.objects.all().order_by("-created_at")[:50]
-    
+
+    # Historial: últimas 50 operaciones reales
+    historial_ops = ops_reales_qs.order_by("-created_at")[:50]
+
     # Verificar si bot está activo
     bot_activo = True
-    
+
     # Hora actual
     ahora = timezone.localtime(timezone.now())
-    
+
     return render(request, "gestion_riesgo/dashboard_binance.html", {
         "stats": stats,
-        "total_ops": total_ops,
-        "total_wins": total_wins,
+        "total_ops": total_ops_real,
+        "total_wins": total_wins_real,
         "wr_global": round(wr_global, 1),
-        "total_profit": total_profit,
+        "total_profit": round(profit_real, 2),
         "balance_real": balance_real,
-        "balance_ficticio": balance_real,  # Usar real como principal
-        "capital_inicial": capital_inicial,
         "historial_ops": historial_ops,
         "ultimas_ops": historial_ops[:20],
         "bot_activo": bot_activo,
@@ -1967,7 +1965,7 @@ def api_guardar_operacion_binance(request):
     confianza = data.get("confianza", "media")
     es_win = bool(data.get("es_win", False))
     profit = float(data.get("profit", 0))
-    orden_real = bool(data.get("orden_real", False))  # NEW
+    orden_real = bool(data.get("orden_real", True))  # True por defecto = operación real
     
     if not simbolo:
         return JsonResponse({"error": "simbolo requerido"}, status=400)
@@ -2100,12 +2098,11 @@ def api_estado_binance(request):
     except:
         pass
     
-    # Calcular balance real basado en operaciones REALES solo
-    # Usar todas las operaciones para el cálculo de profit
-    todas_ops = OperacionBinance.objects.all()
-    profit_real = sum(float(op.profit) for op in todas_ops)
-    balance_real_ops = 10.67 + profit_real  # Balance inicial + profit real
-    
+    # Calcular P&L real desde operaciones marcadas como reales
+    ops_reales = OperacionBinance.objects.filter(orden_real=True)
+    profit_real = sum(float(op.profit) for op in ops_reales)
+    ops_reales_total = ops_reales.count()
+
     return JsonResponse({
         "bot_activo": True,
         "total_ops": total_ops,
@@ -2113,9 +2110,8 @@ def api_estado_binance(request):
         "win_rate": wr_global,
         "total_profit": total_profit,
         "balance_real": balance_real,
-        "balance_real_ops": balance_real_ops,
-        "ops_reales": ops_reales.count(),
-        "profit_real": profit_real,
+        "ops_reales": ops_reales_total,
+        "profit_real": round(profit_real, 2),
         "activos": [
             {
                 "simbolo": s.simbolo,
@@ -2256,25 +2252,27 @@ def sse_binance_stream(request):
                 ops_reales = OperacionBinance.objects.filter(orden_real=True)
                 profit_real = sum(float(op.profit) for op in ops_reales)
                 
-                # Balance basado en operaciones reales
-                balance_inicial = 10.67
+                # Balance inicial = balance real actual - suma de profits registrados
+                # Esto permite que la curva termine exactamente en el balance real de Binance
+                ops_reales_count = ops_reales.count()
+                if balance_real > 0:
+                    balance_inicial = round(balance_real - profit_real, 2)
+                elif ops_reales_count > 0:
+                    # API no disponible: usar 0 como referencia relativa
+                    balance_inicial = 0.0
+                else:
+                    balance_inicial = 0.0
                 balance_calculado = balance_inicial + profit_real
-                
-                # Si no hay ops reales, mostrar balance de Binance API
-                if ops_reales.count() == 0:
-                    balance_calculado = balance_real
-                
+
                 # Datos para gráfico de balance por operación (solo reales)
                 balance_points = []
                 ops_reales_ordered = ops_reales.order_by('created_at')
-                bal = balance_inicial
-                if ops_reales_ordered.count() == 0:
-                    # Si no hay ops reales, mostrar el balance actual de Binance
-                    balance_points.append({
-                        "x": "Actual",
-                        "y": round(balance_real, 2)
-                    })
+                if ops_reales_count == 0:
+                    # Sin operaciones: mostrar el balance actual de Binance como punto único
+                    if balance_real > 0:
+                        balance_points.append({"x": "Actual", "y": round(balance_real, 2)})
                 else:
+                    bal = balance_inicial
                     for op in ops_reales_ordered:
                         bal += float(op.profit)
                         balance_points.append({
@@ -2384,11 +2382,11 @@ def sse_binance_stream(request):
                     "total_ops": total_ops_display,
                     "total_wins": total_wins_display,
                     "wr_global": round(wr_global, 1),
-                    "total_profit": round(total_profit, 2),
+                    "total_profit": round(profit_real, 2),  # P&L neto = suma de profits reales
                     "balance_real": round(balance_real, 2),
-                    "balance_ficticio": round(balance_ficticio, 2),
+                    "balance_calculado": round(balance_calculado, 2),
                     "profit_real": round(profit_real, 2),
-                    "ops_reales": ops_reales.count(),
+                    "ops_reales": ops_reales_count,
                     "activos": activos_data,
                     "balance_points": balance_points[-100:],
                     "ultima_operacion": op_data,

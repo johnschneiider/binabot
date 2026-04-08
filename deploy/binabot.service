@@ -1,0 +1,27 @@
+[Unit]
+Description=Binabot - Django + Gunicorn
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=binabot
+Group=www-data
+WorkingDirectory=/opt/binabot
+EnvironmentFile=/opt/binabot/.env
+ExecStart=/opt/binabot/.venv/bin/gunicorn \
+    --workers 3 \
+    --bind unix:/run/binabot/gunicorn.sock \
+    --timeout 120 \
+    --access-logfile /var/log/binabot/access.log \
+    --error-logfile /var/log/binabot/error.log \
+    quant_deriv_bot.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

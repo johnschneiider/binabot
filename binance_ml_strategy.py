@@ -21,9 +21,10 @@ class MLStrategy:
         
     def analizar_historico(self):
         """Analiza las últimas 200 operaciones para extraer patrones"""
-        print("🧠 ANÁLISIS ML DE PATRONES HISTÓRICOS...")
+        print("[ML] Analizando patrones históricos...")
         
         ops = list(OperacionBinance.objects.order_by('-created_at')[:200])
+        self.total_ops_historico = len(ops)  # cuántas ops hay disponibles
         
         # Análisis por hora del día
         self.horas_ganadoras = {}
@@ -78,7 +79,7 @@ class MLStrategy:
                 if wr >= 60:  # Solo patrones exitosos
                     self.razones_exitosas[razon] = wr
         
-        print(f"✅ Análisis completado:")
+        print(f"[ML] Análisis completado ({self.total_ops_historico} ops):")
         print(f"   Horas ganadoras: {list(self.horas_ganadoras.keys())}")
         print(f"   Símbolos activos: {[s for s, d in self.simbolos_performance.items() if d['activo']]}")
         print(f"   CALL WR: {self.call_wr:.1f}% | PUT WR: {self.put_wr:.1f}%")
@@ -150,45 +151,71 @@ class MLStrategy:
 # Instancia global
 ml_strategy = MLStrategy()
 
+# Mínimo de operaciones necesarias antes de activar los filtros ML
+ML_MIN_OPS_PARA_FILTRAR = 40
+
 def aplicar_filtros_ml(simbolo, direccion, razon, precio):
-    """Aplica filtros de ML antes de ejecutar operación"""
+    """Aplica filtros de ML antes de ejecutar operación.
+    Con menos de ML_MIN_OPS_PARA_FILTRAR ops en historial, deja pasar todo
+    para acumular datos de entrenamiento."""
     hora_actual = datetime.now().hour
-    
+
+    # MODO APRENDIZAJE: sin historial suficiente, dejar pasar la señal técnica
+    if ml_strategy.total_ops_historico < ML_MIN_OPS_PARA_FILTRAR:
+        ops_restantes = ML_MIN_OPS_PARA_FILTRAR - ml_strategy.total_ops_historico
+        print(f"[ML] Modo aprendizaje: {ml_strategy.total_ops_historico}/{ML_MIN_OPS_PARA_FILTRAR} ops. Faltan {ops_restantes} para activar filtros.")
+        return True, f"ml_aprendizaje_{ml_strategy.total_ops_historico}ops"
+
+    # MODO ACTIVO: aplicar todos los filtros
     # 1. Filtro de símbolo
     if not ml_strategy.filtrar_simbolo(simbolo):
         return False, f"simbolo_filtrado_{simbolo}"
-    
+
     # 2. Filtro de hora
     factor_hora = ml_strategy.evaluar_momento_optimal()
     if factor_hora < 0.5:
         return False, f"hora_mala_{hora_actual}"
-    
+
     # 3. Filtro de dirección
     direccion_ajustada = ml_strategy.ajustar_direccion(direccion)
     if direccion_ajustada is None:
         return False, f"direccion_filtrada_{direccion}"
-    
+
     # 4. Score de confianza
     score = ml_strategy.calcular_score_confianza(simbolo, direccion, razon, hora_actual)
-    if score < 70:  # Solo operaciones con alta confianza
+    if score < 70:
         return False, f"score_bajo_{score:.0f}"
-    
+
     return True, f"ml_approved_{score:.0f}"
 
 def recalcular_estrategia():
-    """Recalcula la estrategia cada 50 operaciones"""
+    """Recalcula la estrategia ML con los datos más recientes.
+    - Primeras 40 ops: recalibra cada 10 ops para activar filtros cuanto antes.
+    - Después: recalibra cuando hay ≥50 ops nuevas en las últimas 6 horas.
+    """
     try:
+        total_ops = OperacionBinance.objects.count()
+        global ml_strategy
+
+        # Fase de aprendizaje: recalibrar frecuentemente
+        if total_ops < ML_MIN_OPS_PARA_FILTRAR:
+            if total_ops > 0 and total_ops % 10 == 0:
+                print(f"[ML] Recalibrando en fase aprendizaje ({total_ops} ops)...")
+                ml_strategy = MLStrategy()
+                return True
+            return False
+
+        # Fase activa: recalibrar cuando hay suficientes ops recientes
         ops_recientes = OperacionBinance.objects.filter(
             created_at__gte=datetime.now() - timedelta(hours=6)
         ).count()
-        
+
         if ops_recientes >= 50:
-            print("🔄 RECALCULANDO ESTRATEGIA ML...")
-            global ml_strategy
+            print("[ML] Recalibrando estrategia activa...")
             ml_strategy = MLStrategy()
             return True
     except Exception as e:
-        print(f"Error recalculando: {e}")
+        print(f"[ML] Error recalculando: {e}")
     return False
 
 if __name__ == "__main__":

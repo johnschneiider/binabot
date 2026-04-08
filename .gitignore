@@ -27,3 +27,23 @@ nul
 
 venv/
 venv/
+
+# Datos históricos (demasiado grandes para GitHub)
+data/*.csv
+data/*.parquet
+
+# Archivos sensibles / temporales
+cookies.txt
+bot.log
+bot_err.log
+nul
+
+# Modelos ML binarios (regenerar con scripts/train_ml.py)
+models/*.pkl
+models/*.png
+
+# Archivos sueltos sin nombre válido
+$20)
+
+# Archivos de migración locales temporales
+gestion_riesgo/migrations/0024_fix_orden_real_default.py
