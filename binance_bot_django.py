@@ -1129,8 +1129,8 @@ async def run_bot(simbolos: list):
                         flush=True
                     )
 
-                # Tick a Django cada 30 velas
-                if tick_count[sym] % 30 == 0:
+                # Tick a Django cada 5 mensajes (suficiente resolución sin saturar la BD)
+                if tick_count[sym] % 5 == 0:
                     loop = asyncio.get_event_loop()
                     loop.run_in_executor(None, _guardar_tick_sync, sym, precio_last)
 
