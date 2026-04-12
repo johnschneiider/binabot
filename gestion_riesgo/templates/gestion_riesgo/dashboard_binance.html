@@ -77,24 +77,24 @@
 
   <div class="stats-row">
     <div class="stat-card">
-      <div class="stat-label">Balance REAL (Futures)</div>
+      <div class="stat-label">Balance Wallet (Futures)</div>
       <div class="stat-value" id="balanceDisplay" style="color: var(--green-light)">${{ balance_real|floatformat:2 }}</div>
-      <div class="stat-sub">API Binance</div>
+      <div class="stat-sub" id="balanceSub">Disponible: ${{ balance_available|floatformat:2 }} | PnL abierto: ${{ unrealized_pnl|floatformat:4 }}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Win Rate (100t)</div>
+      <div class="stat-label">Win Rate (últimas 100)</div>
       <div class="stat-value" id="wrDisplay" style="color: #facc15">0.0%</div>
-      <div class="stat-sub"><span id="winsDisplay">0</span> W / <span id="opsDisplay">0</span> L</div>
+      <div class="stat-sub"><span id="winsDisplay">0</span> victorias / <span id="opsDisplay">0</span> ops analizadas</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">P&L Neto</div>
+      <div class="stat-label">P&amp;L Neto (USDT)</div>
       <div class="stat-value" id="profitDisplay">$0.00</div>
-      <div class="stat-sub" id="roiDisplay">ROI: 0%</div>
+      <div class="stat-sub" id="roiDisplay">Desde operaciones reales</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Operaciones</div>
+      <div class="stat-label">Operaciones Reales</div>
       <div class="stat-value" id="totalOpsDisplay" style="color: var(--accent-light)">0</div>
-      <div class="stat-sub">Ejecuciones totales</div>
+      <div class="stat-sub">Total ejecutadas en Binance Futures</div>
     </div>
   </div>
 
@@ -238,14 +238,30 @@ function updateDashboard(data) {
     }
   }
 
-  // Usar balance real de Binance API
-  var balanceMostrar = data.balance_real !== undefined && data.balance_real > 0 ? data.balance_real : data.balance_real_ops;
+  // Usar balance wallet real de Binance API
+  var balanceMostrar = (data.balance_real !== undefined && data.balance_real > 0) ? data.balance_real : data.balance_calculado;
   document.getElementById('balanceDisplay').textContent = '$' + (balanceMostrar || 0).toFixed(2);
+  
+  // Sub-info del balance: disponible + PnL abierto
+  var balAvail = data.balance_available || 0;
+  var upnl = data.unrealized_pnl || 0;
+  var upnlStr = (upnl >= 0 ? '+' : '') + upnl.toFixed(4);
+  document.getElementById('balanceSub').textContent = 'Disponible: $' + balAvail.toFixed(2) + ' | PnL abierto: $' + upnlStr;
+  
   document.getElementById('wrDisplay').textContent = (data.wr_global || 0).toFixed(1) + '%';
-  document.getElementById('profitDisplay').textContent = '$' + (data.total_profit || 0).toFixed(2);
-  document.getElementById('totalOpsDisplay').textContent = data.total_ops || 0;
+
+  // P&L Neto: mostrar con signo + o - con más precisión
+  var pnl = data.total_profit || 0;
+  var pnlStr = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(4);
+  document.getElementById('profitDisplay').textContent = pnlStr;
+  document.getElementById('profitDisplay').style.color = pnl >= 0 ? 'var(--green-light)' : 'var(--red)';
+
+  // Operaciones: total real desde BD (ops_reales), no el conteo de las últimas 100
+  document.getElementById('totalOpsDisplay').textContent = data.ops_reales || 0;
+
+  // Winrate: victorias en últimas 100 / total ops analizadas
   document.getElementById('winsDisplay').textContent = data.total_wins || 0;
-  document.getElementById('opsDisplay').textContent = (data.total_ops - data.total_wins) || 0;
+  document.getElementById('opsDisplay').textContent = data.total_ops || 0;
   
   // Mostrar info de operaciones reales
   console.log('Ops reales:', data.ops_reales, 'Profit real:', data.profit_real);
@@ -271,7 +287,12 @@ function updateDashboard(data) {
 
   if (data.historial) {
     const tbody = document.getElementById('historyTable');
-    tbody.innerHTML = data.historial.map(op => `
+    tbody.innerHTML = data.historial.map(op => {
+      // P&L: si es valor legacy (0.95 o -1.00) mostrar con 2 decimales, si es real con 6
+      var profitAbs = Math.abs(op.profit);
+      var profitDecimals = (profitAbs === 0.95 || profitAbs === 1.0) ? 2 : 6;
+      var profitStr = (op.profit >= 0 ? '+' : '') + op.profit.toFixed(profitDecimals);
+      return `
       <tr>
         <td style="opacity:0.3; font-family:ui-monospace;">#${op.num}</td>
         <td style="font-family:ui-monospace; font-size:12px; color:var(--text-3);">${op.hora}</td>
@@ -279,17 +300,15 @@ function updateDashboard(data) {
         <td style="color:${op.direccion==='CALL'?'var(--green-light)':'var(--red)'}; font-weight:700;">${op.direccion} ${op.direccion==='CALL'?'↑':'↓'}</td>
         <td style="font-family:ui-monospace;">${op.precio.toFixed(2)}</td>
         <td><span class="badge-status ${op.es_win?'bg-win':'bg-loss'}">${op.es_win?'WIN':'LOSS'}</span></td>
-        <td style="font-family:ui-monospace; color:${op.profit>=0?'var(--green-light)':'var(--red)'}; font-weight:700;">${op.profit>=0?'+':''}${op.profit.toFixed(2)}</td>
+        <td style="font-family:ui-monospace; color:${op.profit>=0?'var(--green-light)':'var(--red)'}; font-weight:700;">${profitStr}</td>
         <td style="font-size:11px; opacity:0.5; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${op.razon}</td>
       </tr>
-    `).join('');
+    `}).join('');
   }
 }
 
 setInterval(() => {
-  const now = new Date();
-  const colTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-  document.getElementById('clockDisplay').textContent = colTime.toLocaleTimeString('es-CO', { hour12: false });
+  document.getElementById('clockDisplay').textContent = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
 }, 1000);
 
 connectSSE();

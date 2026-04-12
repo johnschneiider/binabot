@@ -5,8 +5,8 @@ from decimal import Decimal
 
 class BalanceGlobal(models.Model):
     """Balance unificado para todos los mercados (Forex + Binance)"""
-    balance = models.DecimalField(max_digits=20, decimal_places=2, default=1000)
-    capital_inicial = models.DecimalField(max_digits=20, decimal_places=2, default=1000)
+    balance = models.DecimalField(max_digits=20, decimal_places=2, default=10)
+    capital_inicial = models.DecimalField(max_digits=20, decimal_places=2, default=10)
     ultima_actualizacion = models.DateTimeField(auto_now=True)
     
     class Meta:
@@ -16,7 +16,7 @@ class BalanceGlobal(models.Model):
     @classmethod
     def get_balance(cls):
         """Obtiene el balance global (singleton)"""
-        balance_obj, _ = cls.objects.get_or_create(pk=1, defaults={'balance': 1000, 'capital_inicial': 1000})
+        balance_obj, _ = cls.objects.get_or_create(pk=1, defaults={'balance': 10, 'capital_inicial': 10})
         return balance_obj
     
     @classmethod
@@ -168,7 +168,7 @@ class EstadisticasTrading(models.Model):
     wins = models.IntegerField(default=0)
     losses = models.IntegerField(default=0)
     profit_total = models.DecimalField(max_digits=20, decimal_places=2, default=0)
-    balance_ficticio = models.DecimalField(max_digits=20, decimal_places=2, default=1000)
+    balance_ficticio = models.DecimalField(max_digits=20, decimal_places=2, default=10)
     win_streak = models.IntegerField(default=0)
     loss_streak = models.IntegerField(default=0)
     max_win_streak = models.IntegerField(default=0)

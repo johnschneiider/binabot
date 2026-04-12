@@ -700,7 +700,7 @@ class EstadisticasBinance(models.Model):
     loss_streak = models.IntegerField(default=0)
     max_win_streak = models.IntegerField(default=0)
     max_loss_streak = models.IntegerField(default=0)
-    balance_ficticio = models.DecimalField(max_digits=12, decimal_places=2, default=1000)
+    balance_ficticio = models.DecimalField(max_digits=12, decimal_places=2, default=10)
     ultima_operacion = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     

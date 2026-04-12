@@ -47,19 +47,72 @@ import os
 
 FUTURES_API_URL = "https://fapi.binance.com"
 
-# ── Lot sizes mínimos por símbolo (Binance Futures USDT-M) ──────────────────
-# CORREGIDO: el código anterior usaba int(5) = 5 para todos, lo que significa
-# intentar abrir 5 BTC = ~$345k — imposible con cualquier margen razonable.
+# ── Lot sizes mínimos y step por símbolo (Binance Futures USDT-M) ────────────
 MIN_LOT = {
-    'BTC': 0.001,   # ~$69 a $69k  (min step 0.001)
-    'ETH': 0.003,   # ~$6.30 a $2100 (min step 0.001)
-    'SOL': 0.1,     # ~$8 a $80    (min step 0.1)
-    'XRP': 5.0,     # ~$6.50 a $1.30 (min step 1)
+    'BTC': 0.001,   # ~$84 a $84k   (step 0.001)
+    'ETH': 0.001,   # ~$2.10 a $2100 (step 0.001)
+    'SOL': 0.1,     # ~$8.50 a $85   (step 0.1)
+    'XRP': 1.0,     # ~$2.20 a $2.20 (step 1)
 }
 
-def obtener_cantidad(simbolo):
-    """Retorna cantidad mínima correcta para Binance Futures por símbolo."""
-    return MIN_LOT.get(simbolo.upper(), 0.001)
+LOT_STEP = {
+    'BTC': 0.001,
+    'ETH': 0.001,
+    'SOL': 0.1,
+    'XRP': 1.0,
+}
+
+# ── Sizing dinámico: porcentaje del balance como margen por operación ────────
+RIESGO_PCT = 0.50   # 50% del balance disponible por operación (fase prueba)
+LEVERAGE   = 20
+
+# Cache de balance para no hacer API call en cada trade
+_balance_cache      = 0.0
+_balance_cache_ts   = 0.0
+_BALANCE_CACHE_TTL  = 60  # refrescar cada 60 segundos
+
+def _get_cached_balance() -> float:
+    """Obtiene balance disponible cacheado (refresca cada 60s)."""
+    global _balance_cache, _balance_cache_ts
+    if time.time() - _balance_cache_ts < _BALANCE_CACHE_TTL and _balance_cache > 0:
+        return _balance_cache
+    try:
+        bd = obtener_balance_sync()
+        _balance_cache = float(bd.get('availableBalance', 0))
+        _balance_cache_ts = time.time()
+    except Exception:
+        pass  # usa el último valor cacheado
+    return _balance_cache
+
+def obtener_cantidad(simbolo, precio_actual=0.0):
+    """
+    Sizing dinámico: usa RIESGO_PCT del balance disponible como margen.
+    notional = balance × RIESGO_PCT × LEVERAGE
+    cantidad = notional / precio
+    Redondea al step size del símbolo y aplica mínimo.
+    """
+    sym = simbolo.upper()
+    min_lot = MIN_LOT.get(sym, 0.001)
+    step    = LOT_STEP.get(sym, 0.001)
+
+    if precio_actual <= 0:
+        return min_lot
+
+    balance = _get_cached_balance()
+    if balance <= 0:
+        return min_lot
+
+    notional = balance * RIESGO_PCT * LEVERAGE
+    cantidad = notional / precio_actual
+
+    # Redondear al step size (floor)
+    cantidad = int(cantidad / step) * step
+
+    # Aplicar mínimo
+    if cantidad < min_lot:
+        cantidad = min_lot
+
+    return round(cantidad, 8)
 
 def _firmar(params: dict, secret: str):
     """Firma una petición Binance y retorna (query_string, signature)."""
@@ -190,22 +243,22 @@ DJANGO_TICK_URL  = "http://127.0.0.1:8000/api/binance/tick/"
 SPOT_API_URL     = "https://api.binance.com"
 
 # Estrategia
-STAKE              = 1.0
-PAYOUT             = 0.95
+STAKE              = 1.0     # Legacy (solo referencia — P&L real desde API)
+PAYOUT             = 0.95    # Legacy (solo referencia — P&L real desde API)
 DURACION_SEG       = 900      # 15 min: da tiempo al momentum para desarrollarse
-MAX_OPS_DIA        = 10       # Calidad > cantidad; backtest: 6.2 ops/día óptimo
+MAX_OPS_DIA        = 20       # Calidad > cantidad; backtest: 6.2 ops/día óptimo
 COOLDOWN_MIN_SEG   = 600      # 10 min cooldown entre trades del mismo par
 LOSS_STREAK_LIMIT  = 3        # Circuit breaker: pausa tras N losses consecutivos
 LOSS_STREAK_PAUSE  = 600      # 10 minutos de pausa global
 
-# Filtros multi-timeframe — parámetros optimizados por backtest (ETH WR 55.2% → mejorando)
-ADX_MIN            = 28       # ADX fuerte en 5m (mercado trending, no lateral)
+# Filtros multi-timeframe — relajados prudentemente (Capa 2 ML sigue filtrando)
+ADX_MIN            = 24       # era 28 — igual filtra mercados puramente laterales
 ADX_PERIODO        = 14
 RSI_PERIODO        = 14
 EMA50_SLOPE_N      = 5        # Comparar EMA50[-1] vs EMA50[-n] para slope
-EMA50_SLOPE_MIN    = 0.03     # Pendiente mínima % del 15m EMA50 (filtrar flat markets)
-RSI_PULLBACK_CALL  = 42       # Pullback profundo: RSI debe haber estado bajo este nivel
-RSI_PULLBACK_PUT   = 58       # Pullback profundo: RSI debe haber estado sobre este nivel
+EMA50_SLOPE_MIN    = 0.02     # era 0.03 — acepta tendencias suaves en 15m
+RSI_PULLBACK_CALL  = 44       # punto medio 42-46: frecuencia+calidad balanceadas
+RSI_PULLBACK_PUT   = 56       # simétrico
 RSI_RESUME_CALL    = 50       # RSI debe recuperar sobre este → entrada CALL
 RSI_RESUME_PUT     = 50       # RSI debe caer bajo este → entrada PUT
 WARMUP_CANDLES     = 30       # Velas 1m mínimas para operar
@@ -364,7 +417,7 @@ def _cargar_modelos_ml():
         print("[ML] Directorio models/ no encontrado — sin ML gate", flush=True)
         return
 
-    for sym, direc in [("ETHUSDT", "CALL"), ("ETHUSDT", "PUT"), ("BTCUSDT", "CALL")]:
+    for sym, direc in [("ETHUSDT", "CALL"), ("ETHUSDT", "PUT"), ("BTCUSDT", "CALL"), ("SOLUSDT", "CALL")]:
         tag = f"{sym}_{direc.lower()}"
         # buscar ensemble_*.pkl o cualquier *_{tag}.pkl
         candidate = None
@@ -907,6 +960,7 @@ _ops_dia            = 0
 _dia_actual         = datetime.now().day
 _losses_consecutivos = 0
 _pausa_hasta        = 0.0
+_balance_log_ts     = 0.0     # Timestamp del último log de balance real
 
 
 # ============================================================
@@ -916,10 +970,33 @@ _pausa_hasta        = 0.0
 async def cerrar_operacion(estado: EstadoActivo, precio_actual: float, hora: str):
     global _losses_consecutivos, _pausa_hasta
 
-    op     = estado.operacion_pendiente
-    es_win = (precio_actual > op.precio_entrada) if op.direccion == "CALL" \
-             else (precio_actual < op.precio_entrada)
-    profit = (STAKE * PAYOUT) if es_win else -STAKE
+    op = estado.operacion_pendiente
+
+    # ── Cerrar posición REAL en Binance y obtener precio de salida ──
+    precio_salida = precio_actual  # fallback: precio WebSocket
+    side_cierre = "PUT" if op.direccion == "CALL" else "CALL"
+
+    loop = asyncio.get_event_loop()
+    try:
+        resultado_cierre = await loop.run_in_executor(
+            None, ejecutar_orden, op.simbolo, side_cierre, op.cantidad
+        )
+        if resultado_cierre:
+            avg = float(resultado_cierre.get('avgPrice', 0))
+            if avg > 0:
+                precio_salida = avg
+        else:
+            print(f"[CLOSE] ⚠️ Orden de cierre falló — usando precio WebSocket ${precio_actual:.4f}", flush=True)
+    except Exception as e:
+        print(f"[CLOSE] Error cerrando posición: {e}", flush=True)
+
+    # ── P&L REAL de Binance Futures = cantidad × diferencia de precio ──
+    if op.direccion == "CALL":
+        profit = (precio_salida - op.precio_entrada) * op.cantidad
+    else:
+        profit = (op.precio_entrada - precio_salida) * op.cantidad
+
+    es_win = profit > 0
 
     if es_win:
         estado.wins += 1
@@ -933,25 +1010,17 @@ async def cerrar_operacion(estado: EstadoActivo, precio_actual: float, hora: str
 
     total  = estado.wins + estado.losses
     wr     = estado.wins / total * 100 if total else 0
-    cambio = (precio_actual - op.precio_entrada) / op.precio_entrada * 100
+    cambio = (precio_salida - op.precio_entrada) / op.precio_entrada * 100
     res    = "✅ WIN" if es_win else "❌ LOSS"
-    tipo   = "REAL" if op.orden_real else "SIM"
     print(
-        f"[{hora}] {op.simbolo} {op.direccion} {res} | "
-        f"${op.precio_entrada:.4f}→${precio_actual:.4f} ({cambio:+.3f}%) | "
-        f"P&L:{profit:+.2f} | WR:{wr:.1f}%({estado.wins}/{total}) | {tipo}",
+        f"[{hora}] 🟢 REAL {op.simbolo} {op.direccion} {res} | "
+        f"${op.precio_entrada:.4f}→${precio_salida:.4f} ({cambio:+.3f}%) | "
+        f"P&L REAL: ${profit:+.6f} | WR:{wr:.1f}%({estado.wins}/{total})",
         flush=True
     )
 
-    # Cerrar posición real si fue abierta
-    if op.orden_real and op.cantidad > 0:
-        side_cierre = "PUT" if op.direccion == "CALL" else "CALL"
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(None, ejecutar_orden, op.simbolo, side_cierre, op.cantidad)
-
     # Guardar en Django (no bloqueante)
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, _guardar_op_sync, op, precio_actual, es_win, profit)
+    loop.run_in_executor(None, _guardar_op_sync, op, precio_salida, es_win, profit)
 
     estado.operacion_pendiente = None
     estado.cooldown_hasta      = time.time() + COOLDOWN_MIN_SEG
@@ -1016,17 +1085,49 @@ async def run_bot(simbolos: list):
                     tz=timezone.utc
                 ).strftime("%H:%M:%S")
 
-                tick_count[sym] += 1
-                estado.tick_count += 1
-
-                # Reset diario
                 hoy = datetime.now().day
-                if hoy != _dia_actual:
+                if _dia_actual != hoy:
                     _dia_actual = hoy
                     _ops_dia    = 0
                     for st in estados.values():
                         st.ops_hoy = 0
                     print(f"[{hora}] 🌅 Nuevo día — contadores reseteados", flush=True)
+
+                tick_count[sym] += 1
+                estado.tick_count += 1
+
+                # ── LOG POR TICK: actividad visible en tiempo real ──
+                if estado.operacion_pendiente:
+                    op   = estado.operacion_pendiente
+                    elapsed = time.time() - op.tiempo_entrada
+                    restantes = max(0, DURACION_SEG - elapsed)
+                    if op.direccion == "CALL":
+                        pnl_flot = (precio_last - op.precio_entrada) / op.precio_entrada * 100
+                    else:
+                        pnl_flot = (op.precio_entrada - precio_last) / op.precio_entrada * 100
+                    estado_op = "GANANDO" if pnl_flot > 0 else "PERDIENDO"
+                    print(
+                        f"[{hora}] [{sym}] TICK ${precio_last:.4f} | "
+                        f"OP#{op.num_operacion} {op.direccion} abierta ({elapsed:.0f}s/{DURACION_SEG}s) "
+                        f"{estado_op} {pnl_flot:+.3f}% | cierre en {restantes:.0f}s",
+                        flush=True
+                    )
+                else:
+                    cd_restante = max(0, estado.cooldown_hasta - time.time())
+                    pausa_rest  = max(0, _pausa_hasta - time.time())
+                    if pausa_rest > 0:
+                        estado_str = f"PAUSA_CIRCUIT {pausa_rest:.0f}s"
+                    elif cd_restante > 0:
+                        estado_str = f"COOLDOWN {cd_restante:.0f}s"
+                    elif _ops_dia >= MAX_OPS_DIA:
+                        estado_str = f"MAX_OPS_DIA({_ops_dia}/{MAX_OPS_DIA})"
+                    else:
+                        estado_str = f"ESCANEANDO [{len(estado.closes_1m)}velas]"
+                    print(
+                        f"[{hora}] [{sym}] TICK ${precio_last:.4f} | {estado_str} | "
+                        f"vela_cerrada={cerrada}",
+                        flush=True
+                    )
 
                 # Tick a Django cada 30 velas
                 if tick_count[sym] % 30 == 0:
@@ -1074,6 +1175,31 @@ async def run_bot(simbolos: list):
                         if c5:
                             estados[s].cache_5m  = c5
 
+                # ── Log balance REAL de Binance cada 5 minutos ──
+                if time.time() - _balance_log_ts > 300:
+                    _balance_log_ts = time.time()
+                    try:
+                        loop = asyncio.get_event_loop()
+                        bd = await loop.run_in_executor(None, obtener_balance_sync)
+                        _bal_wallet = float(bd.get('totalWalletBalance', 0))
+                        _bal_avail  = float(bd.get('availableBalance', 0))
+                        _bal_upnl   = float(bd.get('totalUnrealizedProfit', 0))
+                        # Actualizar cache de balance para sizing dinámico
+                        global _balance_cache, _balance_cache_ts
+                        _balance_cache = _bal_avail
+                        _balance_cache_ts = time.time()
+                        print(
+                            f"[💰 BALANCE REAL BINANCE] "
+                            f"Wallet: ${_bal_wallet:.2f} | "
+                            f"Disponible: ${_bal_avail:.2f} | "
+                            f"PnL abierto: ${_bal_upnl:+.2f} | "
+                            f"Sizing: {RIESGO_PCT*100:.0f}% × {LEVERAGE}x = "
+                            f"${_bal_avail * RIESGO_PCT * LEVERAGE:.2f} notional",
+                            flush=True
+                        )
+                    except Exception as e:
+                        print(f"[BALANCE] Error consultando: {e}", flush=True)
+
                 # Evaluar señal
                 if estado.operacion_pendiente:
                     continue
@@ -1095,29 +1221,53 @@ async def run_bot(simbolos: list):
                         print(f"[{hora}] {sym} SCAN: {razon}", flush=True)
                     continue
 
-                # Abrir operación
+                # Abrir operación REAL en Binance Futures
                 _num_global += 1
                 _ops_dia    += 1
                 estado.ops_hoy += 1
 
-                cantidad = obtener_cantidad(sym)
+                cantidad = obtener_cantidad(sym, precio_last)
                 resultado_ord = ejecutar_orden(sym, decision, cantidad)
-                fue_real      = resultado_ord is not None
+
+                if resultado_ord is None:
+                    # Orden falló — NO simular, NO registrar
+                    print(
+                        f"[{hora}] ❌ ORDEN FALLIDA {sym} {decision} — "
+                        f"no se abre operación (sin simulación)",
+                        flush=True
+                    )
+                    _num_global -= 1
+                    _ops_dia    -= 1
+                    estado.ops_hoy -= 1
+                    continue
+
+                # Usar precio real de llenado de Binance
+                avg_entry = float(resultado_ord.get('avgPrice', 0))
+                precio_entrada_real = avg_entry if avg_entry > 0 else precio_last
+
+                # Log del sizing dinámico
+                margen_usado = (cantidad * precio_entrada_real) / LEVERAGE
+                print(
+                    f"[SIZING] {sym}: qty={cantidad} × ${precio_entrada_real:.2f} = "
+                    f"${cantidad * precio_entrada_real:.2f} notional | "
+                    f"Margen: ${margen_usado:.2f} ({RIESGO_PCT*100:.0f}% de balance)",
+                    flush=True
+                )
 
                 estado.operacion_pendiente = OperacionPendiente(
                     simbolo        = sym,
                     direccion      = decision,
-                    precio_entrada = precio_last,
+                    precio_entrada = precio_entrada_real,
                     tiempo_entrada = time.time(),
                     razon          = razon,
                     num_operacion  = _num_global,
                     cantidad       = cantidad,
-                    orden_real     = fue_real,
+                    orden_real     = True,
                 )
-                tipo_tag = "🟢 REAL" if fue_real else "🔵 SIM"
                 print(
-                    f"[{hora}] {tipo_tag} #{_num_global} {sym} {decision} "
-                    f"@ ${precio_last:.4f} | {razon[:70]}",
+                    f"[{hora}] 🟢 REAL #{_num_global} {sym} {decision} "
+                    f"@ ${precio_entrada_real:.4f} (fill) | "
+                    f"OrderID={resultado_ord.get('orderId')} | {razon[:60]}",
                     flush=True
                 )
 
@@ -1135,17 +1285,41 @@ async def run_bot(simbolos: list):
 
 async def main():
     # ML gate resultados (test set 30 días):
-    #   ETH CALL: 69.0% WR  ETH PUT: 60.5% WR  BTC CALL: 72.5% WR
-    # BTC habilitado: ML filtra señales débiles → solo opera con prob >= 0.59
-    simbolos = ["ETH", "BTC"]
+    #   ETH CALL: 69.0% WR  ETH PUT: 60.5% WR  BTC CALL: 72.5% WR  SOL CALL: 67.6% WR
+    simbolos = ["ETH", "BTC", "SOL"]
 
-    # ── Chequeo de balance: BTC min_lot=0.001 → ~$4 margen a 20x ────────────
-    # Con balance < $20 es demasiado arriesgado operar BTC al mismo tiempo que ETH
+    # ── Verificación de conexión REAL a Binance Futures ───────────────────────
+    print("=" * 65, flush=True)
+    print("  🔒 MODO: REAL — Todas las operaciones van a Binance Futures", flush=True)
+    print("     Endpoint: https://fapi.binance.com (PRODUCCIÓN)", flush=True)
+    print("     Sin simulaciones — si la orden falla, NO se registra", flush=True)
+    print(f"     Sizing: {RIESGO_PCT*100:.0f}% del balance × {LEVERAGE}x leverage", flush=True)
+    print("=" * 65, flush=True)
+
     MIN_BALANCE_BTC = 20.0
     try:
         bd  = obtener_balance_sync()
         bal = float(bd.get('availableBalance', 0))
-        print(f"[BALANCE] Disponible: ${bal:.2f} USDT", flush=True)
+        wallet = float(bd.get('totalWalletBalance', 0))
+        upnl = float(bd.get('totalUnrealizedProfit', 0))
+        print(f"[💰 BALANCE REAL BINANCE]", flush=True)
+        print(f"     Wallet:     ${wallet:.2f} USDT", flush=True)
+        print(f"     Disponible: ${bal:.2f} USDT", flush=True)
+        print(f"     PnL abierto: ${upnl:+.2f} USDT", flush=True)
+
+        # Inicializar cache de balance para sizing dinámico
+        _balance_cache = bal
+        _balance_cache_ts = time.time()
+        notional_max = bal * RIESGO_PCT * LEVERAGE
+        print(f"     Sizing dinámico: ${bal:.2f} × {RIESGO_PCT*100:.0f}% × {LEVERAGE}x = ${notional_max:.2f} notional", flush=True)
+
+        # Mostrar posiciones abiertas
+        positions = [p for p in bd.get('positions', []) if float(p.get('positionAmt', 0)) != 0]
+        if positions:
+            print(f"     Posiciones abiertas: {len(positions)}", flush=True)
+            for p in positions:
+                print(f"       {p['symbol']}: qty={p['positionAmt']} PnL=${p['unrealizedProfit']}", flush=True)
+
         if bal < MIN_BALANCE_BTC and "BTC" in simbolos:
             simbolos.remove("BTC")
             print(
@@ -1154,8 +1328,12 @@ async def main():
                 f"     Agrega capital para operar BTC sin riesgo de liquidación.",
                 flush=True
             )
+        print(f"[INFO] Activos activos: {simbolos}", flush=True)
+        print(f"[INFO] P&L calculado desde precios REALES de fill de Binance API", flush=True)
     except Exception as e:
-        print(f"[BALANCE] Error: {e}", flush=True)
+        print(f"[❌ BALANCE] Error conectando a Binance: {e}", flush=True)
+        print(f"[❌] Verifica BINANCE_API_KEY y BINANCE_API_SECRET en .env", flush=True)
+        return
 
     while True:
         try:

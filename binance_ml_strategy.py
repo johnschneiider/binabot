@@ -152,7 +152,7 @@ class MLStrategy:
 ml_strategy = MLStrategy()
 
 # Mínimo de operaciones necesarias antes de activar los filtros ML
-ML_MIN_OPS_PARA_FILTRAR = 40
+ML_MIN_OPS_PARA_FILTRAR = 20
 
 def aplicar_filtros_ml(simbolo, direccion, razon, precio):
     """Aplica filtros de ML antes de ejecutar operación.

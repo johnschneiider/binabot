@@ -1858,25 +1858,27 @@ def retirar_view(request):
 
 
 # ============================================================
-#  DASHBOARD BINANCE - OPERACIONES FICTICIAS
+#  DASHBOARD BINANCE - OPERACIONES REALES
 # ============================================================
 
 @user_passes_test(lambda u: u.is_staff, login_url="/admin-panel/login/")
 def dashboard_binance(request):
     """
-    Dashboard para Binance - Balance REAL desde API Coin-M Futures
+    Dashboard para Binance - Balance REAL desde API USDT-M Futures
     """
     from dotenv import load_dotenv
     import os
     import hmac
     import hashlib
     import time
-    import requests as req
+    import urllib.request as _ur
     
     load_dotenv()
     
-    # Obtener balance REAL de Binance Coin-M Futures
+    # Obtener balance REAL de Binance USDT-M Futures
     balance_real = 0.0
+    balance_wallet = 0.0
+    unrealized_pnl = 0.0
     try:
         api_key = os.getenv('BINANCE_API_KEY')
         api_secret = os.getenv('BINANCE_API_SECRET')
@@ -1890,18 +1892,13 @@ def dashboard_binance(request):
                 hashlib.sha256
             ).hexdigest()
             
-            # Coin-M Futures (dapi)
-            url = f"https://dapi.binance.com/dapi/v1/balance?{query_string}&signature={signature}"
-            headers = {'X-MBX-APIKEY': api_key}
-            response = req.get(url, headers=headers, timeout=5)
-            
-            if response.status_code == 200:
-                data = response.json()
-                # Buscar balance en USDT
-                for asset in data:
-                    if asset.get('asset') == 'USDT':
-                        balance_real = float(asset.get('availableBalance', 0))
-                        break
+            url = f"https://fapi.binance.com/fapi/v2/account?{query_string}&signature={signature}"
+            req_b = _ur.Request(url, headers={'X-MBX-APIKEY': api_key})
+            with _ur.urlopen(req_b, timeout=8) as resp:
+                data = json.loads(resp.read())
+            balance_real = float(data.get('availableBalance', 0))
+            balance_wallet = float(data.get('totalWalletBalance', 0))
+            unrealized_pnl = float(data.get('totalUnrealizedProfit', 0))
     except Exception as e:
         print(f"Error obteniendo balance Binance: {e}")
     
@@ -1937,7 +1934,9 @@ def dashboard_binance(request):
         "total_wins": total_wins_real,
         "wr_global": round(wr_global, 1),
         "total_profit": round(profit_real, 2),
-        "balance_real": balance_real,
+        "balance_real": balance_wallet,
+        "balance_available": balance_real,
+        "unrealized_pnl": unrealized_pnl,
         "historial_ops": historial_ops,
         "ultimas_ops": historial_ops[:20],
         "bot_activo": bot_activo,
@@ -1951,7 +1950,8 @@ def dashboard_binance(request):
 @require_http_methods(["POST"])
 def api_guardar_operacion_binance(request):
     """
-    API para guardar operaciones ficticias de Binance.
+    API para guardar operaciones REALES de Binance Futures.
+    P&L calculado desde precios reales de fill de la API de Binance.
     """
     try:
         data = json.loads(request.body)
@@ -2085,17 +2085,26 @@ def api_estado_binance(request):
     
     # Usar balance real de Binance API
     balance_real = 0.0
+    balance_wallet = 0.0
+    unrealized_pnl = 0.0
     try:
+        import hmac
+        import hashlib
+        import urllib.request as _ur
         api_key = os.getenv('BINANCE_API_KEY')
         api_secret = os.getenv('BINANCE_API_SECRET')
         if api_key and api_secret:
             ts = int(time.time() * 1000)
-            sig = hmac.new(api_secret.encode(), f'timestamp={ts}'.encode(), hashlib.sha256).hexdigest()
-            r = requests.get(f'https://fapi.binance.com/fapi/v2/account?timestamp={ts}&signature={sig}', 
-                           headers={'X-MBX-APIKEY': api_key}, timeout=5)
-            if r.status_code == 200:
-                balance_real = float(r.json().get('availableBalance', 0))
-    except:
+            q = f'timestamp={ts}'
+            sig = hmac.new(api_secret.encode(), q.encode(), hashlib.sha256).hexdigest()
+            url = f'https://fapi.binance.com/fapi/v2/account?{q}&signature={sig}'
+            req_b = _ur.Request(url, headers={'X-MBX-APIKEY': api_key})
+            with _ur.urlopen(req_b, timeout=8) as resp:
+                acct = json.loads(resp.read())
+            balance_real = float(acct.get('availableBalance', 0))
+            balance_wallet = float(acct.get('totalWalletBalance', 0))
+            unrealized_pnl = float(acct.get('totalUnrealizedProfit', 0))
+    except Exception:
         pass
     
     # Calcular P&L real desde operaciones marcadas como reales
@@ -2110,6 +2119,8 @@ def api_estado_binance(request):
         "win_rate": wr_global,
         "total_profit": total_profit,
         "balance_real": balance_real,
+        "balance_wallet": balance_wallet,
+        "unrealized_pnl": unrealized_pnl,
         "ops_reales": ops_reales_total,
         "profit_real": round(profit_real, 2),
         "activos": [
@@ -2208,12 +2219,14 @@ def sse_binance_stream(request):
                 
                 # OBTENER BALANCE REAL DESDE API BINANCE FUTURES
                 balance_real = 0.0
+                balance_wallet = 0.0
+                unrealized_pnl = 0.0
                 try:
                     from dotenv import load_dotenv
                     import os
                     import hmac
                     import hashlib
-                    import requests as req
+                    import urllib.request as _ur
                     load_dotenv()
                     
                     api_key = os.getenv('BINANCE_API_KEY')
@@ -2229,16 +2242,16 @@ def sse_binance_stream(request):
                         ).hexdigest()
                         
                         url = f"https://fapi.binance.com/fapi/v2/account?{query_string}&signature={signature}"
-                        headers = {'X-MBX-APIKEY': api_key}
-                        response = req.get(url, headers=headers, timeout=3)
-                        
-                        if response.status_code == 200:
-                            data = response.json()
-                            balance_real = float(data.get('availableBalance', 0))
+                        req_b = _ur.Request(url, headers={'X-MBX-APIKEY': api_key})
+                        with _ur.urlopen(req_b, timeout=3) as resp:
+                            data = json.loads(resp.read())
+                        balance_real = float(data.get('availableBalance', 0))
+                        balance_wallet = float(data.get('totalWalletBalance', 0))
+                        unrealized_pnl = float(data.get('totalUnrealizedProfit', 0))
                 except Exception as e:
                     print(f"SSE Error balance: {e}")
                 
-                balance_ficticio = balance_real
+                balance_ficticio = balance_wallet if balance_wallet > 0 else balance_real
                 
                 # Win Rate de los últimos 100 trades (solo operaciones reales)
                 ultimas_100_ops = list(OperacionBinance.objects.filter(orden_real=True).order_by('-created_at')[:100])
@@ -2294,9 +2307,8 @@ def sse_binance_stream(request):
                 ultima_op = OperacionBinance.objects.filter(orden_real=True).order_by('-created_at').first()
                 op_data = None
                 if ultima_op:
-                    # Convertir a hora Colombia (UTC-5)
-                    from datetime import timedelta
-                    hora_colombia = ultima_op.created_at - timedelta(hours=5)
+                    # Convertir a hora Colombia usando Django timezone
+                    hora_colombia = timezone.localtime(ultima_op.created_at)
                     op_data = {
                         "num": ultima_op.num_operacion,
                         "simbolo": ultima_op.simbolo,
@@ -2314,7 +2326,7 @@ def sse_binance_stream(request):
                 historial_data = []
                 ultimas_ops = OperacionBinance.objects.filter(orden_real=True).order_by('-created_at')[:50]
                 for op in ultimas_ops:
-                    hora_col = op.created_at - timedelta(hours=5)
+                    hora_col = timezone.localtime(op.created_at)
                     historial_data.append({
                         "num": op.num_operacion,
                         "simbolo": op.simbolo,
@@ -2339,7 +2351,7 @@ def sse_binance_stream(request):
                     ).order_by('-timestamp')[:200]
                     ticks_list = [
                         {
-                            "t": t.timestamp.strftime("%H:%M:%S"),
+                            "t": timezone.localtime(t.timestamp).strftime("%H:%M:%S"),
                             "p": float(t.precio)
                         }
                         for t in reversed(list(ticks))
@@ -2372,7 +2384,7 @@ def sse_binance_stream(request):
                     senal_activa = {
                         "simbolo": ultima_op.simbolo,
                         "direccion": ultima_op.direccion,
-                        "hora": ultima_op.created_at.strftime("%H:%M:%S")
+                        "hora": timezone.localtime(ultima_op.created_at).strftime("%H:%M:%S")
                     }
                 
                 data = json.dumps({
@@ -2383,7 +2395,9 @@ def sse_binance_stream(request):
                     "total_wins": total_wins_display,
                     "wr_global": round(wr_global, 1),
                     "total_profit": round(profit_real, 2),  # P&L neto = suma de profits reales
-                    "balance_real": round(balance_real, 2),
+                    "balance_real": round(balance_wallet, 2),
+                    "balance_available": round(balance_real, 2),
+                    "unrealized_pnl": round(unrealized_pnl, 4),
                     "balance_calculado": round(balance_calculado, 2),
                     "profit_real": round(profit_real, 2),
                     "ops_reales": ops_reales_count,
