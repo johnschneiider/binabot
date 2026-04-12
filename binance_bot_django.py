@@ -239,7 +239,7 @@ from websockets.exceptions import ConnectionClosedError
 # ============================================================
 
 DJANGO_API_URL   = "http://127.0.0.1:8000/api/binance/guardar/"
-DJANGO_TICK_URL  = "http://127.0.0.1:8000/api/binance/tick/"
+DJANGO_TICK_URL  = os.getenv("DJANGO_TICK_URL", "http://127.0.0.1:8000/api/binance/tick/")
 SPOT_API_URL     = "https://api.binance.com"
 
 # Estrategia
