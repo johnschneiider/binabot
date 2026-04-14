@@ -1031,7 +1031,7 @@ async def cerrar_operacion(estado: EstadoActivo, precio_actual: float, hora: str
 # ============================================================
 
 async def run_bot(simbolos: list):
-    global _num_global, _ops_dia, _dia_actual
+    global _num_global, _ops_dia, _dia_actual, _balance_log_ts
 
     estados      = {s: EstadoActivo(simbolo=s) for s in simbolos}
     tick_count   = {s: 0 for s in simbolos}
