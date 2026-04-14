@@ -49,6 +49,30 @@
   .bg-win { background: rgba(16,185,129,0.1); color: var(--green-light); border: 1px solid rgba(16,185,129,0.2); }
   .bg-loss { background: rgba(239,68,68,0.1); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
 
+  /* Fila de operación activa en tiempo real */
+  .row-live {
+    background: rgba(234,179,8,0.04) !important;
+    border-left: 3px solid #eab308;
+    animation: pulse-row 2s ease-in-out infinite;
+  }
+  @keyframes pulse-row {
+    0%, 100% { background: rgba(234,179,8,0.04); }
+    50%       { background: rgba(234,179,8,0.08); }
+  }
+  .badge-live {
+    background: rgba(234,179,8,0.15); color: #eab308;
+    border: 1px solid rgba(234,179,8,0.4); padding: 4px 10px;
+    border-radius: 100px; font-size: 10px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    animation: blink-badge 1s step-start infinite;
+  }
+  @keyframes blink-badge { 50% { opacity: 0.4; } }
+  .timer-bar-wrap {
+    width: 80px; height: 4px; background: rgba(255,255,255,0.08);
+    border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 6px;
+  }
+  .timer-bar { height: 100%; border-radius: 4px; transition: width 1s linear; background: #eab308; }
+
   @media (max-width: 768px) { .stats-row { grid-template-columns: 1fr 1fr; } .stat-value { font-size: 20px; } }
 </style>
 {% endblock %}
@@ -154,11 +178,13 @@
             <th>Activo</th>
             <th>Dirección</th>
             <th>Entrada</th>
+            <th>Actual</th>
             <th>Resultado</th>
             <th>P&L</th>
             <th>Lógica</th>
           </tr>
         </thead>
+        <tbody id="liveOpRow"></tbody>
         <tbody id="historyTable"></tbody>
       </table>
     </div>
@@ -299,11 +325,39 @@ function updateDashboard(data) {
         <td><span style="color:${colors[op.simbolo]}; font-weight:800;">${op.simbolo}</span></td>
         <td style="color:${op.direccion==='CALL'?'var(--green-light)':'var(--red)'}; font-weight:700;">${op.direccion} ${op.direccion==='CALL'?'↑':'↓'}</td>
         <td style="font-family:ui-monospace;">${op.precio.toFixed(2)}</td>
+        <td style="opacity:0.3; font-size:11px;">—</td>
         <td><span class="badge-status ${op.es_win?'bg-win':'bg-loss'}">${op.es_win?'WIN':'LOSS'}</span></td>
         <td style="font-family:ui-monospace; color:${op.profit>=0?'var(--green-light)':'var(--red)'}; font-weight:700;">${profitStr}</td>
         <td style="font-size:11px; opacity:0.5; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${op.razon}</td>
       </tr>
     `}).join('');
+  }
+
+  // Operación activa en tiempo real
+  const liveRow = document.getElementById('liveOpRow');
+  if (data.op_abierta && data.op_abierta.activo) {
+    const op = data.op_abierta;
+    const pnlColor = op.pnl_usdt >= 0 ? 'var(--green-light)' : 'var(--red)';
+    const pnlSign  = op.pnl_usdt >= 0 ? '+' : '';
+    const progPct  = Math.min(100, Math.round(op.elapsed / op.duracion_total * 100));
+    const restSeg  = Math.max(0, op.duracion_total - op.elapsed);
+    liveRow.innerHTML = `
+      <tr class="row-live">
+        <td style="font-family:ui-monospace;"><span class="badge-live">LIVE</span> #${op.num_operacion}</td>
+        <td style="font-family:ui-monospace; font-size:12px; color:var(--text-3);">
+          ${restSeg}s restantes
+          <div class="timer-bar-wrap"><div class="timer-bar" style="width:${progPct}%"></div></div>
+        </td>
+        <td><span style="color:${colors[op.simbolo]}; font-weight:800;">${op.simbolo}</span></td>
+        <td style="color:${op.direccion==='CALL'?'var(--green-light)':'var(--red)'}; font-weight:700;">${op.direccion} ${op.direccion==='CALL'?'↑':'↓'}</td>
+        <td style="font-family:ui-monospace;">${op.precio_entrada.toFixed(4)}</td>
+        <td style="font-family:ui-monospace; font-weight:700; color:${pnlColor};">${op.precio_actual.toFixed(4)}</td>
+        <td><span class="badge-live">${op.pnl_pct >= 0 ? '▲' : '▼'} ${Math.abs(op.pnl_pct).toFixed(3)}%</span></td>
+        <td style="font-family:ui-monospace; color:${pnlColor}; font-weight:800; font-size:14px;">${pnlSign}${op.pnl_usdt.toFixed(4)}</td>
+        <td style="font-size:11px; opacity:0.5; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${op.razon}</td>
+      </tr>`;
+  } else {
+    liveRow.innerHTML = '';
   }
 }
 

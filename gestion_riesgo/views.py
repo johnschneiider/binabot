@@ -2338,6 +2338,16 @@ def sse_binance_stream(request):
                         "profit": float(op.profit),
                         "hora": hora_col.strftime("%d-%m-%Y %H:%M:%S")
                     })
+
+                # Leer operación abierta en tiempo real (escrita por el bot)
+                op_abierta = None
+                try:
+                    with open("/tmp/bot_op_abierta.json", "r") as _fa:
+                        _op_data = json.load(_fa)
+                        if _op_data.get("activo") and time.time() - _op_data.get("timestamp", 0) < 30:
+                            op_abierta = _op_data
+                except Exception:
+                    pass
                 
                 # Ticks de precios por activo (últimos 200 cada uno) + indicadores
                 from .models import TickBinance
@@ -2405,6 +2415,7 @@ def sse_binance_stream(request):
                     "balance_points": balance_points[-100:],
                     "ultima_operacion": op_data,
                     "historial": historial_data,
+                    "op_abierta": op_abierta,
                     "ticks": ticks_data,
                     "indicadores": indicadores_data,
                     "senal_activa": senal_activa,

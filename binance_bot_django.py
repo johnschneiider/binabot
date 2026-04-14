@@ -1134,6 +1134,40 @@ async def run_bot(simbolos: list):
                     loop = asyncio.get_event_loop()
                     loop.run_in_executor(None, _guardar_tick_sync, sym, precio_last)
 
+                # Escribir estado de operación abierta para SSE dashboard (tiempo real)
+                if tick_count[sym] % 5 == 0:
+                    try:
+                        _op_json: dict = {"activo": False, "timestamp": time.time()}
+                        if estado.operacion_pendiente:
+                            _op = estado.operacion_pendiente
+                            _elapsed = time.time() - _op.tiempo_entrada
+                            if _op.direccion == "CALL":
+                                _pnl_usdt = (precio_last - _op.precio_entrada) * _op.cantidad
+                                _pnl_pct  = (precio_last - _op.precio_entrada) / _op.precio_entrada * 100
+                            else:
+                                _pnl_usdt = (_op.precio_entrada - precio_last) * _op.cantidad
+                                _pnl_pct  = (_op.precio_entrada - precio_last) / _op.precio_entrada * 100
+                            _op_json = {
+                                "activo":          True,
+                                "simbolo":         _op.simbolo,
+                                "direccion":       _op.direccion,
+                                "precio_entrada":  _op.precio_entrada,
+                                "precio_actual":   precio_last,
+                                "tiempo_entrada":  _op.tiempo_entrada,
+                                "razon":           _op.razon,
+                                "num_operacion":   _op.num_operacion,
+                                "cantidad":        _op.cantidad,
+                                "pnl_pct":         round(_pnl_pct, 4),
+                                "pnl_usdt":        round(_pnl_usdt, 6),
+                                "elapsed":         int(_elapsed),
+                                "duracion_total":  DURACION_SEG,
+                                "timestamp":       time.time(),
+                            }
+                        with open("/tmp/bot_op_abierta.json", "w") as _f:
+                            json.dump(_op_json, _f)
+                    except Exception:
+                        pass
+
                 # Verificar operación pendiente
                 if estado.operacion_pendiente:
                     elapsed = time.time() - estado.operacion_pendiente.tiempo_entrada
