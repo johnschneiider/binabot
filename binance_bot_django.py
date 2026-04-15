@@ -1,32 +1,27 @@
 """
-BINANCE FUTURES BOT - SNIPER PULLBACK v2.1
-Estrategia multi-timeframe con confirmación RSI pullback, EMA21 micro-filtro y ADX fuerte.
+BINANCE FUTURES BOT - MICRO SNIPER v3.0
+Estrategia scalp multi-timeframe con TP/SL/trailing, RSI pullback, ML gate.
+Objetivo: 80%+ WR, muchas operaciones pequeñas, 5%+ retorno diario.
 
 ESTRATEGIA:
-  - 15m EMA50 define tendencia macro (BULL / BEAR) con pendiente mínima ≥ 0.03%
-  - 5m ADX > 28 confirma mercado fuertemente trending (filtra laterales)
-  - 1m RSI pullback profundo: RSI cae < 42 luego recupera > 50 → CALL en uptrend
-                               RSI sube > 58 luego cae < 50   → PUT en downtrend
-  - 1m EMA21 micro-filtro: precio debe estar encima (CALL) / debajo (PUT) de EMA21
-  - Volumen: vela de entrada con volumen normal (botón en backtest)
-  - Confirmación: vela 1m cierra en dirección de señal
-  - Hold: 15 minutos (900 segundos)
-  - Max 10 trades/día, 10min cooldown entre trades
-  - Circuit breaker: pausa tras 3 losses consecutivos
+  - 15m EMA50 define tendencia macro (BULL/BEAR) con pendiente ≥ 0.04%
+  - 5m ADX ≥ 25 confirma mercado trending (filtra laterales)
+  - 5m RSI: evita entrar en extremos (CALL: RSI5m < 70, PUT: RSI5m > 30)
+  - 1m RSI pullback: RSI cae < 44 → recupera > 48 → CALL en uptrend
+                     RSI sube > 56 → cae < 52    → PUT en downtrend
+  - 1m EMA21 micro-filtro: precio del lado correcto de EMA21
+  - Volumen: vela 1m con volumen ≥ 70% del promedio 20 velas
+  - ML gate: modelo ensemble LGBM+XGB filtra señales débiles
+  - TP: +0.15% precio → cierre automático (= +3.0% en margen con 20x)
+  - SL: -0.12% precio → cierre automático (= -2.4% en margen con 20x)
+  - Trailing: activa a +0.08%, trail 0.06% detrás del peak
+  - Hold máximo: 3 min (backup si no toca TP/SL)
+  - Max 30 trades/día, 2min cooldown, circuit breaker tras 4 losses
 
-RESULTADOS BACKTEST (14 días, ETH, v2.1):
-  - WR total: 58.3% (21W / 15L)  — CALL: 65.0%, PUT: 50.0%
-  - P&L: +$4.95 (2.6 ops/día)
-  - BTC: WR 38.6% — DESHABILITADO (pocos ops, régimen adverso)
-  - Activo actual: ETH únicamente
-
-BUGS CORREGIDOS vs versión anterior:
-  - RSI: era rsi > RSI_MAX para CALL (comprar overbought), ahora es pullback recovery
-  - Cantidad: era hardcoded int(5) → ahora lot size mínimo correcto por símbolo
-  - marginType: era int 1, ahora string "CROSSED"
-  - requests.get() bloqueante dentro de evaluar_senal → eliminado, usa cache klines
-  - Polling REST cada 1s → reemplazado por WebSocket @kline_1m stream
-  - ADX: implementación correcta con dirección de movimiento real
+SIZING DINÁMICO:
+  - Monto por operación = balance × RIESGO_PCT × LEVERAGE / precio
+  - Crece automáticamente a medida que crece el capital
+  - Sin modelo ML cargado para un par/dirección → señal BLOQUEADA
 """
 
 from dotenv import load_dotenv
@@ -62,8 +57,8 @@ LOT_STEP = {
     'XRP': 1.0,
 }
 
-# ── Sizing dinámico: porcentaje del balance como margen por operación ────────
-RIESGO_PCT = 0.50   # 50% del balance disponible por operación (fase prueba)
+# ── Sizing dinámico: crece automáticamente con el capital ────────────────────
+RIESGO_PCT = 0.50   # 50% del balance disponible → monto crece con el capital
 LEVERAGE   = 20
 
 # Cache de balance para no hacer API call en cada trade
@@ -242,25 +237,31 @@ DJANGO_API_URL   = os.getenv("DJANGO_API_URL",  "http://127.0.0.1:8000/api/binan
 DJANGO_TICK_URL  = os.getenv("DJANGO_TICK_URL", "http://127.0.0.1:8000/api/binance/tick/")
 SPOT_API_URL     = "https://api.binance.com"
 
-# Estrategia
+# Estrategia — MICRO SNIPER v3.0 (scalp 80%+ WR)
 STAKE              = 1.0     # Legacy (solo referencia — P&L real desde API)
 PAYOUT             = 0.95    # Legacy (solo referencia — P&L real desde API)
-DURACION_SEG       = 900      # 15 min: da tiempo al momentum para desarrollarse
-MAX_OPS_DIA        = 20       # Calidad > cantidad; backtest: 6.2 ops/día óptimo
-COOLDOWN_MIN_SEG   = 600      # 10 min cooldown entre trades del mismo par
-LOSS_STREAK_LIMIT  = 3        # Circuit breaker: pausa tras N losses consecutivos
-LOSS_STREAK_PAUSE  = 600      # 10 minutos de pausa global
+DURACION_SEG       = 180      # 3 min max hold — scalp rápido para alto WR
+MAX_OPS_DIA        = 30       # Más operaciones con scalps cortos
+COOLDOWN_MIN_SEG   = 120      # 2 min cooldown entre trades del mismo par
+LOSS_STREAK_LIMIT  = 4        # Circuit breaker: pausa tras N losses consecutivos
+LOSS_STREAK_PAUSE  = 300      # 5 minutos de pausa global
 
-# Filtros multi-timeframe — relajados prudentemente (Capa 2 ML sigue filtrando)
-ADX_MIN            = 24       # era 28 — igual filtra mercados puramente laterales
+# ── Exit management — TP / SL / Trailing Stop ────────────────────────────────
+TAKE_PROFIT_PCT    = 0.15     # Cerrar en +0.15% de precio (+3.0% en margen con 20x)
+STOP_LOSS_PCT      = 0.12     # Cerrar en -0.12% de precio (-2.4% en margen con 20x)
+TRAILING_ACT_PCT   = 0.08     # Trailing se activa cuando P&L >= +0.08%
+TRAILING_STOP_PCT  = 0.06     # Trail: 0.06% detrás del peak (peor cierre: +0.02% = win)
+
+# Filtros multi-timeframe — ajustados para 80% WR con frecuencia
+ADX_MIN            = 25       # Mercado con tendencia clara
 ADX_PERIODO        = 14
 RSI_PERIODO        = 14
 EMA50_SLOPE_N      = 5        # Comparar EMA50[-1] vs EMA50[-n] para slope
-EMA50_SLOPE_MIN    = 0.02     # era 0.03 — acepta tendencias suaves en 15m
-RSI_PULLBACK_CALL  = 44       # punto medio 42-46: frecuencia+calidad balanceadas
-RSI_PULLBACK_PUT   = 56       # simétrico
-RSI_RESUME_CALL    = 50       # RSI debe recuperar sobre este → entrada CALL
-RSI_RESUME_PUT     = 50       # RSI debe caer bajo este → entrada PUT
+EMA50_SLOPE_MIN    = 0.04     # Tendencia macro clara requerida
+RSI_PULLBACK_CALL  = 44       # Pullback profundo: calidad de entrada
+RSI_PULLBACK_PUT   = 56       # Simétrico
+RSI_RESUME_CALL    = 48       # Entrada anticipada para más ops (era 50)
+RSI_RESUME_PUT     = 52       # Simétrico (era 50)
 WARMUP_CANDLES     = 30       # Velas 1m mínimas para operar
 
 # ============================================================
@@ -366,6 +367,7 @@ class OperacionPendiente:
     num_operacion:  int
     cantidad:       float
     orden_real:     bool = False
+    pnl_peak_pct:   float = 0.0   # Peak P&L % alcanzado (para trailing stop)
 
 
 @dataclass
@@ -803,7 +805,7 @@ def _ml_gate(estado: 'EstadoActivo', decision: str, razon: str) -> tuple:
     """
     key = f"{estado.simbolo}_{decision}"
     if key not in _ML:
-        return decision, razon    # sin modelo → pasar
+        return "NEUTRAL", f"ml_no_model|{decision}|{estado.simbolo}"   # sin modelo → BLOQUEAR
 
     ml    = _ML[key]
     feats = extraer_features_live(estado)
@@ -856,6 +858,15 @@ def evaluar_senal(estado: EstadoActivo) -> tuple:
     if adx_val < ADX_MIN:
         return "NEUTRAL", f"adx={adx_val:.1f}<{ADX_MIN}"
 
+    # ── 5m RSI — evitar extremos (sobrecompra/sobreventa) ──
+    rsi_5m = calcular_rsi(c5.closes, RSI_PERIODO) if len(c5.closes) >= RSI_PERIODO + 1 else 50.0
+
+    # ── Volumen 1m — mínimo 70% del promedio 20 velas ──────
+    if len(estado.volumes_1m) >= 2:
+        vol_avg = sum(estado.volumes_1m[-20:]) / min(20, len(estado.volumes_1m))
+        if vol_avg > 0 and estado.volumes_1m[-1] < vol_avg * 0.7:
+            return "NEUTRAL", f"vol_bajo({estado.volumes_1m[-1]:.0f}<{vol_avg*0.7:.0f})"
+
     # ── 15m EMA50 tendencia macro ───────────────────────────
     c15 = estado.cache_15m
     if c15 is None or len(c15.closes) < 55:
@@ -879,24 +890,26 @@ def evaluar_senal(estado: EstadoActivo) -> tuple:
 
     # ── CALL: pullback en uptrend ───────────────────────────
     # RSI cayó bajo RSI_PULLBACK_CALL y ahora recupera sobre RSI_RESUME_CALL
-    # + precio por encima de EMA21 (micro-estructura alcista confirmada)
+    # + precio por encima de EMA21 + 5m RSI no sobrecomprado
     pullback_call = rsi_anterior < RSI_PULLBACK_CALL and rsi_actual > RSI_RESUME_CALL
     ema21_bull    = (not ema21_ok) or (precio >= ema21_vals[-1])
-    if bull_macro and pullback_call and vela_alcista and ema21_bull:
+    rsi5m_ok_call = rsi_5m < 70   # no entrar si 5m ya sobrecomprado
+    if bull_macro and pullback_call and vela_alcista and ema21_bull and rsi5m_ok_call:
         razon_c = (
             f"call_pull|ema50={e_now:.0f}|slp={slope_pct:+.3f}%|"
-            f"adx={adx_val:.1f}|rsi={rsi_anterior:.1f}>{rsi_actual:.1f}"
+            f"adx={adx_val:.1f}|rsi={rsi_anterior:.1f}>{rsi_actual:.1f}|rsi5m={rsi_5m:.0f}"
         )
         return _ml_gate(estado, "CALL", razon_c)
 
     # ── PUT: pullback en downtrend ──────────────────────────
-    # + precio por debajo de EMA21 (micro-estructura bajista confirmada)
+    # + precio por debajo de EMA21 + 5m RSI no sobrevendido
     pullback_put  = rsi_anterior > RSI_PULLBACK_PUT  and rsi_actual < RSI_RESUME_PUT
     ema21_bear    = (not ema21_ok) or (precio <= ema21_vals[-1])
-    if bear_macro and pullback_put and vela_bajista and ema21_bear:
+    rsi5m_ok_put  = rsi_5m > 30   # no entrar si 5m ya sobrevendido
+    if bear_macro and pullback_put and vela_bajista and ema21_bear and rsi5m_ok_put:
         razon_p = (
             f"put_pull|ema50={e_now:.0f}|slp={slope_pct:+.3f}%|"
-            f"adx={adx_val:.1f}|rsi={rsi_anterior:.1f}>{rsi_actual:.1f}"
+            f"adx={adx_val:.1f}|rsi={rsi_anterior:.1f}>{rsi_actual:.1f}|rsi5m={rsi_5m:.0f}"
         )
         return _ml_gate(estado, "PUT", razon_p)
 
@@ -1040,11 +1053,15 @@ async def run_bot(simbolos: list):
     url     = f"wss://stream.binance.com:9443/stream?streams={streams}"
 
     print("=" * 65, flush=True)
-    print("  🎯 SNIPER PULLBACK v2.0 — Multi-timeframe RSI pullback", flush=True)
+    print("  🎯 MICRO SNIPER v3.0 — Scalp TP/SL/Trailing + ML gate", flush=True)
     print(f"  Activos: {', '.join(simbolos)}", flush=True)
-    print(f"  Hold: {DURACION_SEG}s | Max {MAX_OPS_DIA} trades/día", flush=True)
-    print(f"  ADX≥{ADX_MIN} | CALL: RSI<{RSI_PULLBACK_CALL}→>{RSI_RESUME_CALL}", flush=True)
-    print(f"  PUT: RSI>{RSI_PULLBACK_PUT}→<{RSI_RESUME_PUT}", flush=True)
+    print(f"  Hold max: {DURACION_SEG}s | Max {MAX_OPS_DIA} trades/día", flush=True)
+    print(f"  TP: +{TAKE_PROFIT_PCT}% | SL: -{STOP_LOSS_PCT}% | "
+          f"Trail: act={TRAILING_ACT_PCT}% dist={TRAILING_STOP_PCT}%", flush=True)
+    print(f"  ADX≥{ADX_MIN} | Slope≥{EMA50_SLOPE_MIN}% | "
+          f"CALL: RSI<{RSI_PULLBACK_CALL}→>{RSI_RESUME_CALL} | "
+          f"PUT: RSI>{RSI_PULLBACK_PUT}→<{RSI_RESUME_PUT}", flush=True)
+    print(f"  Sizing: {RIESGO_PCT*100:.0f}% × {LEVERAGE}x (crece con capital)", flush=True)
     print("=" * 65, flush=True)
 
     # Precarga de klines superiores
@@ -1168,10 +1185,58 @@ async def run_bot(simbolos: list):
                     except Exception:
                         pass
 
-                # Verificar operación pendiente
+                # Verificar operación pendiente — TP / SL / Trailing / Timeout
                 if estado.operacion_pendiente:
-                    elapsed = time.time() - estado.operacion_pendiente.tiempo_entrada
+                    op = estado.operacion_pendiente
+                    if op.direccion == "CALL":
+                        pnl_pct = (precio_last - op.precio_entrada) / op.precio_entrada * 100
+                    else:
+                        pnl_pct = (op.precio_entrada - precio_last) / op.precio_entrada * 100
+
+                    # Actualizar peak para trailing stop
+                    if pnl_pct > op.pnl_peak_pct:
+                        op.pnl_peak_pct = pnl_pct
+
+                    # Take Profit
+                    if pnl_pct >= TAKE_PROFIT_PCT:
+                        print(
+                            f"[{hora}] 🎯 TP {sym} {op.direccion} +{pnl_pct:.3f}% >= {TAKE_PROFIT_PCT}% | "
+                            f"${op.precio_entrada:.4f}→${precio_last:.4f}",
+                            flush=True
+                        )
+                        await cerrar_operacion(estado, precio_last, hora)
+                        continue
+
+                    # Stop Loss
+                    if pnl_pct <= -STOP_LOSS_PCT:
+                        print(
+                            f"[{hora}] 🛑 SL {sym} {op.direccion} {pnl_pct:.3f}% <= -{STOP_LOSS_PCT}% | "
+                            f"${op.precio_entrada:.4f}→${precio_last:.4f}",
+                            flush=True
+                        )
+                        await cerrar_operacion(estado, precio_last, hora)
+                        continue
+
+                    # Trailing Stop
+                    if op.pnl_peak_pct >= TRAILING_ACT_PCT:
+                        trail_exit = op.pnl_peak_pct - TRAILING_STOP_PCT
+                        if pnl_pct <= trail_exit:
+                            print(
+                                f"[{hora}] 📉 TRAIL {sym} {op.direccion} peak={op.pnl_peak_pct:.3f}% "
+                                f"→ exit={pnl_pct:.3f}% (trail={TRAILING_STOP_PCT}%)",
+                                flush=True
+                            )
+                            await cerrar_operacion(estado, precio_last, hora)
+                            continue
+
+                    # Timeout — cierre por tiempo máximo
+                    elapsed = time.time() - op.tiempo_entrada
                     if elapsed >= DURACION_SEG:
+                        print(
+                            f"[{hora}] ⏰ TIME {sym} {op.direccion} cierre por tiempo "
+                            f"({elapsed:.0f}s >= {DURACION_SEG}s) | P&L={pnl_pct:+.3f}%",
+                            flush=True
+                        )
                         await cerrar_operacion(estado, precio_last, hora)
 
                 # Solo actuar en cierre de vela 1m
