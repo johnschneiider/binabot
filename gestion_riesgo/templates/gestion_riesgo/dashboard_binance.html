@@ -341,21 +341,32 @@ function updateDashboard(data) {
     const pnlSign  = op.pnl_usdt >= 0 ? '+' : '';
     const progPct  = Math.min(100, Math.round(op.elapsed / op.duracion_total * 100));
     const restSeg  = Math.max(0, op.duracion_total - op.elapsed);
-    liveRow.innerHTML = `
-      <tr class="row-live">
-        <td style="font-family:ui-monospace;"><span class="badge-live">LIVE</span> #${op.num_operacion}</td>
-        <td style="font-family:ui-monospace; font-size:12px; color:var(--text-3);">
-          ${restSeg}s restantes
-          <div class="timer-bar-wrap"><div class="timer-bar" style="width:${progPct}%"></div></div>
-        </td>
-        <td><span style="color:${colors[op.simbolo]}; font-weight:800;">${op.simbolo}</span></td>
-        <td style="color:${op.direccion==='CALL'?'var(--green-light)':'var(--red)'}; font-weight:700;">${op.direccion} ${op.direccion==='CALL'?'↑':'↓'}</td>
-        <td style="font-family:ui-monospace;">${op.precio_entrada.toFixed(4)}</td>
-        <td style="font-family:ui-monospace; font-weight:700; color:${pnlColor};">${op.precio_actual.toFixed(4)}</td>
-        <td><span class="badge-live">${op.pnl_pct >= 0 ? '▲' : '▼'} ${Math.abs(op.pnl_pct).toFixed(3)}%</span></td>
-        <td style="font-family:ui-monospace; color:${pnlColor}; font-weight:800; font-size:14px;">${pnlSign}${op.pnl_usdt.toFixed(4)}</td>
-        <td style="font-size:11px; opacity:0.5; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${op.razon}</td>
-      </tr>`;
+    // Si ya existe la fila, actualizar celdas sin recrear (evita parpadeo de animaciones)
+    if (document.getElementById('liveCell-timer')) {
+      document.getElementById('liveCell-timer').textContent = restSeg + 's restantes';
+      document.getElementById('liveCell-timerbar').style.width = progPct + '%';
+      document.getElementById('liveCell-actual').textContent = op.precio_actual.toFixed(4);
+      document.getElementById('liveCell-actual').style.color = pnlColor;
+      document.getElementById('liveCell-pct').textContent = (op.pnl_pct >= 0 ? '▲ ' : '▼ ') + Math.abs(op.pnl_pct).toFixed(3) + '%';
+      document.getElementById('liveCell-pnl').textContent = pnlSign + op.pnl_usdt.toFixed(4);
+      document.getElementById('liveCell-pnl').style.color = pnlColor;
+    } else {
+      liveRow.innerHTML = `
+        <tr class="row-live">
+          <td style="font-family:ui-monospace;"><span class="badge-live">LIVE</span> #${op.num_operacion}</td>
+          <td style="font-family:ui-monospace; font-size:12px; color:var(--text-3);">
+            <span id="liveCell-timer">${restSeg}s restantes</span>
+            <div class="timer-bar-wrap"><div class="timer-bar" id="liveCell-timerbar" style="width:${progPct}%"></div></div>
+          </td>
+          <td><span style="color:${colors[op.simbolo]}; font-weight:800;">${op.simbolo}</span></td>
+          <td style="color:${op.direccion==='CALL'?'var(--green-light)':'var(--red)'}; font-weight:700;">${op.direccion} ${op.direccion==='CALL'?'↑':'↓'}</td>
+          <td style="font-family:ui-monospace;">${op.precio_entrada.toFixed(4)}</td>
+          <td id="liveCell-actual" style="font-family:ui-monospace; font-weight:700; color:${pnlColor};">${op.precio_actual.toFixed(4)}</td>
+          <td><span class="badge-live" id="liveCell-pct">${op.pnl_pct >= 0 ? '▲' : '▼'} ${Math.abs(op.pnl_pct).toFixed(3)}%</span></td>
+          <td id="liveCell-pnl" style="font-family:ui-monospace; color:${pnlColor}; font-weight:800; font-size:14px;">${pnlSign}${op.pnl_usdt.toFixed(4)}</td>
+          <td style="font-size:11px; opacity:0.5; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${op.razon}</td>
+        </tr>`;
+    }
   } else {
     liveRow.innerHTML = '';
   }
