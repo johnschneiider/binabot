@@ -38,8 +38,8 @@ bot.log
 bot_err.log
 nul
 
-# Modelos ML binarios (regenerar con scripts/train_ml.py)
-models/*.pkl
+# Modelos ML binarios — incluidos en repo (son pequeños, <2MB c/u)
+# models/*.pkl  <- eliminado del gitignore para que se suban al VPS via git pull
 models/*.png
 
 # Archivos sueltos sin nombre válido
