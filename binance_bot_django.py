@@ -805,7 +805,10 @@ def _ml_gate(estado: 'EstadoActivo', decision: str, razon: str) -> tuple:
     """
     key = f"{estado.simbolo}_{decision}"
     if key not in _ML:
-        return "NEUTRAL", f"ml_no_model|{decision}|{estado.simbolo}"   # sin modelo → BLOQUEAR
+        # Si ML_GATE_STRICT=true en .env → bloquear; por defecto → dejar pasar con aviso
+        if os.getenv("ML_GATE_STRICT", "false").lower() == "true":
+            return "NEUTRAL", f"ml_no_model|{decision}|{estado.simbolo}"
+        return decision, razon + "|ml=no_model(pass)"
 
     ml    = _ML[key]
     feats = extraer_features_live(estado)
