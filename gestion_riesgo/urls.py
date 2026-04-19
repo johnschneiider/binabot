@@ -25,8 +25,8 @@ urlpatterns = [
     path("api/sse/", views.sse_stream, name="sse_stream"),
 
     # Solo superadmin puede crear cuentas desde el panel
-    path("admin/crear-cuenta/", views.crear_cuenta_admin, name="crear_cuenta_admin"),
-    path("admin/api/crear-cuenta/", views.api_crear_cuenta_admin, name="api_crear_cuenta_admin"),
+    path("gestion/crear-cuenta/", views.crear_cuenta_admin, name="crear_cuenta_admin"),
+    path("gestion/api/crear-cuenta/", views.api_crear_cuenta_admin, name="api_crear_cuenta_admin"),
     
     # Portal solo para usuarios autenticados
     path("portal/", views.portal_inversionista, name="portal_inversionista"),
@@ -41,7 +41,7 @@ urlpatterns = [
     path("inversionista/crear/", views.crear_inversionista, name="crear_inversionista"),
     path("inversionista/api/rendimiento/", views.api_rendimiento_inversionista, name="api_rendimiento_inversionista"),
     path("inversionista/liquidar/<int:inv_id>/", views.liquidar_inversionista, name="liquidar_inversionista"),
-    path("admin/inversionistas/", views.admin_inversionistas, name="admin_inversionistas"),
+    path("gestion/inversionistas/", views.admin_inversionistas, name="admin_inversionistas"),
     
     # Chat con opencode
     path("api/chat/", views.api_chat, name="api_chat"),

@@ -87,7 +87,7 @@
             const formData = new FormData(this);
             
             try {
-                const response = await fetch('/admin/api/crear-cuenta/', {
+                const response = await fetch('/gestion/api/crear-cuenta/', {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': '{{ csrf_token }}',
